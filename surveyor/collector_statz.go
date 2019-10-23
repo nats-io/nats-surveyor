@@ -20,6 +20,7 @@ import (
 	"log"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +32,6 @@ import (
 // statzDescs holds the metric descriptions
 type statzDescs struct {
 	Info             *prometheus.Desc
-	Seq              *prometheus.Desc
 	Start            *prometheus.Desc
 	Mem              *prometheus.Desc
 	Cores            *prometheus.Desc
@@ -74,6 +74,7 @@ type StatzCollector struct {
 	pollTimeout time.Duration
 	reply       string
 	polling     bool
+	pollkey     string
 	numServers  int
 	more        int
 	servers     map[string]bool
@@ -86,6 +87,7 @@ type StatzCollector struct {
 	expectedCnt *prometheus.GaugeVec
 	pollErrCnt  *prometheus.CounterVec
 	pollTime    *prometheus.SummaryVec
+	lateReplies *prometheus.CounterVec
 }
 
 ////////////////////////////////////////////
@@ -136,7 +138,6 @@ func buildDescs(sc *StatzCollector) {
 		"1 if connected to NATS, 0 otherwise.  A gauge.", nil, nil)
 
 	sc.descs.Info = newPromDesc("info", "General Server information Summary gauge", serverInfoLabels)
-	sc.descs.Seq = newPromDesc("sequence_number", "Metric sequence number gauge", serverLabels)
 	sc.descs.Start = newPromDesc("start_time", "Server start time gauge", serverLabels)
 	sc.descs.Mem = newPromDesc("mem_bytes", "Server memory gauge", serverLabels)
 	sc.descs.Cores = newPromDesc("core_count", "Machine cores gauge", serverLabels)
@@ -189,16 +190,10 @@ func buildDescs(sc *StatzCollector) {
 		Help: "The number of times the poller encountered errors counter",
 	}, []string{})
 
-	// Add Number of leaf node connections
-	// Leaf nodes
-	// Remotes
-	// config_load_time
-
-	// Runtime go
-	// # of go routines
-	// GC time
-
-	// RTT on a node - histogram of connection RTTs
+	sc.lateReplies = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "late_replies_count"),
+		Help: "Number of times a reply was received too late counter",
+	}, []string{"timeout"})
 }
 
 // NewStatzCollector creates a NATS Statz Collector
@@ -216,8 +211,16 @@ func NewStatzCollector(nc *nats.Conn, numServers int, pollTimeout time.Duration)
 
 	sc.expectedCnt.WithLabelValues().Set(float64(numServers))
 
-	nc.Subscribe(sc.reply, sc.handleResponse)
+	nc.Subscribe(sc.reply+".*", sc.handleResponse)
 	return sc
+}
+
+// Polling determines if the collector is in a polling cycle
+func (sc *StatzCollector) Polling() bool {
+	sc.Lock()
+	defer sc.Unlock()
+
+	return sc.polling
 }
 
 func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
@@ -227,16 +230,18 @@ func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 	}
 
 	sc.Lock()
+	isCurrent := strings.HasSuffix(msg.Subject, sc.pollkey)
 	rtt := time.Now().Sub(sc.start)
-	if sc.polling {
+	if sc.polling && isCurrent {
 		sc.stats = append(sc.stats, m)
 		sc.rtts[m.Server.ID] = rtt
 		if len(sc.stats) == sc.numServers {
 			sc.polling = false
 			sc.doneCh <- struct{}{}
 		}
-	} else if len(sc.stats) < sc.numServers {
+	} else if !isCurrent || len(sc.stats) < sc.numServers {
 		log.Printf("Late reply for server [%15s : %15s : %s]: %v", m.Server.Cluster, serverName(m), m.Server.ID, rtt)
+		sc.lateReplies.WithLabelValues(fmt.Sprintf("%.1f", sc.pollTimeout.Seconds())).Inc()
 	} else {
 		log.Printf("Extra reply from server [%15s : %15s : %s]: %v", m.Server.Cluster, serverName(m), m.Server.ID, rtt)
 		sc.more++
@@ -252,6 +257,7 @@ func (sc *StatzCollector) poll() error {
 	sc.Lock()
 	sc.start = time.Now()
 	sc.polling = true
+	sc.pollkey = strconv.Itoa(int(sc.start.UnixNano()))
 	sc.stats = nil
 	sc.rtts = make(map[string]time.Duration, sc.numServers)
 	sc.more = 0
@@ -263,6 +269,13 @@ func (sc *StatzCollector) poll() error {
 	}
 	sc.Unlock()
 
+	// not all error paths clean this up, so this way might be easier
+	defer func() {
+		sc.Lock()
+		sc.polling = false
+		sc.Unlock()
+	}()
+
 	// fail fast if we aren't connected to return a nats down (nats_up=0) to
 	// Prometheus
 	if sc.nc.IsConnected() == false {
@@ -270,7 +283,7 @@ func (sc *StatzCollector) poll() error {
 	}
 
 	// Send our ping for statusz updates
-	if err := sc.nc.PublishRequest("$SYS.REQ.SERVER.PING", sc.reply, nil); err != nil {
+	if err := sc.nc.PublishRequest("$SYS.REQ.SERVER.PING", sc.reply+"."+sc.pollkey, nil); err != nil {
 		return err
 	}
 
@@ -278,6 +291,7 @@ func (sc *StatzCollector) poll() error {
 	select {
 	case <-sc.doneCh:
 	case <-time.After(sc.pollTimeout):
+		log.Printf("Poll timeout after %v while waiting for %d responses\n", sc.pollTimeout, sc.numServers)
 	}
 
 	sc.Lock()
@@ -302,8 +316,8 @@ func (sc *StatzCollector) poll() error {
 
 		log.Println("RTTs for responding servers:")
 		for _, stat := range stats {
-			// We use for key the cluster name followed by IP (Host)
-			key := fmt.Sprintf("%s:%s", stat.Server.Cluster, stat.Server.Host)
+			// We use for key the cluster name followed by ID which is unique per server
+			key := fmt.Sprintf("%s:%s", stat.Server.Cluster, stat.Server.ID)
 			// Mark this server has been seen
 			sc.servers[key] = true
 			log.Printf("Server [%15s : %15s : %15s : %s]: %v\n", stat.Server.Cluster, serverName(stat), stat.Server.Host, stat.Server.ID, rtts[stat.Server.ID])
@@ -373,6 +387,7 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 	sc.expectedCnt.Describe(ch)
 	sc.pollErrCnt.Describe(ch)
 	sc.pollTime.Describe(ch)
+	sc.lateReplies.Describe(ch)
 }
 
 func newGaugeMetric(sm *server.ServerStatsMsg, desc *prometheus.Desc, value float64, labels []string) prometheus.Metric {
@@ -396,6 +411,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		sc.pollErrCnt.Collect(ch)
 		sc.surveyedCnt.Collect(ch)
 		sc.expectedCnt.Collect(ch)
+		sc.lateReplies.Collect(ch)
 	}()
 
 	// poll the servers

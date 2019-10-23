@@ -68,7 +68,6 @@ func httpGet(url string) (*http.Response, error) {
 func getTestOptions() *Options {
 	o := GetDefaultOptions()
 	o.Credentials = st.SystemCreds
-	o.ListenAddress = "127.0.0.1"
 	return o
 }
 
@@ -144,25 +143,24 @@ func TestSurveyor_Basic(t *testing.T) {
 	}
 
 	// check for labels
-	if strings.Contains(output, "nats_server_host") == false {
-		t.Fatalf("invalid output:  %v\n", err)
+	if strings.Contains(output, "server_name") == false {
+		t.Fatalf("invalid output:  %v\n", output)
 	}
-	if strings.Contains(output, "nats_server_cluster") == false {
-		t.Fatalf("invalid output:  %v\n", err)
+	if strings.Contains(output, "server_cluster") == false {
+		t.Fatalf("invalid output:  %v\n", output)
 	}
-	if strings.Contains(output, "nats_server_id") == false {
-		t.Fatalf("invalid output:  %v\n", err)
+	if strings.Contains(output, "server_id") == false {
+		t.Fatalf("invalid output:  %v\n", output)
 	}
-	if strings.Contains(output, "nats_server_gateway_name") == false {
-		t.Fatalf("invalid output:  %v\n", err)
+	if strings.Contains(output, "server_gateway_name") == false {
+		t.Fatalf("invalid output:  %v\n", output)
 	}
-	if strings.Contains(output, "nats_server_gateway_id") == false {
-		t.Fatalf("invalid output:  %v\n", err)
+	if strings.Contains(output, "server_gateway_id") == false {
+		t.Fatalf("invalid output:  %v\n", output)
 	}
-	if strings.Contains(output, "nats_server_route_id") == false {
-		t.Fatalf("invalid output:  %v\n", err)
+	if strings.Contains(output, "server_route_id") == false {
+		t.Fatalf("invalid output:  %v\n", output)
 	}
-	s.Stop()
 }
 
 func TestSurveyor_Reconnect(t *testing.T) {
@@ -201,7 +199,7 @@ func TestSurveyor_Reconnect(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	}
 	if err != nil {
-		t.Fatalf("Retries failed.")
+		t.Fatalf("Retries failed: %v.", err)
 	}
 	if strings.Contains(output, "nats_up 1") == false {
 		t.Fatalf("output did not contain nats-up 1")
@@ -330,5 +328,29 @@ func TestSurveyor_MissingResponses(t *testing.T) {
 	_, err = pollAndCheck(t, defaultSurveyorURL, "nats_core_mem_bytes")
 	if err != nil {
 		t.Fatalf("poll error:  %v\n", err)
+	}
+}
+
+func TestSurveyor_ConcurrentBlock(t *testing.T) {
+	sc := st.NewSuperCluster(t)
+	defer sc.Shutdown()
+
+	s, err := NewSurveyor(getTestOptions())
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+
+	s.statzC.polling = true
+	_, err = pollAndCheck(t, defaultSurveyorURL, "nats_core_mem_bytes")
+	if err == nil {
+		t.Fatalf("Expected an error but none were encountered")
+	}
+
+	if err.Error() != "expected a 200 response, got 503" {
+		t.Fatalf("Expected 503 error but got: %v", err)
 	}
 }

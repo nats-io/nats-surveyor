@@ -82,7 +82,7 @@ type Surveyor struct {
 	opts   Options
 	nc     *nats.Conn
 	http   net.Listener
-	statzC prometheus.Collector
+	statzC *StatzCollector
 }
 
 func connect(opts *Options) (*nats.Conn, error) {
@@ -135,7 +135,10 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 }
 
 func (s *Surveyor) createCollector() error {
+	s.Lock()
 	s.statzC = NewStatzCollector(s.nc, s.opts.ExpectedServers, s.opts.PollTimeout)
+	s.Unlock()
+
 	err := prometheus.Register(s.statzC)
 	for i := 0; i < 50 && err != nil; i++ {
 		if _, ok := err.(prometheus.AlreadyRegisteredError); ok {
@@ -208,14 +211,9 @@ func (s *Surveyor) isValidUserPass(user, password string) bool {
 	return true
 }
 
-// getScrapeHandler returns the default handler if no nttp
-// auhtorization has been specificed.  Otherwise, it checks
-// basic authorization.
-func (s *Surveyor) getScrapeHandler() http.Handler {
-	h := promhttp.Handler()
-
-	if s.opts.HTTPUser != "" {
-		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+func (s *Surveyor) httpAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		if s.opts.HTTPUser != "" {
 			auth := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 			if len(auth) != 2 || auth[0] != "Basic" {
 				http.Error(rw, "authorization failed", http.StatusUnauthorized)
@@ -233,12 +231,37 @@ func (s *Surveyor) getScrapeHandler() http.Handler {
 				http.Error(rw, "authorization failed", http.StatusUnauthorized)
 				return
 			}
+		}
+		next.ServeHTTP(rw, r)
+	})
+}
 
-			h.ServeHTTP(rw, r)
-		})
-	}
+func (s *Surveyor) httpConcurrentPollBlockMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		s.Lock()
+		sz := s.statzC
+		s.Unlock()
 
-	return h
+		if sz == nil {
+			next.ServeHTTP(rw, r)
+			return
+		}
+
+		if sz.Polling() {
+			rw.WriteHeader(http.StatusServiceUnavailable)
+			rw.Write([]byte("Concurrent polls are not supported"))
+			log.Printf("Concurrent access detected and blocked\n")
+			return
+		}
+
+		next.ServeHTTP(rw, r)
+	})
+}
+
+// getScrapeHandler returns a chain of handlers that handles auth, concurency checks
+// and the prometheus handlers
+func (s *Surveyor) getScrapeHandler() http.Handler {
+	return s.httpAuthMiddleware(s.httpConcurrentPollBlockMiddleware(promhttp.Handler()))
 }
 
 // startHTTP configures and starts the HTTP server for applications to poll data from
@@ -280,6 +303,9 @@ func (s *Surveyor) startHTTP() error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", s.getScrapeHandler())
+	mux.HandleFunc("/healthz", func(resp http.ResponseWriter, req *http.Request) {
+		resp.Write([]byte("ok"))
+	})
 
 	srv := &http.Server{
 		Addr:           hp,
@@ -295,11 +321,11 @@ func (s *Surveyor) startHTTP() error {
 			if err = srv.Serve(sHTTP); err != nil {
 				// In a test environment, this can fail because the server is already running.
 				// debugf
-				log.Printf("Unable to start HTTP server: %v", err)
-				time.Sleep(500 * time.Millisecond)
+				log.Printf("Unable to start HTTP server (may already be running): %v", err)
 			}
 		}
 	}()
+
 	return nil
 }
 
@@ -317,14 +343,8 @@ func (s *Surveyor) Start() error {
 // Stop stops the surveyor
 func (s *Surveyor) Stop() {
 	s.Lock()
-	defer s.Unlock()
-
 	prometheus.Unregister(s.statzC)
-
-	if s.http != nil {
-		s.http.Close()
-	}
-	if s.nc != nil {
-		s.nc.Drain()
-	}
+	s.http.Close()
+	s.nc.Drain()
+	s.Unlock()
 }
