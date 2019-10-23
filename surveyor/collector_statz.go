@@ -231,8 +231,8 @@ func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 
 	sc.Lock()
 	isCurrent := strings.HasSuffix(msg.Subject, sc.pollkey)
-	rtt := time.Now().Sub(sc.start)
-	if sc.polling && isCurrent {
+	rtt := time.Since(sc.start)
+	if sc.polling && isCurrent { //nolint
 		sc.stats = append(sc.stats, m)
 		sc.rtts[m.Server.ID] = rtt
 		if len(sc.stats) == sc.numServers {
@@ -278,7 +278,7 @@ func (sc *StatzCollector) poll() error {
 
 	// fail fast if we aren't connected to return a nats down (nats_up=0) to
 	// Prometheus
-	if sc.nc.IsConnected() == false {
+	if !sc.nc.IsConnected() {
 		return fmt.Errorf("no connection to NATS")
 	}
 
@@ -390,13 +390,13 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 	sc.lateReplies.Describe(ch)
 }
 
-func newGaugeMetric(sm *server.ServerStatsMsg, desc *prometheus.Desc, value float64, labels []string) prometheus.Metric {
+func newGaugeMetric(desc *prometheus.Desc, value float64, labels []string) prometheus.Metric {
 	return prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, value, labels...)
 }
 
 func (sc *StatzCollector) newNatsUpGaugeMetric(value bool) prometheus.Metric {
 	var fval float64
-	if value == true {
+	if value {
 		fval = 1
 	}
 	return prometheus.MustNewConstMetric(sc.natsUp, prometheus.GaugeValue, fval)
@@ -431,42 +431,42 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 	for _, sm := range sc.stats {
 		sc.surveyedCnt.WithLabelValues().Inc()
 
-		ch <- newGaugeMetric(sm, sc.descs.Info, 1, serverInfoLabelValues(sm))
+		ch <- newGaugeMetric(sc.descs.Info, 1, serverInfoLabelValues(sm))
 
 		labels := serverLabelValues(sm)
-		ch <- newGaugeMetric(sm, sc.descs.Start, float64(sm.Stats.Start.UnixNano()), labels)
-		ch <- newGaugeMetric(sm, sc.descs.Mem, float64(sm.Stats.Mem), labels)
-		ch <- newGaugeMetric(sm, sc.descs.Cores, float64(sm.Stats.Cores), labels)
-		ch <- newGaugeMetric(sm, sc.descs.CPU, float64(sm.Stats.CPU), labels)
-		ch <- newGaugeMetric(sm, sc.descs.Connections, float64(sm.Stats.Connections), labels)
-		ch <- newGaugeMetric(sm, sc.descs.TotalConnections, float64(sm.Stats.TotalConnections), labels)
-		ch <- newGaugeMetric(sm, sc.descs.ActiveAccounts, float64(sm.Stats.ActiveAccounts), labels)
-		ch <- newGaugeMetric(sm, sc.descs.NumSubs, float64(sm.Stats.NumSubs), labels)
-		ch <- newGaugeMetric(sm, sc.descs.SentMsgs, float64(sm.Stats.Sent.Msgs), labels)
-		ch <- newGaugeMetric(sm, sc.descs.SentBytes, float64(sm.Stats.Sent.Bytes), labels)
-		ch <- newGaugeMetric(sm, sc.descs.RecvMsgs, float64(sm.Stats.Received.Msgs), labels)
-		ch <- newGaugeMetric(sm, sc.descs.RecvBytes, float64(sm.Stats.Received.Bytes), labels)
-		ch <- newGaugeMetric(sm, sc.descs.SlowConsumers, float64(sm.Stats.SlowConsumers), labels)
-		ch <- newGaugeMetric(sm, sc.descs.RTT, float64(sc.rtts[sm.Server.ID]), labels)
-		ch <- newGaugeMetric(sm, sc.descs.Routes, float64(len(sm.Stats.Routes)), labels)
-		ch <- newGaugeMetric(sm, sc.descs.Gateways, float64(len(sm.Stats.Gateways)), labels)
+		ch <- newGaugeMetric(sc.descs.Start, float64(sm.Stats.Start.UnixNano()), labels)
+		ch <- newGaugeMetric(sc.descs.Mem, float64(sm.Stats.Mem), labels)
+		ch <- newGaugeMetric(sc.descs.Cores, float64(sm.Stats.Cores), labels)
+		ch <- newGaugeMetric(sc.descs.CPU, sm.Stats.CPU, labels)
+		ch <- newGaugeMetric(sc.descs.Connections, float64(sm.Stats.Connections), labels)
+		ch <- newGaugeMetric(sc.descs.TotalConnections, float64(sm.Stats.TotalConnections), labels)
+		ch <- newGaugeMetric(sc.descs.ActiveAccounts, float64(sm.Stats.ActiveAccounts), labels)
+		ch <- newGaugeMetric(sc.descs.NumSubs, float64(sm.Stats.NumSubs), labels)
+		ch <- newGaugeMetric(sc.descs.SentMsgs, float64(sm.Stats.Sent.Msgs), labels)
+		ch <- newGaugeMetric(sc.descs.SentBytes, float64(sm.Stats.Sent.Bytes), labels)
+		ch <- newGaugeMetric(sc.descs.RecvMsgs, float64(sm.Stats.Received.Msgs), labels)
+		ch <- newGaugeMetric(sc.descs.RecvBytes, float64(sm.Stats.Received.Bytes), labels)
+		ch <- newGaugeMetric(sc.descs.SlowConsumers, float64(sm.Stats.SlowConsumers), labels)
+		ch <- newGaugeMetric(sc.descs.RTT, float64(sc.rtts[sm.Server.ID]), labels)
+		ch <- newGaugeMetric(sc.descs.Routes, float64(len(sm.Stats.Routes)), labels)
+		ch <- newGaugeMetric(sc.descs.Gateways, float64(len(sm.Stats.Gateways)), labels)
 
 		for _, rs := range sm.Stats.Routes {
 			labels = routeLabelValues(sm, rs)
-			ch <- newGaugeMetric(sm, sc.descs.RouteSentMsgs, float64(rs.Sent.Msgs), labels)
-			ch <- newGaugeMetric(sm, sc.descs.RouteSentBytes, float64(rs.Sent.Bytes), labels)
-			ch <- newGaugeMetric(sm, sc.descs.RouteRecvMsgs, float64(rs.Received.Msgs), labels)
-			ch <- newGaugeMetric(sm, sc.descs.RouteRecvBytes, float64(rs.Received.Bytes), labels)
-			ch <- newGaugeMetric(sm, sc.descs.RoutePending, float64(rs.Pending), labels)
+			ch <- newGaugeMetric(sc.descs.RouteSentMsgs, float64(rs.Sent.Msgs), labels)
+			ch <- newGaugeMetric(sc.descs.RouteSentBytes, float64(rs.Sent.Bytes), labels)
+			ch <- newGaugeMetric(sc.descs.RouteRecvMsgs, float64(rs.Received.Msgs), labels)
+			ch <- newGaugeMetric(sc.descs.RouteRecvBytes, float64(rs.Received.Bytes), labels)
+			ch <- newGaugeMetric(sc.descs.RoutePending, float64(rs.Pending), labels)
 		}
 
 		for _, gw := range sm.Stats.Gateways {
 			labels = gatewayLabelValues(sm, gw)
-			ch <- newGaugeMetric(sm, sc.descs.GatewaySentMsgs, float64(gw.Sent.Msgs), labels)
-			ch <- newGaugeMetric(sm, sc.descs.GatewaySentBytes, float64(gw.Sent.Bytes), labels)
-			ch <- newGaugeMetric(sm, sc.descs.GatewayRecvMsgs, float64(gw.Received.Msgs), labels)
-			ch <- newGaugeMetric(sm, sc.descs.GatewayRecvBytes, float64(gw.Received.Bytes), labels)
-			ch <- newGaugeMetric(sm, sc.descs.GatewayNumInbound, float64(gw.NumInbound), labels)
+			ch <- newGaugeMetric(sc.descs.GatewaySentMsgs, float64(gw.Sent.Msgs), labels)
+			ch <- newGaugeMetric(sc.descs.GatewaySentBytes, float64(gw.Sent.Bytes), labels)
+			ch <- newGaugeMetric(sc.descs.GatewayRecvMsgs, float64(gw.Received.Msgs), labels)
+			ch <- newGaugeMetric(sc.descs.GatewayRecvBytes, float64(gw.Received.Bytes), labels)
+			ch <- newGaugeMetric(sc.descs.GatewayNumInbound, float64(gw.NumInbound), labels)
 		}
 	}
 }
