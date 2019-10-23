@@ -1,6 +1,6 @@
 # NATS Surveyor
 
-A NATS Monitoring POC.  Eventually this will be moved into the `nats-io` organization.
+NATS Monitoring, Simplified.
 
 This project uses the polling of NATS server `Statz` messages to generate data for
 Prometheus, allowing a single exporter to connect to any NATS server and get an entire
@@ -197,11 +197,4 @@ anti-pattern, we won't be submitting it to Prometheus as an official exporter at
 
 ## TODO
 
-- [X] Tests
-- [X] TLS
-- [X] Basic auth
-- [X] Up/Down
-- [X] Standardized Metric names
-- [X] Docker Image
-- [ ] Copy to nats-io
 - [ ] CI
