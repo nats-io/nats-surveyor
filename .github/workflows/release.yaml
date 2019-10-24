@@ -26,7 +26,7 @@ jobs:
     - name: Release
       shell: bash --noprofile --norc -x -eo pipefail {0}
       env:
-        GO111MODULE: 'off'
+        GO111MODULE: 'on'
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
       run: |
         export GOPATH="$RUNNER_WORKSPACE"
