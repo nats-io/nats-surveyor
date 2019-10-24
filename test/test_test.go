@@ -29,3 +29,8 @@ func TestStartSupercluster(t *testing.T) {
 	ns := NewSuperCluster(t)
 	ns.Shutdown()
 }
+
+func TestStartSingleServer(t *testing.T) {
+	ns := NewSingleServer(t)
+	ns.Shutdown()
+}
