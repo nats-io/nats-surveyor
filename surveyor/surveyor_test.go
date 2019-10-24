@@ -101,8 +101,8 @@ func PollSurveyorEndpoint(t *testing.T, url string, secure bool, expectedRc int)
 	return string(body), nil
 }
 
-func pollAndCheck(t *testing.T, url, result string) (string, error) {
-	results, err := PollSurveyorEndpoint(t, url, false, http.StatusOK)
+func pollAndCheckDefault(t *testing.T, result string) (string, error) {
+	results, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
 	if err != nil {
 		return "", err
 	}
@@ -127,7 +127,7 @@ func TestSurveyor_Basic(t *testing.T) {
 	defer s.Stop()
 
 	// poll and check for basic core NATS output
-	output, err := pollAndCheck(t, defaultSurveyorURL, "nats_core_mem_bytes")
+	output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
 	if err != nil {
 		t.Fatalf("poll error:  %v\n", err)
 	}
@@ -177,7 +177,7 @@ func TestSurveyor_Reconnect(t *testing.T) {
 	defer s.Stop()
 
 	// poll and check for basic core NATS output
-	_, err = pollAndCheck(t, defaultSurveyorURL, "nats")
+	_, err = pollAndCheckDefault(t, "nats")
 	if err != nil {
 		t.Fatalf("poll error:  %v\n", err)
 	}
@@ -185,14 +185,14 @@ func TestSurveyor_Reconnect(t *testing.T) {
 	sc.Servers[0].Shutdown()
 
 	// this poll should fail...
-	output, err := pollAndCheck(t, defaultSurveyorURL, "nats_core_mem_bytes")
+	output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
 	if strings.Contains(output, "nats_up 0") == false {
 		t.Fatalf("output did not contain nats-up 0")
 	}
 
 	// poll and check for basic core NATS output, the next server should
 	for i := 0; i < 5; i++ {
-		output, err = pollAndCheck(t, defaultSurveyorURL, "nats_core_mem_bytes")
+		output, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
 		if err == nil {
 			break
 		}
@@ -224,7 +224,7 @@ func TestSurveyor_NoSystemAccount(t *testing.T) {
 		t.Fatalf("Couldn't poll exporter: %v", err)
 	}
 	if len(results) == 0 {
-		t.Fatalf("Should have recieved some non-nats data")
+		t.Fatalf("Should have received some non-nats data")
 	}
 	if strings.Contains(results, "nats_core_mem_bytes") {
 		t.Fatalf(("Should NOT have NATS data"))
@@ -251,7 +251,7 @@ func TestSurveyor_HTTPS(t *testing.T) {
 
 	// Check that we CANNOT connect with http
 	if _, err = PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK); err == nil {
-		t.Fatalf("didn't recieve an error")
+		t.Fatalf("didn't receive an error")
 	}
 	// Check that we CAN connect with https
 	if _, err = PollSurveyorEndpoint(t, "https://127.0.0.1:7777/metrics", true, http.StatusOK); err != nil {
@@ -325,7 +325,7 @@ func TestSurveyor_MissingResponses(t *testing.T) {
 	sc.Servers[1].Shutdown()
 
 	// poll and check for basic core NATS output
-	_, err = pollAndCheck(t, defaultSurveyorURL, "nats_core_mem_bytes")
+	_, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
 	if err != nil {
 		t.Fatalf("poll error:  %v\n", err)
 	}
@@ -345,7 +345,7 @@ func TestSurveyor_ConcurrentBlock(t *testing.T) {
 	}
 
 	s.statzC.polling = true
-	_, err = pollAndCheck(t, defaultSurveyorURL, "nats_core_mem_bytes")
+	_, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
 	if err == nil {
 		t.Fatalf("Expected an error but none were encountered")
 	}
