@@ -200,7 +200,9 @@ anti-pattern, we won't be submitting it to Prometheus as an official exporter at
 
 ## TODO
 
-[ ] Windows CI
+- [ ] Windows builds
+- [ ] Other events (connections, disconnects, etc)
+- [ ] Best Guess Server Count
 
 [License-Url]: https://www.apache.org/licenses/LICENSE-2.0
 [License-Image]: https://img.shields.io/badge/License-Apache2-blue.svg
