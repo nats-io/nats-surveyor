@@ -187,7 +187,7 @@ func TestSurveyor_Reconnect(t *testing.T) {
 	// this poll should fail...
 	output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
 	if strings.Contains(output, "nats_up 0") == false {
-		t.Fatalf("output did not contain nats-up 0")
+		t.Fatalf("output did not contain nats_up 0.\n%s", output)
 	}
 
 	// poll and check for basic core NATS output, the next server should
@@ -202,7 +202,7 @@ func TestSurveyor_Reconnect(t *testing.T) {
 		t.Fatalf("Retries failed: %v.", err)
 	}
 	if strings.Contains(output, "nats_up 1") == false {
-		t.Fatalf("output did not contain nats-up 1")
+		t.Fatalf("output did not contain nats_up 1.\n%s", output)
 	}
 }
 
