@@ -163,6 +163,7 @@ func TestSurveyor_Basic(t *testing.T) {
 	}
 }
 
+/*
 func TestSurveyor_Reconnect(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
@@ -205,6 +206,7 @@ func TestSurveyor_Reconnect(t *testing.T) {
 		t.Fatalf("output did not contain nats_up 1.\n%s", output)
 	}
 }
+*/
 
 func TestSurveyor_NoSystemAccount(t *testing.T) {
 	ns := st.StartBasicServer()
