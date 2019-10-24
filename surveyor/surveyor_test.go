@@ -188,6 +188,8 @@ func TestSurveyor_Reconnect(t *testing.T) {
 	// shutdown the server
 	ns.Shutdown()
 
+	time.Sleep(time.Second * 2)
+
 	// this poll should fail...
 	output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
 	if strings.Contains(output, "nats_up 0") == false {
