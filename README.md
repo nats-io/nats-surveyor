@@ -1,6 +1,8 @@
-# NATS Surveyor
+# NATS Surveyor - WIP
 
 NATS Monitoring, Simplified.
+
+NOTE:  This should be considered *alpha* and is currently a work in progress.
 
 This project uses the polling of NATS server `Statz` messages to generate data for
 Prometheus, allowing a single exporter to connect to any NATS server and get an entire

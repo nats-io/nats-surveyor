@@ -22,8 +22,8 @@ import (
 	"time"
 
 	"github.com/nats-io/nats-server/v2/logger"
-	nats "github.com/nats-io/nats.go"
 	ns "github.com/nats-io/nats-server/v2/server"
+	nats "github.com/nats-io/nats.go"
 )
 
 // Test variables
