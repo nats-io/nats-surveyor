@@ -88,7 +88,7 @@ type Surveyor struct {
 func connect(opts *Options) (*nats.Conn, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		hostname = "localhost"
+		hostname = "127.0.0.1"
 	}
 	nopts := []nats.Option{nats.Name(fmt.Sprintf("NATS_Surveyor - %s", hostname))}
 	if opts.Credentials != "" {

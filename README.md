@@ -1,3 +1,4 @@
+[![License][License-Image]][License-Url] [![Build][Build-Status-Image]][Build-Status-Url] [![Coverage][Coverage-Image]][Coverage-Url]
 # NATS Surveyor - WIP
 
 NATS Monitoring, Simplified.
@@ -199,4 +200,13 @@ anti-pattern, we won't be submitting it to Prometheus as an official exporter at
 
 ## TODO
 
-- [ ] CI
+- [ ] Windows builds
+- [ ] Other events (connections, disconnects, etc)
+- [ ] Best Guess Server Count
+
+[License-Url]: https://www.apache.org/licenses/LICENSE-2.0
+[License-Image]: https://img.shields.io/badge/License-Apache2-blue.svg
+[Build-Status-Image]: https://github.com/nats-io/nats-surveyor/workflows/Testing/badge.svg
+[Build-Status-Url]: https://github.com/nats-io/nats-surveyor/workflows/Testing/badge.svg
+[Coverage-Url]: https://codecov.io/gh/nats-io/nats-surveyor
+[Coverage-image]: https://codecov.io/gh/nats-io/nats-surveyor/branch/master/graph/badge.svg

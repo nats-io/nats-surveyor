@@ -144,6 +144,13 @@ func NewSuperCluster(t *testing.T) *SuperCluster {
 	return sc
 }
 
+// NewSingleServer creates a single NATS server with a system account
+func NewSingleServer(t *testing.T) *ns.Server {
+	s := startServer(t, "../test/r1s1.conf")
+	connectAndVerify(t, s.ClientURL())
+	return s
+}
+
 // Shutdown shuts the supercluster down
 func (sc *SuperCluster) Shutdown() {
 	for _, c := range sc.Clients {
@@ -154,24 +161,31 @@ func (sc *SuperCluster) Shutdown() {
 	}
 }
 
+func connectAndVerify(t *testing.T, url string) *nats.Conn {
+	c, err := nats.Connect(url, nats.UserCredentials("../test/myuser.creds"))
+	if err != nil {
+		t.Fatalf("Couldn't connect a client to %s: %v", url, err)
+	}
+	_, err = c.Subscribe("test.ready", func(msg *nats.Msg) {
+		c.Flush()
+		c.Publish(msg.Reply, nil)
+	})
+	if err != nil {
+		t.Fatalf("Couldn't subscribe to \"test.ready\": %v", err)
+	}
+	_, err = c.Subscribe(("test.data"), func(msg *nats.Msg) {
+		c.Flush()
+		c.Publish(msg.Reply, []byte("response"))
+	})
+	if err != nil {
+		t.Fatalf("Couldn't subscribe to \"test.data\": %v", err)
+	}
+	return c
+}
+
 func (sc *SuperCluster) setupClientsAndVerify(t *testing.T) {
 	for _, s := range sc.Servers {
-		c, err := nats.Connect(s.ClientURL(), nats.UserCredentials("../test/myuser.creds"))
-		if err != nil {
-			t.Fatalf("Couldn't connect a client to %s: %v", s.ClientURL(), err)
-		}
-		_, err = c.Subscribe("test.ready", func(msg *nats.Msg) {
-			c.Publish(msg.Reply, nil)
-		})
-		if err != nil {
-			t.Fatalf("Couldn't subscribe to \"test.ready\": %v", err)
-		}
-		_, err = c.Subscribe(("test.data"), func(msg *nats.Msg) {
-			c.Publish(msg.Reply, []byte("response"))
-		})
-		if err != nil {
-			t.Fatalf("Couldn't subscribe to \"test.data\": %v", err)
-		}
+		c := connectAndVerify(t, s.ClientURL())
 		sc.Clients = append(sc.Clients, c)
 	}
 

@@ -1,0 +1,64 @@
+---
+project_name: nats-surveyor
+
+release:
+  draft: true
+  github:
+    owner: nats-io
+    name: nats-surveyor
+
+  name_template: 'Release {{.Tag}}'
+
+builds:
+- goos:
+  - linux
+  - darwin
+  - windows
+  goarch:
+  - 386
+  - amd64
+  - arm
+  - arm64
+  goarm:
+  - 6
+  - 7
+  ignore:
+    - goos: darwin
+      goarch: 386
+
+  main: .
+  binary: nats-surveyor
+
+  lang: go
+
+archive:
+  wrap_in_directory: true
+  name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
+    }}v{{ .Arm }}{{ end }}'
+  format: zip
+  files:
+  - LICENSE
+  - README.md
+
+nfpm:
+  formats:
+    - deb
+  name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
+    }}v{{ .Arm }}{{ end }}'
+  bindir: /usr/local/bin
+  description: A Simplified Prometheus Monitoring Solution for NATS
+  vendor: nats.io
+  maintainer: Colin Sullivan <colin@nats.io>
+  homepage: https://nats.io
+  license: Apache 2.0
+
+snapshot:
+  name_template: SNAPSHOT-{{ .Commit }}
+
+checksum:
+  name_template: '{{ .ProjectName }}-v{{ .Version }}-checksums.txt'
+
+dist: dist
+
+github_urls:
+  download: https://github.com

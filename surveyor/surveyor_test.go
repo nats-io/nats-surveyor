@@ -164,10 +164,13 @@ func TestSurveyor_Basic(t *testing.T) {
 }
 
 func TestSurveyor_Reconnect(t *testing.T) {
-	sc := st.NewSuperCluster(t)
-	defer sc.Shutdown()
+	ns := st.NewSingleServer(t)
+	defer ns.Shutdown()
 
-	s, err := NewSurveyor(getTestOptions())
+	opts := getTestOptions()
+	opts.ExpectedServers = 1
+	opts.PollTimeout = time.Second
+	s, err := NewSurveyor(opts)
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
 	}
@@ -182,27 +185,31 @@ func TestSurveyor_Reconnect(t *testing.T) {
 		t.Fatalf("poll error:  %v\n", err)
 	}
 
-	sc.Servers[0].Shutdown()
+	// shutdown the server
+	ns.Shutdown()
+
+	time.Sleep(time.Second * 2)
 
 	// this poll should fail...
 	output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
 	if strings.Contains(output, "nats_up 0") == false {
-		t.Fatalf("output did not contain nats-up 0")
+		t.Fatalf("output did not contain nats_up 0.\n====Output====\n%s", output)
 	}
+
+	// restart the server
+	ns = st.NewSingleServer(t)
+	defer ns.Shutdown()
 
 	// poll and check for basic core NATS output, the next server should
 	for i := 0; i < 5; i++ {
-		output, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
+		_, err = pollAndCheckDefault(t, "nats_up 1")
 		if err == nil {
 			break
 		}
 		time.Sleep(1 * time.Second)
 	}
 	if err != nil {
-		t.Fatalf("Retries failed: %v.", err)
-	}
-	if strings.Contains(output, "nats_up 1") == false {
-		t.Fatalf("output did not contain nats-up 1")
+		t.Fatalf("Reconnect failed: %v.", err)
 	}
 }
 
