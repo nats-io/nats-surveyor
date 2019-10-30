@@ -86,6 +86,12 @@ type Surveyor struct {
 }
 
 func connect(opts *Options) (*nats.Conn, error) {
+	reconnCtr := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
+		Help: "Number of times the surveyor reconnected to the NATS cluster",
+	})
+	prometheus.Register(reconnCtr)
+
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = "127.0.0.1"
@@ -99,6 +105,7 @@ func connect(opts *Options) (*nats.Conn, error) {
 		log.Println("Disconnected, will possibly miss replies")
 	}))
 	nopts = append(nopts, nats.ReconnectHandler(func(c *nats.Conn) {
+		reconnCtr.Inc()
 		log.Printf("Reconnected to %v", c.ConnectedAddr())
 	}))
 	nopts = append(nopts, nats.ClosedHandler(func(_ *nats.Conn) {
