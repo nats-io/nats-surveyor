@@ -427,6 +427,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 	defer sc.Unlock()
 
 	ch <- sc.newNatsUpGaugeMetric(true)
+	sc.surveyedCnt.WithLabelValues().Set(0)
 
 	for _, sm := range sc.stats {
 		sc.surveyedCnt.WithLabelValues().Inc()
