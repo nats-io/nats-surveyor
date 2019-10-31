@@ -1,16 +1,23 @@
-# Golang binary building stage
-FROM golang:1.13
+FROM golang:1.12-alpine3.10 as builder
 
-# download the source
-WORKDIR /go/src/github.com/nats-io/nats-surveyor
-RUN git clone --branch master https://github.com/nats-io/nats-surveyor.git .
+WORKDIR $GOPATH/src/github.com/nats-io/
 
-# build
-RUN CGO_ENABLED=0 GO111MODULE=on GOOS=linux GOARCH=amd64 go build -v -a -tags netgo -installsuffix netgo -ldflags "-s -w"
+ENV GO111MODULE=on
+RUN apk add -U --no-cache git binutils
+
+RUN go get github.com/nats-io/nats-surveyor
+RUN strip /go/bin/*
 
 # Final docker image building stage
-FROM scratch
-COPY --from=0 /go/src/github.com/nats-io/nats-surveyor/nats-surveyor /nats-surveyor
+FROM alpine:3.10
+
+RUN apk add -U --no-cache ca-certificates figlet
+
+COPY --from=builder /go/bin/nats-surveyor /nats-surveyor
+
+USER root
+WORKDIR /root
+
 EXPOSE 7777
 ENTRYPOINT ["/nats-surveyor"]
 CMD ["--help"]
