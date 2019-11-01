@@ -226,6 +226,9 @@ a convenience.
 | NATS_SURVEYOR_CREDS   | ./SYS.creds          | NATS 2.0 System Account credentials |
 | NATS_SURVEYOR_SERVER_COUNT | 9               | Number of expected NATS servers |
 | PROMETHEUS_STORAGE    | ./storage/prometheus | Path to store prometheus data locally |
+| SURVEYOR_DOCKER_TAG   | latest               | Surveyor docker tag to pull | 
+| PROMETHEUS_DOCKER_TAG | latest               | Prometheus docker tag to pull | 
+| GRAFANA_DOCKER_TAG    | latest               | Grafana docker tag to pull | 
 
 Note:  For referencing files and paths, docker always expects volume mounts
 to be either a fully qualified directory, or a relative directory beginning
