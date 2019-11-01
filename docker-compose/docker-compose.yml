@@ -7,14 +7,12 @@ networks:
 services:
 
   surveyor:
-    image: synadia/nats-surveyor
+    image: synadia/nats-surveyor:${SURVEYOR_DOCKER_TAG}
     container_name:  nats-surveyor
     volumes:
       - $NATS_SURVEYOR_CREDS:/etc/surveyor/SYS.creds
     entrypoint: /nats-surveyor
-    command: -c $NATS_SURVEYOR_SERVER_COUNT -creds /etc/surveyor/SYS.creds -s $NATS_SURVEYOR_SERVERS
-    ports:
-      - "7777:7777"
+    command: -c ${NATS_SURVEYOR_SERVER_COUNT} -creds /etc/surveyor/SYS.creds -s "${NATS_SURVEYOR_SERVERS}"
     networks:
       - monitor-net
     labels:
@@ -27,8 +25,6 @@ services:
       - ./prometheus/:/etc/prometheus/
       - $PROMETHEUS_STORAGE:/usr/local/share/prometheus
     command: --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/usr/local/share/prometheus
-    ports:
-      - "9090:9090"
     networks:
       - monitor-net
     labels:
