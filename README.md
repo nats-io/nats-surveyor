@@ -196,37 +196,54 @@ nats_core_total_connection_count{nats_server_cluster="region1",nats_server_host=
 nats_core_total_connection_count{nats_server_cluster="region2",nats_server_host="localhost",nats_server_id="NCBI75V5ASPJAEAR3VPS2YELXP7K6CUXXWAD5PB2SJ4BOIYQHU6JKV7A"} 0
 ```
 
-Note, as this is not the recommended Prometheus archtecture, and in fact considered an
-anti-pattern, we won't be submitting it to Prometheus as an official exporter at this time.
+We feel Prometheus is the right fit for this project, but it's worth noting
+that this is not the recommended Prometheus archtecture, preferring ease of use
+over installing and configuring a full monitoring infrastructure.  For a more
+robust monitoring architecture the
+[prometheus-nats-exporter](https://github.com/nats-io/prometheus-nats-exporter)
+should be placed and configured alongside every NATS server component.
 
-## Docker compose
+## Docker Compose
 
-The NATS Surveyor stack (Grafana / Prometheus / NATS Surveyor) can be run on the command line
-through docker-compose.
+An easy way to start the NATS Surveyor stack (Grafana, Prometheus, and NATS
+Surveyor) is through docker-compose.
 
 Follow these links for installation instructions:
 
-* [Docker Installation](https://docs.docker.com/v17.09/engine/installation/) instructions.
-* [Docker Compose Installation](https://docs.docker.com/compose/install/) instructions.
+* [Docker Installation](https://docs.docker.com/v17.09/engine/installation/)
+* [Docker Compose Installation](https://docs.docker.com/compose/install/)
 
 ### Environment Variables
 
-The following environment variables MUST be set, either in your environment or through the [.env](./docker-compose/.env) file that is automatically read by docker-compose.  There is a `survey.sh` script that will set them for you as a convenience.
+The following environment variables MUST be set, either in your environment or
+through the [.env](./docker-compose/.env) file that is automatically read by
+docker-compose.  There is a `survey.sh` script that will set them for you as
+a convenience.
 
 | Environment Variable | Example | Description |
 |--|--|--|
-| NATS_SURVEYOR_SERVERS | nats://hostname:4222 | The URLs of the NATS server(s) you want to connect to  |
+| NATS_SURVEYOR_SERVERS | nats://hostname:4222 | The URLs of any deployed NATS server(s) |
 | NATS_SURVEYOR_CREDS   | ./SYS.creds          | NATS 2.0 System Account credentials |
-| NATS_SURVEYOR_SERVER_COUNT | 9 | The number of expected NATS servers |
-| PROMETHEUS_STORAGE | ./storage/prometheus | Local storage for prometheus data. |
+| NATS_SURVEYOR_SERVER_COUNT | 9               | Number of expected NATS servers |
+| PROMETHEUS_STORAGE    | ./storage/prometheus | Path to store prometheus data locally |
 
-Note:  For files and paths, docker always expects volume mounts to be either a fully qualified directory, or a relative directory beginning with
-with `./`.
+Note:  For referencing files and paths, docker always expects volume mounts
+to be either a fully qualified directory, or a relative directory beginning
+with with `./`.
+
+#### Server URLs
+
+You only need to connect to a single NATS server to monitor your entire NATS
+deployment.  In configuring NATS_SURVEYOR_SERVERS, only one server is required,
+but it's recommended you provide a list for backup servers to connect to, e.g.
+`nats://host1:4222,nats://host2:5222`.  Valid urls are formatted as `hostname`
+(defaulting to port 4222), `hostname:port`, or `nats://hostname:port`.
 
 ### Starting Up
 
-You can start the Surveyor stack two ways.  The first is through docker compose.  Ensure the environment
-varibles are set, that you are working from the /docker-compose directory and run `docker-compose up`.
+You can start the Surveyor stack two ways.  The first is through docker
+compose.  Ensure the environment varibles are set, that you are working
+from the /docker-compose directory and run `docker-compose up`.
 
 ```bash
 $ docker-compose up
@@ -237,7 +254,8 @@ Attaching to nats-surveyor, prometheus, grafana
 ...
 ```
 
-Alternatively, you can pass variables into the `survey.sh` script in the docker-compose directory.
+Alternatively, you can pass variables into the `survey.sh` script in the
+docker-compose directory.
 
 ```bash
 $ ./survey.sh
@@ -248,17 +266,34 @@ e.g.
 
 `./survey.sh  nats://mydeployment:4222 24 /privatekeys/SYS.creds`
 
-If things aren't working, look in the output for any lines that contain `exited with code 1` and
-address the problem. They are usually docker volume mount problems or connectivity problems.
+If things aren't working, look in the output for any lines that contain
+`exited with code 1` and address the problem. They are usually docker
+volume mount problems or connectivity problems.
 
-Next, with your browser, navigate to `http://127.0.0.1:3000`, or if you are running the Surveyor stack remotely, the hostname of the host running the NATS surveyor stack, e.g. `http://yourremotehost:3000`.  
+Next, with your browser, navigate to `http://127.0.0.1:3000`, or if you are
+running the Surveyor stack remotely, the hostname of the host running the
+NATS surveyor stack, e.g. `http://yourremotehost:3000`.  
 
 The first time you connect, you'll need to login:
 
 * User:  *admin*
 * Password: *admin*
 
-After logging in, navigate to "Manage dashboards" and you'll see a dashboard available named **NATS Surveyor**, where you'll be able to monitor your entire NATS deployment.
+After logging in, navigate to "Manage dashboards" and you'll see a dashboard
+available named **NATS Surveyor**, where you'll be able to monitor your
+entire NATS deployment.
+
+### Stopping (while keeping the containers)
+
+To stop the surveyor stack, but keep the containers run: `docker-compose stop`
+
+### Restarting Surveyor
+
+To restart the surveyor stack after being stopped, run: `docker-compose up`
+
+### Stopping and removing containers
+
+To cleanup your installation, run: `docker-compose down`
 
 ## TODO
 
