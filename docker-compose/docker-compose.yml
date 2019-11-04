@@ -1,0 +1,48 @@
+version: '3'
+
+networks:
+  monitor-net:
+    driver: bridge
+
+services:
+
+  surveyor:
+    image: synadia/nats-surveyor:${SURVEYOR_DOCKER_TAG}
+    container_name:  nats-surveyor
+    volumes:
+      - $NATS_SURVEYOR_CREDS:/etc/surveyor/SYS.creds
+    entrypoint: /nats-surveyor
+    command: -c ${NATS_SURVEYOR_SERVER_COUNT} -creds /etc/surveyor/SYS.creds -s "${NATS_SURVEYOR_SERVERS}"
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "nats-monitoring"
+
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_DOCKER_TAG}
+    container_name: prometheus
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - $PROMETHEUS_STORAGE:/usr/local/share/prometheus
+    command: --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/usr/local/share/prometheus
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "nats-monitoring"
+    depends_on:
+      - surveyor
+  
+  grafana:
+    image: grafana/grafana:${GRAFANA_DOCKER_TAG}
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "nats-monitoring"
+    depends_on:
+      - prometheus
