@@ -298,6 +298,35 @@ To restart the surveyor stack after being stopped, run: `docker-compose up`
 
 To cleanup your installation, run: `docker-compose down`
 
+### Errors
+
+The logs should normally contain enough information about the cause of
+problems or errors.
+
+If you encounter a Prometheus error of:
+`panic: Unable to create mmap-ed active query log`, set the UID of the
+container to match the UID of your user in the
+[docker-compose](./docker-compose/docker-compose.yml) file.
+
+e.g:
+
+```yaml
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_DOCKER_TAG}
+    user: "1000:1000"
+```
+
+If the above doesn't work, using `root` will work but may pose a
+security thread to the node it is running on.
+
+```yaml
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_DOCKER_TAG}
+    user: root
+```
+
+More information can be found [here](https://github.com/prometheus/prometheus/issues/5976).
+
 ## TODO
 
 - [ ] Windows builds
