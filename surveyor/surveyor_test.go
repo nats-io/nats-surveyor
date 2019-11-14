@@ -26,6 +26,7 @@ import (
 	"time"
 
 	st "github.com/nats-io/nats-surveyor/test"
+	ptu "github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 // Testing constants
@@ -373,6 +374,28 @@ func TestSurveyor_MissingResponses(t *testing.T) {
 	_, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
 	if err != nil {
 		t.Fatalf("poll error:  %v\n", err)
+	}
+}
+
+func TestSurveyor_Observations(t *testing.T) {
+	sc := st.NewSuperCluster(t)
+	defer sc.Shutdown()
+
+	opt := getTestOptions()
+	opt.ObservationConfigDir = "testdata/observations"
+
+	s, err := NewSurveyor(opt)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	defer s.Stop()
+
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+
+	if ptu.ToFloat64(observationsGauge) != 1 {
+		t.Fatalf("process error: observations not started")
 	}
 }
 

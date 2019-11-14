@@ -1,18 +1,18 @@
-version: '3'
+version: "3"
 
 networks:
   monitor-net:
     driver: bridge
 
 services:
-
   surveyor:
     image: synadia/nats-surveyor:${SURVEYOR_DOCKER_TAG}
-    container_name:  nats-surveyor
+    container_name: nats-surveyor
     volumes:
       - $NATS_SURVEYOR_CREDS:/etc/surveyor/SYS.creds
+      - ./observations:/observations
     entrypoint: /nats-surveyor
-    command: -c ${NATS_SURVEYOR_SERVER_COUNT} -creds /etc/surveyor/SYS.creds -s "${NATS_SURVEYOR_SERVERS}"
+    command: -c ${NATS_SURVEYOR_SERVER_COUNT} -creds /etc/surveyor/SYS.creds -s "${NATS_SURVEYOR_SERVERS}" -observe /observations
     networks:
       - monitor-net
     labels:
@@ -31,7 +31,7 @@ services:
       org.label-schema.group: "nats-monitoring"
     depends_on:
       - surveyor
-  
+
   grafana:
     image: grafana/grafana:${GRAFANA_DOCKER_TAG}
     container_name: grafana
