@@ -238,14 +238,52 @@ func TestSurveyor_NoSystemAccount(t *testing.T) {
 	}
 }
 
+func TestSurveyor_ClientTLSFail(t *testing.T) {
+	ns := st.StartServer(t, "../test/r1s1.conf")
+	st.ConnectAndVerify(t, ns.ClientURL())
+	defer ns.Shutdown()
+
+	opts := getTestOptions()
+	opts.CaFile = caCertFile
+	opts.CertFile = clientCert
+	opts.KeyFile = clientKey
+
+	_, err := NewSurveyor(opts)
+	if err == nil {
+		t.Fatalf("Connected to a server that required TLS")
+	}
+}
+
+func TestSurveyor_ClientTLS(t *testing.T) {
+	ns := st.StartServer(t, "../test/tls.conf")
+	defer ns.Shutdown()
+
+	opts := getTestOptions()
+	opts.URLs = "127.0.0.1:4223"
+	opts.CaFile = caCertFile
+	opts.CertFile = clientCert
+	opts.KeyFile = clientKey
+
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	pollAndCheckDefault(t, "nats_core_mem_bytes")
+}
+
 func TestSurveyor_HTTPS(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
 
 	opts := getTestOptions()
-	opts.CaFile = caCertFile
-	opts.CertFile = serverCert
-	opts.KeyFile = serverKey
+	opts.HTTPCaFile = caCertFile
+	opts.HTTPCertFile = serverCert
+	opts.HTTPKeyFile = serverKey
 
 	s, err := NewSurveyor(opts)
 	if err != nil {

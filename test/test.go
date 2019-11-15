@@ -95,8 +95,8 @@ func StartBasicServer() *ns.Server {
 	panic("Unable to start NATS Server in Go Routine")
 }
 
-// startServer starts a a NATS server
-func startServer(t *testing.T, confFile string) *ns.Server {
+// StartServer starts a a NATS server
+func StartServer(t *testing.T, confFile string) *ns.Server {
 	resetPreviousHTTPConnections()
 	opts, err := ns.ProcessConfigFile(confFile)
 
@@ -138,7 +138,7 @@ var configFiles = []string{"../test/r1s1.conf", "../test/r1s2.conf", "../test/r2
 func NewSuperCluster(t *testing.T) *SuperCluster {
 	sc := &SuperCluster{}
 	for _, f := range configFiles {
-		sc.Servers = append(sc.Servers, startServer(t, f))
+		sc.Servers = append(sc.Servers, StartServer(t, f))
 	}
 	sc.setupClientsAndVerify(t)
 	return sc
@@ -146,8 +146,8 @@ func NewSuperCluster(t *testing.T) *SuperCluster {
 
 // NewSingleServer creates a single NATS server with a system account
 func NewSingleServer(t *testing.T) *ns.Server {
-	s := startServer(t, "../test/r1s1.conf")
-	connectAndVerify(t, s.ClientURL())
+	s := StartServer(t, "../test/r1s1.conf")
+	ConnectAndVerify(t, s.ClientURL())
 	return s
 }
 
@@ -161,7 +161,9 @@ func (sc *SuperCluster) Shutdown() {
 	}
 }
 
-func connectAndVerify(t *testing.T, url string) *nats.Conn {
+// ConnectAndVerify connects to a server a verifies it is
+// ready to process messages.
+func ConnectAndVerify(t *testing.T, url string) *nats.Conn {
 	c, err := nats.Connect(url, nats.UserCredentials("../test/myuser.creds"))
 	if err != nil {
 		t.Fatalf("Couldn't connect a client to %s: %v", url, err)
@@ -185,7 +187,7 @@ func connectAndVerify(t *testing.T, url string) *nats.Conn {
 
 func (sc *SuperCluster) setupClientsAndVerify(t *testing.T) {
 	for _, s := range sc.Servers {
-		c := connectAndVerify(t, s.ClientURL())
+		c := ConnectAndVerify(t, s.ClientURL())
 		sc.Clients = append(sc.Clients, c)
 	}
 

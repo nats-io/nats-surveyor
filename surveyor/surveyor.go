@@ -58,6 +58,9 @@ type Options struct {
 	CertFile        string
 	KeyFile         string
 	CaFile          string
+	HTTPCertFile    string
+	HTTPKeyFile     string
+	HTTPCaFile      string
 	NATSServerURL   string
 	HTTPUser        string // User in metrics scrape by Prometheus.
 	HTTPPassword    string
@@ -120,6 +123,14 @@ func connect(opts *Options) (*nats.Conn, error) {
 	}))
 	nopts = append(nopts, nats.MaxReconnects(10240))
 
+	// NATS TLS Options
+	if opts.CaFile != "" {
+		nopts = append(nopts, nats.RootCAs(opts.CaFile))
+	}
+	if opts.CertFile != "" {
+		nopts = append(nopts, nats.ClientCert(opts.CertFile, opts.KeyFile))
+	}
+
 	nc, err := nats.Connect(opts.URLs, nopts...)
 	if err != nil {
 		return nil, err
@@ -164,17 +175,17 @@ func (s *Surveyor) createCollector() error {
 }
 
 // generates the TLS config for https
-func (s *Surveyor) generateTLSConfig() (*tls.Config, error) {
+func (s *Surveyor) generateHTTPTLSConfig() (*tls.Config, error) {
 	//  Load in cert and private key
-	cert, err := tls.LoadX509KeyPair(s.opts.CertFile, s.opts.KeyFile)
+	cert, err := tls.LoadX509KeyPair(s.opts.HTTPCertFile, s.opts.HTTPKeyFile)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing X509 certificate/key pair (%s, %s): %v",
-			s.opts.CertFile, s.opts.KeyFile, err)
+			s.opts.HTTPCertFile, s.opts.HTTPKeyFile, err)
 	}
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
 		return nil, fmt.Errorf("error parsing certificate (%s): %v",
-			s.opts.CertFile, err)
+			s.opts.HTTPCertFile, err)
 	}
 	// Create our TLS configuration
 	config := &tls.Config{
@@ -183,10 +194,10 @@ func (s *Surveyor) generateTLSConfig() (*tls.Config, error) {
 		MinVersion:   tls.VersionTLS12,
 	}
 	// Add in CAs if applicable.
-	if s.opts.CaFile != "" {
-		rootPEM, err := ioutil.ReadFile(s.opts.CaFile)
+	if s.opts.HTTPCaFile != "" {
+		rootPEM, err := ioutil.ReadFile(s.opts.HTTPCaFile)
 		if err != nil || rootPEM == nil {
-			return nil, fmt.Errorf("failed to load root ca certificate (%s): %v", s.opts.CaFile, err)
+			return nil, fmt.Errorf("failed to load root ca certificate (%s): %v", s.opts.HTTPCaFile, err)
 		}
 		pool := x509.NewCertPool()
 		ok := pool.AppendCertsFromPEM(rootPEM)
@@ -284,11 +295,11 @@ func (s *Surveyor) startHTTP() error {
 
 	// If a certificate file has been specified, setup TLS with the
 	// key provided.
-	if s.opts.CertFile != "" {
+	if s.opts.HTTPCertFile != "" {
 		proto = "https"
 		// debug
 		log.Printf("Certificate file specfied; using https.")
-		config, err = s.generateTLSConfig()
+		config, err = s.generateHTTPTLSConfig()
 		if err != nil {
 			return err
 		}

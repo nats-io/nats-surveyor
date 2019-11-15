@@ -34,3 +34,9 @@ func TestStartSingleServer(t *testing.T) {
 	ns := NewSingleServer(t)
 	ns.Shutdown()
 }
+
+func TestStartServers(t *testing.T) {
+	ns := StartServer(t, "../test/r1s1.conf")
+	ConnectAndVerify(t, ns.ClientURL())
+	ns.Shutdown()
+}
