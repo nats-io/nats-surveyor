@@ -8,6 +8,7 @@ services:
   surveyor:
     image: synadia/nats-surveyor:${SURVEYOR_DOCKER_TAG}
     container_name: nats-surveyor
+    restart: always
     volumes:
       - $NATS_SURVEYOR_CREDS:/etc/surveyor/SYS.creds
       - ./observations:/observations
@@ -21,6 +22,7 @@ services:
   prometheus:
     image: prom/prometheus:${PROMETHEUS_DOCKER_TAG}
     container_name: prometheus
+    restart: always
     volumes:
       - ./prometheus/:/etc/prometheus/
       - $PROMETHEUS_STORAGE:/usr/local/share/prometheus
@@ -35,6 +37,7 @@ services:
   grafana:
     image: grafana/grafana:${GRAFANA_DOCKER_TAG}
     container_name: grafana
+    restart: always
     ports:
       - "3000:3000"
     volumes:
