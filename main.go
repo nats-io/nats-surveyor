@@ -51,6 +51,7 @@ func main() {
 	flag.StringVar(&opts.HTTPUser, "http_user", "", "Enable basic auth and set user name for HTTP scrapes.")
 	flag.StringVar(&opts.HTTPPassword, "http_pass", "", "Set the password for HTTP scrapes. NATS bcrypt supported.")
 	flag.StringVar(&opts.Prefix, "prefix", "", "Replace the default prefix for all the metrics.")
+	flag.StringVar(&opts.ObservationConfigDir, "observe", "", "Listen for observation statistics based on config files in a directory.")
 	flag.Parse()
 
 	if printVersion {
@@ -60,9 +61,12 @@ func main() {
 
 	s, err := surveyor.NewSurveyor(opts)
 	if err != nil {
-		log.Fatalf("couldn't start surveyor:  %v", err)
+		log.Fatalf("couldn't start surveyor: %v", err)
 	}
-	s.Start()
+	err = s.Start()
+	if err != nil {
+		log.Fatalf("couldn't start surveyor: %s", err)
+	}
 
 	// Setup the interrupt handler to gracefully exit.
 	c := make(chan os.Signal, 1)

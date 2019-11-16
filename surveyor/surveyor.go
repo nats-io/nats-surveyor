@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,27 +50,35 @@ var (
 
 // Options are used to configure the NATS collector
 type Options struct {
-	URLs            string
-	Credentials     string
-	PollTimeout     time.Duration
-	ExpectedServers int
-	ListenAddress   string
-	ListenPort      int
-	CertFile        string
-	KeyFile         string
-	CaFile          string
-	HTTPCertFile    string
-	HTTPKeyFile     string
-	HTTPCaFile      string
-	NATSServerURL   string
-	HTTPUser        string // User in metrics scrape by Prometheus.
-	HTTPPassword    string
-	Prefix          string // TODO
+	Name                 string
+	URLs                 string
+	Credentials          string
+	PollTimeout          time.Duration
+	ExpectedServers      int
+	ListenAddress        string
+	ListenPort           int
+	CertFile             string
+	KeyFile              string
+	CaFile               string
+	HTTPCertFile         string
+	HTTPKeyFile          string
+	HTTPCaFile           string
+	NATSServerURL        string
+	HTTPUser             string // User in metrics scrape by Prometheus.
+	HTTPPassword         string
+	Prefix               string // TODO
+	ObservationConfigDir string
 }
 
 // GetDefaultOptions returns the default set of options
 func GetDefaultOptions() *Options {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "127.0.0.1"
+	}
+
 	opts := &Options{
+		Name:            fmt.Sprintf("NATS_Surveyor - %s", hostname),
 		ListenAddress:   DefaultListenAddress,
 		ListenPort:      DefaultListenPort,
 		URLs:            DefaultURL,
@@ -82,10 +91,11 @@ func GetDefaultOptions() *Options {
 // A Surveyor instance
 type Surveyor struct {
 	sync.Mutex
-	opts   Options
-	nc     *nats.Conn
-	http   net.Listener
-	statzC *StatzCollector
+	opts         Options
+	nc           *nats.Conn
+	http         net.Listener
+	statzC       *StatzCollector
+	observations []*ServiceObsListener
 }
 
 func connect(opts *Options) (*nats.Conn, error) {
@@ -95,11 +105,7 @@ func connect(opts *Options) (*nats.Conn, error) {
 	})
 	prometheus.Register(reconnCtr)
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "127.0.0.1"
-	}
-	nopts := []nats.Option{nats.Name(fmt.Sprintf("NATS_Surveyor - %s", hostname))}
+	nopts := []nats.Option{nats.Name(opts.Name)}
 	if opts.Credentials != "" {
 		nopts = append(nopts, nats.UserCredentials(opts.Credentials))
 	}
@@ -147,8 +153,9 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 		return nil, err
 	}
 	return &Surveyor{
-		nc:   nc,
-		opts: *opts,
+		nc:           nc,
+		opts:         *opts,
+		observations: []*ServiceObsListener{},
 	}, nil
 }
 
@@ -347,9 +354,57 @@ func (s *Surveyor) startHTTP() error {
 	return nil
 }
 
+func (s *Surveyor) startObservations() error {
+	observationsGauge.Set(0)
+
+	dir := s.opts.ObservationConfigDir
+	if dir == "" {
+		log.Printf("Skipping observation startup, no directory configured")
+		return nil
+	}
+
+	fs, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("could not start observations, %s does not exist", dir)
+	}
+
+	if !fs.IsDir() {
+		return fmt.Errorf("observations dir %s is not a directory", dir)
+	}
+
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if filepath.Ext(info.Name()) != ".json" {
+			return nil
+		}
+
+		obs, err := NewServiceObservation(path, s.opts)
+		if err != nil {
+			return fmt.Errorf("could not create observation from %s: %s", path, err)
+		}
+
+		err = obs.Start()
+		if err != nil {
+			return fmt.Errorf("could not start observation from %s: %s", path, err)
+		}
+
+		s.observations = append(s.observations, obs)
+
+		return nil
+	})
+
+	return err
+}
+
 // Start starts the surveyor
 func (s *Surveyor) Start() error {
 	if err := s.startHTTP(); err != nil {
+		return err
+	}
+	if err := s.startObservations(); err != nil {
 		return err
 	}
 	if err := s.createCollector(); err != nil {
@@ -361,6 +416,11 @@ func (s *Surveyor) Start() error {
 // Stop stops the surveyor
 func (s *Surveyor) Stop() {
 	s.Lock()
+
+	for _, o := range s.observations {
+		o.nc.Close()
+	}
+
 	prometheus.Unregister(s.statzC)
 	s.http.Close()
 	s.nc.Drain()

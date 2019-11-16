@@ -327,6 +327,20 @@ security thread to the node it is running on.
 
 More information can be found [here](https://github.com/prometheus/prometheus/issues/5976).
 
+## Service Observations
+
+Services can be observed by creating JSON files in the `observations` directory, here's an example:
+
+```
+{
+  "name": "email.subscribe",
+  "topic": "monitor.email.subscribe",
+  "credential": "/observations/email.subscribe.cred"
+}
+```
+
+Place this in `observations/email.surbscribe.json` and create a credential giving access to this topic in `observations/email.subscribe.cred`, when you restart the service any observations published by the NATS system will be tracked and graphed.
+
 ## TODO
 
 - [ ] Windows builds

@@ -1,0 +1,5 @@
+{
+    "name": "testing",
+    "topic": "testing.topic",
+    "credential": "testdata/badobs/badauth.creds"
+}
