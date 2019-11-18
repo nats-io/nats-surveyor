@@ -401,13 +401,13 @@ func (s *Surveyor) startObservations() error {
 
 // Start starts the surveyor
 func (s *Surveyor) Start() error {
-	if err := s.startHTTP(); err != nil {
-		return err
-	}
 	if err := s.startObservations(); err != nil {
 		return err
 	}
 	if err := s.createCollector(); err != nil {
+		return err
+	}
+	if err := s.startHTTP(); err != nil {
 		return err
 	}
 	return nil
