@@ -382,17 +382,17 @@ func TestSurveyor_Observations(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
-	opt.ObservationConfigDir = "testdata/observations"
+	opt.ObservationConfigDir = "test/data/observations"
 
 	s, err := NewSurveyor(opt)
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
 	}
-	defer s.Stop()
 
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
+	defer s.Stop()
 
 	if ptu.ToFloat64(observationsGauge) != 1 {
 		t.Fatalf("process error: observations not started")
