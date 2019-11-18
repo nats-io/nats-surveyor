@@ -28,23 +28,23 @@ func TestServiceObservation_Load(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
-	obs, err := NewServiceObservation("test/data/goodobs/good.json", *opt)
+	obs, err := NewServiceObservation("../test/data/goodobs/good.json", *opt)
 	if err != nil {
 		t.Fatalf("observation load error: %s", err)
 	}
 	obs.Stop()
 
-	_, err = NewServiceObservation("test/data/badobs/missing.json", *opt)
-	if err.Error() != "open test/data/badobs/missing.json: no such file or directory" {
+	_, err = NewServiceObservation("../test/data/badobs/missing.json", *opt)
+	if err.Error() != "open ../test/data/badobs/missing.json: no such file or directory" {
 		t.Fatalf("observation load error: %s", err)
 	}
 
-	_, err = NewServiceObservation("test/data/badobs/bad.json", *opt)
+	_, err = NewServiceObservation("../test/data/badobs/bad.json", *opt)
 	if err.Error() != "invalid service observation configuration: test/data/badobs/bad.json: name is required, topic is required, credential is required" {
 		t.Fatalf("observation load error: %s", err)
 	}
 
-	_, err = NewServiceObservation("test/data/badobs/badauth.json", *opt)
+	_, err = NewServiceObservation("../test/data/badobs/badauth.json", *opt)
 	if err.Error() != "nats connection failed: nats: Authorization Violation" {
 		t.Fatalf("observation load error: %s", err)
 	}
@@ -55,7 +55,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
-	obs, err := NewServiceObservation("test/data/goodobs/good.json", *opt)
+	obs, err := NewServiceObservation("../test/data/goodobs/good.json", *opt)
 	if err != nil {
 		t.Fatalf("observation load error: %s", err)
 	}

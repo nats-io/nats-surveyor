@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -382,7 +383,11 @@ func TestSurveyor_Observations(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
-	opt.ObservationConfigDir = "test/data/observations"
+	opt.ObservationConfigDir = "../test/data/observations"
+
+	if _, err := os.Stat(opt.ObservationConfigDir); os.IsNotExist(err) {
+		os.Mkdir(opt.ObservationConfigDir, os.ModePerm)
+	}
 
 	s, err := NewSurveyor(opt)
 	if err != nil {
