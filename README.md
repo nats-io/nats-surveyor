@@ -298,6 +298,14 @@ To restart the surveyor stack after being stopped, run: `docker-compose up`
 
 To cleanup your installation, run: `docker-compose down`
 
+### Running Surveyor as a service
+
+For platforms that support `systemd`, [surveyor.service](./docker-compose/surveyor.service)
+is provided as a service definition template.  Modify and save this file as
+`/etc/systemd/system/surveyor.service`.
+
+`systemctl start surveyor` will launch the service.
+
 ### Errors
 
 The logs should normally contain enough information about the cause of
