@@ -1,0 +1,25 @@
+# Save as e.g. /etc/systemd/system/surveyor.service
+[Unit]
+Description=NATS Surveyor service under docker compose
+
+[Service]
+Restart=always
+
+Environment=NATS_SURVEYOR_SERVERS=<server url(s)>
+Environment=NATS_SURVEYOR_SERVER_COUNT=<expected server count>
+Environment=NATS_SURVEYOR_CREDS=<full path to system credentials>
+
+WorkingDirectory=<path to nats-surveyor>/docker-compose
+
+# This example assumes snap was used to install docker-compose. Adjust
+# as required.
+
+# Compose up
+ExecStart=/snap/bin/docker-compose up
+
+# Compose down, remove containers and volumes
+ExecStop=/snap/bin/docker-compose down -v
+
+[Install]
+WantedBy=multi-user.target
+
