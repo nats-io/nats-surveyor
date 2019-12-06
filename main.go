@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/nats-io/nats-surveyor/surveyor"
@@ -70,11 +71,22 @@ func main() {
 
 	// Setup the interrupt handler to gracefully exit.
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, os.Interrupt, syscall.SIGQUIT)
 	go func() {
-		<-c
-		s.Stop()
-		os.Exit(0)
+		for {
+			sig := <-c
+
+			switch sig {
+			case syscall.SIGQUIT:
+				buf := make([]byte, 1<<20)
+				stacklen := runtime.Stack(buf, true)
+				fmt.Fprintln(os.Stderr, string(buf[:stacklen]))
+
+			default:
+				s.Stop()
+				os.Exit(0)
+			}
+		}
 	}()
 
 	runtime.Goexit()
