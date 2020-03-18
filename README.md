@@ -1,6 +1,6 @@
 [![License][License-Image]][License-Url] [![Build][Build-Status-Image]][Build-Status-Url] [![Coverage][Coverage-Image]][Coverage-Url]
 
-# NATS Surveyor - WIP
+# NATS Surveyor
 
 NATS Monitoring, Simplified.
 
