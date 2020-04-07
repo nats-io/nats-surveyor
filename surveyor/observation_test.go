@@ -90,7 +90,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 	sc.Clients[0].Flush()
 
 	// ugh, but it has to travel through nats etc? what better way?
-	time.Sleep(100 * time.Microsecond)
+	time.Sleep(1 * time.Second)
 	if ptu.ToFloat64(observationsReceived) != 10.0 {
 		t.Fatalf("process error: metrics not handled")
 	}
