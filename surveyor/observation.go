@@ -44,15 +44,15 @@ func (o *serviceObsOptions) Validate() error {
 	errs := []string{}
 
 	if o.ServiceName == "" {
-		errs = append(errs, fmt.Sprintf("name is required"))
+		errs = append(errs, "name is required")
 	}
 
 	if o.Topic == "" {
-		errs = append(errs, fmt.Sprintf("topic is required"))
+		errs = append(errs, "topic is required")
 	}
 
 	if o.Credentials == "" {
-		errs = append(errs, fmt.Sprintf("credential is required"))
+		errs = append(errs, "credential is required")
 	} else {
 		_, err := os.Stat(o.Credentials)
 		if err != nil {
