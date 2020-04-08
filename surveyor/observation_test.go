@@ -55,6 +55,9 @@ func TestServiceObservation_Handle(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
 
+	// sleep to let supercluster fully form
+	time.Sleep(time.Second * 1)
+
 	opt := getTestOptions()
 	obs, err := NewServiceObservation("testdata/goodobs/good.json", *opt)
 	if err != nil {
@@ -63,7 +66,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 	defer obs.Stop()
 	err = obs.Start()
 	if err != nil {
-		t.Fatalf("subscribe failed: %s", err)
+		t.Fatalf("obs could not start: %s", err)
 	}
 
 	// create a test subscriber as to approximate when the observer is ready.
