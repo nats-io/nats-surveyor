@@ -105,7 +105,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 	time.Sleep(250 * time.Microsecond)
 	var obsrecvd = ptu.ToFloat64(observationsReceived)
 	if obsrecvd != 10.0 {
-		t.Fatalf(fmt.Sprintf("observationsReceived = %f, expected 10.0", obsrecvd))
+		t.Fatalf(fmt.Sprintf("observations Received = %f, expected 10.0", obsrecvd))
 	}
 
 	// publish an invalid observation
