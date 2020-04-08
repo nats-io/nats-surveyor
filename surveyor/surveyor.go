@@ -404,10 +404,10 @@ func (s *Surveyor) Start() error {
 	if err := s.startHTTP(); err != nil {
 		return err
 	}
-	if err := s.startObservations(); err != nil {
+	if err := s.createCollector(); err != nil {
 		return err
 	}
-	if err := s.createCollector(); err != nil {
+	if err := s.startObservations(); err != nil {
 		return err
 	}
 	return nil

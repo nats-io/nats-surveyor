@@ -62,9 +62,13 @@ func TestServiceObservation_Handle(t *testing.T) {
 	defer obs.Stop()
 	err = obs.Start()
 	if err != nil {
-		t.Fatalf("subscribe failed: %s", err)
+		t.Fatalf("obs could not start: %s", err)
 	}
 
+	// create a test subscriber as to approximate when the observer is ready.
+	sub, _ := sc.Clients[0].SubscribeSync("testing.topic")
+
+	// send a bunch of observations
 	for i := 0; i < 10; i++ {
 		observation := &server.ServiceLatency{
 			AppName:      "testing",
@@ -89,19 +93,34 @@ func TestServiceObservation_Handle(t *testing.T) {
 
 	sc.Clients[0].Flush()
 
-	// ugh, but it has to travel through nats etc? what better way?
-	time.Sleep(100 * time.Microsecond)
-	if ptu.ToFloat64(observationsReceived) != 10.0 {
-		t.Fatalf("process error: metrics not handled")
+	// wait for all observations to be received in the test subscription
+	for i := 0; i < 10; i++ {
+		_, err = sub.NextMsg(time.Second)
+		if err != nil {
+			t.Fatalf("test subscriber didn't receive all published messages")
+		}
 	}
 
+	// sleep a bit just in case of slower delivery to the observer
+	time.Sleep(250 * time.Microsecond)
+	if ptu.ToFloat64(observationsReceived) == 0.0 {
+		t.Fatalf("did not receive observations")
+	}
+
+	// publish an invalid observation
 	err = sc.Clients[0].Publish("testing.topic", []byte{})
 	if err != nil {
 		t.Fatalf("publish error: %s", err)
 	}
 
-	time.Sleep(100 * time.Microsecond)
-	if ptu.ToFloat64(invalidObservationsReceived) != 1.0 {
-		t.Fatalf("process error: metrics not handled")
+	// wait for the invalid observation to arrive and then test for it
+	_, err = sub.NextMsg(time.Second)
+	if err != nil {
+		t.Fatalf("test subscriber didn't receive invalid message")
+	}
+
+	time.Sleep(250 * time.Microsecond)
+	if ptu.ToFloat64(invalidObservationsReceived) == 0.0 {
+		t.Fatalf("did not receive invalid observation")
 	}
 }

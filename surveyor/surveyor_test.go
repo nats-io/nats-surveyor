@@ -382,7 +382,7 @@ func TestSurveyor_Observations(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
-	opt.ObservationConfigDir = "testdata/observations"
+	opt.ObservationConfigDir = "testdata/goodobs"
 
 	s, err := NewSurveyor(opt)
 	if err != nil {

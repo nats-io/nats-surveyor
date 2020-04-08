@@ -44,15 +44,15 @@ func (o *serviceObsOptions) Validate() error {
 	errs := []string{}
 
 	if o.ServiceName == "" {
-		errs = append(errs, fmt.Sprintf("name is required"))
+		errs = append(errs, "name is required")
 	}
 
 	if o.Topic == "" {
-		errs = append(errs, fmt.Sprintf("topic is required"))
+		errs = append(errs, "topic is required")
 	}
 
 	if o.Credentials == "" {
-		errs = append(errs, fmt.Sprintf("credential is required"))
+		errs = append(errs, "credential is required")
 	} else {
 		_, err := os.Stat(o.Credentials)
 		if err != nil {
@@ -158,6 +158,7 @@ func (o *ServiceObsListener) Start() error {
 	if err != nil {
 		return fmt.Errorf("could not subscribe to observation topic for %s (%s): %s", o.opts.ServiceName, o.opts.Topic, err)
 	}
+	_ = o.nc.Flush()
 
 	observationsGauge.Inc()
 	log.Printf("Started observing stats on %s for %s", o.opts.Topic, o.opts.ServiceName)
