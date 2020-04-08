@@ -15,6 +15,7 @@ package surveyor
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -102,8 +103,9 @@ func TestServiceObservation_Handle(t *testing.T) {
 
 	// sleep a bit just in case of slower delivery to the observer
 	time.Sleep(250 * time.Microsecond)
-	if ptu.ToFloat64(observationsReceived) != 10.0 {
-		t.Fatalf("process error: metrics not handled")
+	var obsrecvd = ptu.ToFloat64(observationsReceived)
+	if obsrecvd != 10.0 {
+		t.Fatalf(fmt.Sprintf("invalidObservationsReceived = %f, expected 10.0", obsrecvd))
 	}
 
 	// publish an invalid observation
@@ -119,7 +121,8 @@ func TestServiceObservation_Handle(t *testing.T) {
 	}
 
 	time.Sleep(250 * time.Microsecond)
-	if ptu.ToFloat64(invalidObservationsReceived) != 1.0 {
-		t.Fatalf("process error: metrics not handled")
+	obsrecvd = ptu.ToFloat64(invalidObservationsReceived)
+	if obsrecvd != 1.0 {
+		t.Fatalf(fmt.Sprintf("invalidObservationsReceived = %f, expected 1.0", obsrecvd))
 	}
 }
