@@ -101,7 +101,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 	}
 
 	// sleep a bit just in case of slower delivery to the observer
-	time.Sleep(50 * time.Microsecond)
+	time.Sleep(250 * time.Microsecond)
 	if ptu.ToFloat64(observationsReceived) != 10.0 {
 		t.Fatalf("process error: metrics not handled")
 	}
@@ -118,7 +118,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 		t.Fatalf("test subscriber didn't receive invalid message")
 	}
 
-	time.Sleep(50 * time.Microsecond)
+	time.Sleep(250 * time.Microsecond)
 	if ptu.ToFloat64(invalidObservationsReceived) != 1.0 {
 		t.Fatalf("process error: metrics not handled")
 	}
