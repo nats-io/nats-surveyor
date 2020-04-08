@@ -158,6 +158,7 @@ func (o *ServiceObsListener) Start() error {
 	if err != nil {
 		return fmt.Errorf("could not subscribe to observation topic for %s (%s): %s", o.opts.ServiceName, o.opts.Topic, err)
 	}
+	_ = o.nc.Flush()
 
 	observationsGauge.Inc()
 	log.Printf("Started observing stats on %s for %s", o.opts.Topic, o.opts.ServiceName)
