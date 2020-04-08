@@ -104,7 +104,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 	// sleep a bit just in case of slower delivery to the observer
 	time.Sleep(250 * time.Microsecond)
 	if ptu.ToFloat64(observationsReceived) == 0.0 {
-		t.Fatalf("did not recieve observations")
+		t.Fatalf("did not receive observations")
 	}
 
 	// publish an invalid observation
