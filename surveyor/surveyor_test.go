@@ -411,6 +411,7 @@ func TestSurveyor_ConcurrentBlock(t *testing.T) {
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
+	defer s.Stop()
 
 	s.statzC.polling = true
 	_, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
@@ -451,7 +452,7 @@ func TestSurveyor_NATSUserPass(t *testing.T) {
 	}
 	defer s.Stop()
 
-	if _, err = PollSurveyorEndpoint(t, "http://colin:secret@127.0.0.1:7777/metrics", false, http.StatusOK); err != nil {
+	if _, err = PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK); err != nil {
 		t.Fatalf("received unexpected error: %v", err)
 	}
 }
