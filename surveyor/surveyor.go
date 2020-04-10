@@ -53,6 +53,8 @@ type Options struct {
 	Name                 string
 	URLs                 string
 	Credentials          string
+	NATSUser             string
+	NATSPassword         string
 	PollTimeout          time.Duration
 	ExpectedServers      int
 	ListenAddress        string
@@ -108,6 +110,8 @@ func connect(opts *Options) (*nats.Conn, error) {
 	nopts := []nats.Option{nats.Name(opts.Name)}
 	if opts.Credentials != "" {
 		nopts = append(nopts, nats.UserCredentials(opts.Credentials))
+	} else if opts.NATSUser != "" {
+		nopts = append(nopts, nats.UserInfo(opts.NATSUser, opts.NATSPassword))
 	}
 
 	nopts = append(nopts, nats.DisconnectHandler(func(_ *nats.Conn) {

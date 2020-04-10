@@ -100,12 +100,12 @@ func StartServer(t *testing.T, confFile string) *ns.Server {
 	resetPreviousHTTPConnections()
 	opts, err := ns.ProcessConfigFile(confFile)
 
-	// remove this line for debugging
-	opts.NoLog = true
-
 	if err != nil {
 		t.Fatalf("Error processing config file: %v", err)
 	}
+
+	// remove this line for debugging
+	opts.NoLog = true
 
 	s, err := ns.NewServer(opts)
 	if err != nil || s == nil {

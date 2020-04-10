@@ -411,6 +411,7 @@ func TestSurveyor_ConcurrentBlock(t *testing.T) {
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
+	defer s.Stop()
 
 	s.statzC.polling = true
 	_, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
@@ -420,5 +421,38 @@ func TestSurveyor_ConcurrentBlock(t *testing.T) {
 
 	if err.Error() != "expected a 200 response, got 503" {
 		t.Fatalf("Expected 503 error but got: %v", err)
+	}
+}
+
+func TestSurveyor_NATSUserPass(t *testing.T) {
+	ns := st.StartServer(t, "../test/trad.conf")
+	defer ns.Shutdown()
+
+	opts := getTestOptions()
+	opts.Credentials = ""
+
+	opts.NATSUser = "invalid_user"
+	opts.NATSPassword = "password"
+	_, err := NewSurveyor(opts)
+	if err == nil {
+		t.Fatalf("didn't receive expected error")
+	}
+	if !strings.Contains(err.Error(), "Auth") {
+		t.Fatalf("didn't receive expected error: %v", err)
+	}
+
+	opts.NATSUser = "sys"
+	opts.NATSPassword = "password"
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	if _, err = PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK); err != nil {
+		t.Fatalf("received unexpected error: %v", err)
 	}
 }

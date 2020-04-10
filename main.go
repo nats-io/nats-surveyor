@@ -37,6 +37,8 @@ func main() {
 	flag.BoolVar(&printVersion, "version", false, "Show exporter version and exit.")
 	flag.StringVar(&opts.URLs, "s", "nats://localhost:4222", "NATS Cluster url(s)")
 	flag.StringVar(&opts.Credentials, "creds", "", "Credentials File")
+	flag.StringVar(&opts.NATSUser, "user", "", "NATS user name or token")
+	flag.StringVar(&opts.NATSPassword, "password", "", "NATS user password")
 	flag.IntVar(&opts.ExpectedServers, "c", 1, "Expected number of servers")
 	flag.DurationVar(&opts.PollTimeout, "timeout", 3*time.Second, "Polling timeout")
 	flag.IntVar(&opts.ListenPort, "port", surveyor.DefaultListenPort, "Port to listen on.")
