@@ -4,11 +4,13 @@
 
 NATS Monitoring, Simplified.
 
-NOTE:  This should be considered *alpha* and is currently a work in progress.
+NATS surveyor polls the NATS server for `Statz` messages to generate data for
+Prometheus.  This allows a single exporter to connect to any NATS server and
+get an entire picture of a NATS deployment without requiring extra monitoring
+components or sidecars.  Surveyor has been used extensively by [Synadia](https://synadia.com).
 
-This project uses the polling of NATS server `Statz` messages to generate data for
-Prometheus, allowing a single exporter to connect to any NATS server and get an entire
-picture of a NATS deployment.
+[System accounts](https://docs.nats.io/nats-server/configuration/sys_accounts)
+must be enabled to use surveyor.
 
 ## Usage
 
@@ -21,7 +23,7 @@ Usage of ./nats-surveyor:
   -c int
     	Expected number of servers (default 1)
   -creds string
-    	Credentials File
+    	Credentials File for the system account
   -http_pass string
     	Set the password for HTTP scrapes. NATS bcrypt supported.
   -http_user string
