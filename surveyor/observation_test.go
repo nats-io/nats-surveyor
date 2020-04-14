@@ -107,16 +107,22 @@ func TestServiceObservation_Handle(t *testing.T) {
 		t.Fatalf("did not receive observations")
 	}
 
-	// publish an invalid observation
-	err = sc.Clients[0].Publish("testing.topic", []byte{})
-	if err != nil {
-		t.Fatalf("publish error: %s", err)
+	// publish some invalid observations
+	for i := 0; i < 10; i++ {
+		err = sc.Clients[0].Publish("testing.topic", []byte{})
+		if err != nil {
+			t.Fatalf("publish error: %s", err)
+		}
 	}
 
-	// wait for the invalid observation to arrive and then test for it
-	_, err = sub.NextMsg(time.Second)
-	if err != nil {
-		t.Fatalf("test subscriber didn't receive invalid message")
+	sc.Clients[0].Flush()
+
+	for i := 0; i < 10; i++ {
+		// wait for the invalid observations to arrive
+		_, err = sub.NextMsg(time.Second)
+		if err != nil {
+			t.Fatalf("test subscriber didn't receive invalid message")
+		}
 	}
 
 	time.Sleep(250 * time.Microsecond)
