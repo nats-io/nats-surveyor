@@ -26,7 +26,7 @@ import (
 	"github.com/nats-io/nats-surveyor/surveyor"
 )
 
-var version = "0.0.1"
+var version = "0.1.1"
 
 func main() {
 	var printVersion bool
