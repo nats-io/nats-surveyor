@@ -31,26 +31,29 @@ builds:
 
   lang: go
 
-archive:
-  wrap_in_directory: true
-  name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
-    }}v{{ .Arm }}{{ end }}'
-  format: zip
-  files:
-  - LICENSE
-  - README.md
+archives:
+  - id: zipfiles
+    wrap_in_directory: true
+    name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
+      }}v{{ .Arm }}{{ end }}'
+    format: zip
+    files:
+    - LICENSE
+    - README.md
+    - nats-surveyor*
 
-nfpm:
-  formats:
-    - deb
-  name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
-    }}v{{ .Arm }}{{ end }}'
-  bindir: /usr/local/bin
-  description: A Simplified Prometheus Monitoring Solution for NATS
-  vendor: nats.io
-  maintainer: Colin Sullivan <colin@nats.io>
-  homepage: https://nats.io
-  license: Apache 2.0
+nfpms:
+  - 
+    formats:
+      - deb
+    file_name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
+      }}v{{ .Arm }}{{ end }}'
+    bindir: /usr/local/bin
+    description: A Simplified Prometheus Monitoring Solution for NATS
+    vendor: nats.io
+    maintainer: Colin Sullivan <colin@nats.io>
+    homepage: https://nats.io
+    license: Apache 2.0
 
 snapshot:
   name_template: SNAPSHOT-{{ .Commit }}
