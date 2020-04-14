@@ -1,5 +1,5 @@
 IMAGE := synadia/nats-surveyor
-TAG := 0.0.1-alpha3
+TAG := 0.1.0
  
 build:
 	$(info Make: Building "$(TAG)" tagged images.)
