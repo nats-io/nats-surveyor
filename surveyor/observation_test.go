@@ -1,4 +1,4 @@
-// Copyright 2019 The NATS Authors
+// Copyright 2020 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,9 +18,10 @@ import (
 	"testing"
 	"time"
 
-	server "github.com/nats-io/nats-server/v2/server"
-	st "github.com/nats-io/nats-surveyor/test"
+	"github.com/nats-io/nats-server/v2/server"
 	ptu "github.com/prometheus/client_golang/prometheus/testutil"
+
+	st "github.com/nats-io/nats-surveyor/test"
 )
 
 func TestServiceObservation_Load(t *testing.T) {
@@ -59,11 +60,12 @@ func TestServiceObservation_Handle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("observation load error: %s", err)
 	}
-	defer obs.Stop()
+
 	err = obs.Start()
 	if err != nil {
 		t.Fatalf("obs could not start: %s", err)
 	}
+	defer obs.Stop()
 
 	// create a test subscriber as to approximate when the observer is ready.
 	sub, _ := sc.Clients[0].SubscribeSync("testing.topic")
@@ -71,14 +73,21 @@ func TestServiceObservation_Handle(t *testing.T) {
 	// send a bunch of observations
 	for i := 0; i < 10; i++ {
 		observation := &server.ServiceLatency{
-			AppName:      "testing",
-			RequestStart: time.Now(),
-			TotalLatency: time.Second,
-			NATSLatency: server.NATSLatency{
-				Requestor: 333 * time.Microsecond,
-				Responder: 333 * time.Microsecond,
-				System:    333 * time.Microsecond,
+			TypedEvent: server.TypedEvent{
+				Time: time.Now().UTC(),
 			},
+			Requestor: server.LatencyClient{
+				Start: time.Now(),
+				RTT:   333 * time.Second,
+			},
+			Responder: server.LatencyClient{
+				Account: "testing",
+				RTT:     time.Second,
+				Start:   time.Now(),
+			},
+			RequestStart:   time.Now(),
+			ServiceLatency: 333 * time.Microsecond,
+			SystemLatency:  333 * time.Microsecond,
 		}
 		oj, err := json.Marshal(observation)
 		if err != nil {

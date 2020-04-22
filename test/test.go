@@ -151,6 +151,13 @@ func NewSingleServer(t *testing.T) *ns.Server {
 	return s
 }
 
+// NewJetStreamServer creates a single NATS server with JetStream enabled globally
+func NewJetStreamServer(t *testing.T) *ns.Server {
+	s := StartServer(t, "../test/jetstream.conf")
+	ConnectAndVerify(t, s.ClientURL())
+	return s
+}
+
 // Shutdown shuts the supercluster down
 func (sc *SuperCluster) Shutdown() {
 	for _, c := range sc.Clients {

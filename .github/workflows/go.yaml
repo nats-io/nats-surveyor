@@ -5,7 +5,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [1.13, 1.12.9]
+        go: [1.14]
         os: [ubuntu-latest, macOS-latest]
     runs-on: ${{matrix.os}}
     steps:
@@ -40,7 +40,6 @@ jobs:
                --enable stylecheck \
                --enable interfacer \
                --enable unconvert \
-               --enable dupl \
                --enable gocyclo \
                --enable gofmt \
                --enable goimports \

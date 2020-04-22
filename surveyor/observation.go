@@ -70,7 +70,7 @@ func (o *serviceObsOptions) Validate() error {
 var (
 	observationsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: prometheus.BuildFQName("nats", "survey", "observerations_count"),
-		Help: "Number of observations that are running",
+		Help: "Number of Service Latency listeners that are running",
 	})
 
 	observationsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -175,12 +175,12 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 		return
 	}
 
-	observationsReceived.WithLabelValues(o.opts.ServiceName, obs.AppName).Inc()
-	serviceLatency.WithLabelValues(o.opts.ServiceName, obs.AppName).Observe(obs.ServiceLatency.Seconds())
-	totalLatency.WithLabelValues(o.opts.ServiceName, obs.AppName).Observe(obs.TotalLatency.Seconds())
-	requestorRTT.WithLabelValues(o.opts.ServiceName, obs.AppName).Observe(obs.NATSLatency.Requestor.Seconds())
-	responderRTT.WithLabelValues(o.opts.ServiceName, obs.AppName).Observe(obs.NATSLatency.Responder.Seconds())
-	systemRTT.WithLabelValues(o.opts.ServiceName, obs.AppName).Observe(obs.NATSLatency.System.Seconds())
+	observationsReceived.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Inc()
+	serviceLatency.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.ServiceLatency.Seconds())
+	totalLatency.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.TotalLatency.Seconds())
+	requestorRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.Requestor.RTT.Seconds())
+	responderRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.Responder.RTT.Seconds())
+	systemRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.SystemLatency.Seconds())
 }
 
 // Stop closes the connection to the network

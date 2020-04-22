@@ -70,6 +70,7 @@ type Options struct {
 	HTTPPassword         string
 	Prefix               string // TODO
 	ObservationConfigDir string
+	JetStreamConfigDir   string
 }
 
 // GetDefaultOptions returns the default set of options
@@ -98,6 +99,7 @@ type Surveyor struct {
 	http         net.Listener
 	statzC       *StatzCollector
 	observations []*ServiceObsListener
+	jsAPIAudits  []*JSAdvisoryListener
 }
 
 func connect(opts *Options) (*nats.Conn, error) {
@@ -114,8 +116,8 @@ func connect(opts *Options) (*nats.Conn, error) {
 		nopts = append(nopts, nats.UserInfo(opts.NATSUser, opts.NATSPassword))
 	}
 
-	nopts = append(nopts, nats.DisconnectHandler(func(_ *nats.Conn) {
-		log.Println("Disconnected, will possibly miss replies")
+	nopts = append(nopts, nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
+		log.Printf("Disconnected, will possibly miss replies: %s", err)
 	}))
 	nopts = append(nopts, nats.ReconnectHandler(func(c *nats.Conn) {
 		reconnCtr.Inc()
@@ -160,10 +162,15 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 		nc:           nc,
 		opts:         *opts,
 		observations: []*ServiceObsListener{},
+		jsAPIAudits:  []*JSAdvisoryListener{},
 	}, nil
 }
 
 func (s *Surveyor) createCollector() error {
+	if s.opts.ExpectedServers == 0 {
+		return nil
+	}
+
 	s.Lock()
 	s.statzC = NewStatzCollector(s.nc, s.opts.ExpectedServers, s.opts.PollTimeout)
 	s.Unlock()
@@ -358,6 +365,51 @@ func (s *Surveyor) startHTTP() error {
 	return nil
 }
 
+func (s *Surveyor) startJetStreamAdvisories() error {
+	jsAdvisoriesGauge.Set(0)
+
+	dir := s.opts.JetStreamConfigDir
+	if dir == "" {
+		log.Printf("Skipping JetStream API Audit startup, no directory configured")
+		return nil
+	}
+
+	fs, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("could not start JetStream API Audit, %s does not exist", dir)
+	}
+
+	if !fs.IsDir() {
+		return fmt.Errorf("JetStream API Audit dir %s is not a directory", dir)
+	}
+
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if filepath.Ext(info.Name()) != ".json" {
+			return nil
+		}
+
+		obs, err := NewJetStreamAdvisoryListener(path, s.opts)
+		if err != nil {
+			return fmt.Errorf("could not create JetStream API Audit from %s: %s", path, err)
+		}
+
+		err = obs.Start()
+		if err != nil {
+			return fmt.Errorf("could not start observation from %s: %s", path, err)
+		}
+
+		s.jsAPIAudits = append(s.jsAPIAudits, obs)
+
+		return nil
+	})
+
+	return err
+}
+
 func (s *Surveyor) startObservations() error {
 	observationsGauge.Set(0)
 
@@ -408,12 +460,19 @@ func (s *Surveyor) Start() error {
 	if err := s.startHTTP(); err != nil {
 		return err
 	}
+
 	if err := s.createCollector(); err != nil {
 		return err
 	}
+
 	if err := s.startObservations(); err != nil {
 		return err
 	}
+
+	if err := s.startJetStreamAdvisories(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
