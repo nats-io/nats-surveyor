@@ -14,11 +14,13 @@
 package surveyor
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nuid"
 	ptu "github.com/prometheus/client_golang/prometheus/testutil"
 
 	st "github.com/nats-io/nats-surveyor/test"
@@ -74,6 +76,8 @@ func TestServiceObservation_Handle(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		observation := &server.ServiceLatency{
 			TypedEvent: server.TypedEvent{
+				Type: "io.nats.server.metric.v1.service_latency",
+				ID:   nuid.New().Next(),
 				Time: time.Now().UTC(),
 			},
 			Requestor: server.LatencyClient{
@@ -81,9 +85,9 @@ func TestServiceObservation_Handle(t *testing.T) {
 				RTT:   333 * time.Second,
 			},
 			Responder: server.LatencyClient{
-				Account: "testing",
-				RTT:     time.Second,
-				Start:   time.Now(),
+				Name:  "testing_service",
+				RTT:   time.Second,
+				Start: time.Now(),
 			},
 			RequestStart:   time.Now(),
 			ServiceLatency: 333 * time.Microsecond,
@@ -137,5 +141,15 @@ func TestServiceObservation_Handle(t *testing.T) {
 	time.Sleep(250 * time.Microsecond)
 	if ptu.ToFloat64(invalidObservationsReceived) == 0.0 {
 		t.Fatalf("did not receive invalid observation")
+	}
+
+	expected := `
+# HELP nats_latency_observation_count Number of observations received by this surveyor across all services
+# TYPE nats_latency_observation_count counter
+nats_latency_observation_count{app="testing_service",service="testing"} 10
+`
+	err = ptu.CollectAndCompare(observationsReceived, bytes.NewReader([]byte(expected)))
+	if err != nil {
+		t.Fatalf("Invalid observations counter: %s", err)
 	}
 }

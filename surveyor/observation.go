@@ -22,8 +22,9 @@ import (
 	"os"
 	"strings"
 
-	server "github.com/nats-io/nats-server/v2/server"
-	nats "github.com/nats-io/nats.go"
+	"github.com/nats-io/jsm.go"
+	"github.com/nats-io/jsm.go/api/server/metric"
+	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -167,20 +168,27 @@ func (o *ServiceObsListener) Start() error {
 }
 
 func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
-	obs := &server.ServiceLatency{}
-	err := json.Unmarshal(m.Data, obs)
+	kind, obs, err := jsm.ParseEvent(m.Data)
 	if err != nil {
 		invalidObservationsReceived.WithLabelValues(o.opts.ServiceName).Inc()
 		log.Printf("Unparsable observation received on %s: %s", o.opts.Topic, err)
 		return
 	}
 
-	observationsReceived.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Inc()
-	serviceLatency.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.ServiceLatency.Seconds())
-	totalLatency.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.TotalLatency.Seconds())
-	requestorRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.Requestor.RTT.Seconds())
-	responderRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.Responder.RTT.Seconds())
-	systemRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.SystemLatency.Seconds())
+	switch obs := obs.(type) {
+	case *metric.ServiceLatencyV1:
+		observationsReceived.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Inc()
+		serviceLatency.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.ServiceLatency.Seconds())
+		totalLatency.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.TotalLatency.Seconds())
+		requestorRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.Requestor.RTT.Seconds())
+		responderRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.Responder.RTT.Seconds())
+		systemRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.SystemLatency.Seconds())
+
+	default:
+		invalidObservationsReceived.WithLabelValues(o.opts.ServiceName).Inc()
+		log.Printf("Unsupported observation received on %s: %s", o.opts.Topic, kind)
+		return
+	}
 }
 
 // Stop closes the connection to the network
