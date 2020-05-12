@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/nats-io/jsm.go"
@@ -79,6 +80,11 @@ var (
 		Help: "Number of observations received by this surveyor across all services",
 	}, []string{"service", "app"})
 
+	serviceRequestStatus = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "nats_latency_observation_status_count",
+		Help: "The status result codes for requests to a service",
+	}, []string{"service", "status"})
+
 	invalidObservationsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "nats_latency_observation_error_count",
 		Help: "Number of observations received by this surveyor across all services that could not be handled",
@@ -113,6 +119,7 @@ var (
 func init() {
 	prometheus.MustRegister(invalidObservationsReceived)
 	prometheus.MustRegister(observationsReceived)
+	prometheus.MustRegister(serviceRequestStatus)
 	prometheus.MustRegister(serviceLatency)
 	prometheus.MustRegister(totalLatency)
 	prometheus.MustRegister(requestorRTT)
@@ -159,7 +166,10 @@ func (o *ServiceObsListener) Start() error {
 	if err != nil {
 		return fmt.Errorf("could not subscribe to observation topic for %s (%s): %s", o.opts.ServiceName, o.opts.Topic, err)
 	}
-	_ = o.nc.Flush()
+	err = o.nc.Flush()
+	if err != nil {
+		return err
+	}
 
 	observationsGauge.Inc()
 	log.Printf("Started observing stats on %s for %s", o.opts.Topic, o.opts.ServiceName)
@@ -183,6 +193,12 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 		requestorRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.Requestor.RTT.Seconds())
 		responderRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.Responder.RTT.Seconds())
 		systemRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.SystemLatency.Seconds())
+
+		if obs.Status == 0 {
+			serviceRequestStatus.WithLabelValues(o.opts.ServiceName, "500").Inc()
+		} else {
+			serviceRequestStatus.WithLabelValues(o.opts.ServiceName, strconv.Itoa(obs.Status)).Inc()
+		}
 
 	default:
 		invalidObservationsReceived.WithLabelValues(o.opts.ServiceName).Inc()
