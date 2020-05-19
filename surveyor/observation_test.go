@@ -1,4 +1,4 @@
-// Copyright 2019 The NATS Authors
+// Copyright 2020 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,13 +14,16 @@
 package surveyor
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 	"time"
 
-	server "github.com/nats-io/nats-server/v2/server"
-	st "github.com/nats-io/nats-surveyor/test"
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nuid"
 	ptu "github.com/prometheus/client_golang/prometheus/testutil"
+
+	st "github.com/nats-io/nats-surveyor/test"
 )
 
 func TestServiceObservation_Load(t *testing.T) {
@@ -59,39 +62,69 @@ func TestServiceObservation_Handle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("observation load error: %s", err)
 	}
-	defer obs.Stop()
+
 	err = obs.Start()
 	if err != nil {
 		t.Fatalf("obs could not start: %s", err)
 	}
+	defer obs.Stop()
 
-	// create a test subscriber as to approximate when the observer is ready.
-	sub, _ := sc.Clients[0].SubscribeSync("testing.topic")
+	expected := `
+# HELP nats_survey_observerations_count Number of Service Latency listeners that are running
+# TYPE nats_survey_observerations_count gauge
+nats_survey_observerations_count 1
+`
+	err = ptu.CollectAndCompare(observationsGauge, bytes.NewReader([]byte(expected)))
+	if err != nil {
+		t.Fatalf("Invalid observations counter: %s", err)
+	}
+
+	tnc := sc.Clients[0]
+
+	sub, err := tnc.SubscribeSync("testing.topic")
+	if err != nil {
+		t.Fatalf("subscribe failed: %s", err)
+	}
+
+	statusses := []int{0, 200, 400, 500}
 
 	// send a bunch of observations
 	for i := 0; i < 10; i++ {
 		observation := &server.ServiceLatency{
-			AppName:      "testing",
-			RequestStart: time.Now(),
-			TotalLatency: time.Second,
-			NATSLatency: server.NATSLatency{
-				Requestor: 333 * time.Microsecond,
-				Responder: 333 * time.Microsecond,
-				System:    333 * time.Microsecond,
+			TypedEvent: server.TypedEvent{
+				Type: "io.nats.server.metric.v1.service_latency",
+				ID:   nuid.New().Next(),
+				Time: time.Now().UTC(),
 			},
+			Requestor: server.LatencyClient{
+				Start: time.Now(),
+				RTT:   333 * time.Second,
+			},
+			Responder: server.LatencyClient{
+				Name:  "testing_service",
+				RTT:   time.Second,
+				Start: time.Now(),
+			},
+			RequestStart:   time.Now(),
+			ServiceLatency: 333 * time.Microsecond,
+			SystemLatency:  333 * time.Microsecond,
+			Status:         statusses[i%4],
 		}
 		oj, err := json.Marshal(observation)
 		if err != nil {
 			t.Fatalf("encode error: %s", err)
 		}
 
-		err = sc.Clients[0].Publish("testing.topic", oj)
+		err = tnc.Publish("testing.topic", oj)
 		if err != nil {
 			t.Fatalf("publish error: %s", err)
 		}
 	}
 
-	sc.Clients[0].Flush()
+	err = tnc.Flush()
+	if err != nil {
+		t.Fatalf("Flush failed: %s", err)
+	}
 
 	// wait for all observations to be received in the test subscription
 	for i := 0; i < 10; i++ {
@@ -103,22 +136,30 @@ func TestServiceObservation_Handle(t *testing.T) {
 
 	// sleep a bit just in case of slower delivery to the observer
 	time.Sleep(250 * time.Microsecond)
-	if ptu.ToFloat64(observationsReceived) == 0.0 {
-		t.Fatalf("did not receive observations")
+	expected = `
+# HELP nats_latency_observation_count Number of observations received by this surveyor across all services
+# TYPE nats_latency_observation_count counter
+nats_latency_observation_count{app="testing_service",service="testing"} 10
+`
+	err = ptu.CollectAndCompare(observationsReceived, bytes.NewReader([]byte(expected)))
+	if err != nil {
+		t.Fatalf("Invalid observations counter: %s", err)
 	}
 
 	// publish some invalid observations
 	for i := 0; i < 10; i++ {
-		err = sc.Clients[0].Publish("testing.topic", []byte{})
+		err = tnc.Publish("testing.topic", []byte{})
 		if err != nil {
 			t.Fatalf("publish error: %s", err)
 		}
 	}
 
-	sc.Clients[0].Flush()
+	err = tnc.Flush()
+	if err != nil {
+		t.Fatalf("flush failed: %s", err)
+	}
 
 	for i := 0; i < 10; i++ {
-		// wait for the invalid observations to arrive
 		_, err = sub.NextMsg(time.Second)
 		if err != nil {
 			t.Fatalf("test subscriber didn't receive invalid message")
@@ -126,7 +167,36 @@ func TestServiceObservation_Handle(t *testing.T) {
 	}
 
 	time.Sleep(250 * time.Microsecond)
-	if ptu.ToFloat64(invalidObservationsReceived) == 0.0 {
-		t.Fatalf("did not receive invalid observation")
+
+	expected = `
+# HELP nats_latency_observation_error_count Number of observations received by this surveyor across all services that could not be handled
+# TYPE nats_latency_observation_error_count counter
+nats_latency_observation_error_count{service="testing"} 10
+`
+	err = ptu.CollectAndCompare(invalidObservationsReceived, bytes.NewReader([]byte(expected)))
+	if err != nil {
+		t.Fatalf("Invalid invalidObservationsReceived counter: %s", err)
+	}
+
+	expected = `
+# HELP nats_latency_observation_count Number of observations received by this surveyor across all services
+# TYPE nats_latency_observation_count counter
+nats_latency_observation_count{app="testing_service",service="testing"} 10
+`
+	err = ptu.CollectAndCompare(observationsReceived, bytes.NewReader([]byte(expected)))
+	if err != nil {
+		t.Fatalf("Invalid observationsReceived counter: %s", err)
+	}
+
+	expected = `
+# HELP nats_latency_observation_status_count The status result codes for requests to a service
+# TYPE nats_latency_observation_status_count counter
+nats_latency_observation_status_count{service="testing",status="200"} 3
+nats_latency_observation_status_count{service="testing",status="400"} 2
+nats_latency_observation_status_count{service="testing",status="500"} 5
+`
+	err = ptu.CollectAndCompare(serviceRequestStatus, bytes.NewReader([]byte(expected)))
+	if err != nil {
+		t.Fatalf("Status counter: %s", err)
 	}
 }

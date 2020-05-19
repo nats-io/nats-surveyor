@@ -55,6 +55,7 @@ func main() {
 	flag.StringVar(&opts.HTTPPassword, "http_pass", "", "Set the password for HTTP scrapes. NATS bcrypt supported.")
 	flag.StringVar(&opts.Prefix, "prefix", "", "Replace the default prefix for all the metrics.")
 	flag.StringVar(&opts.ObservationConfigDir, "observe", "", "Listen for observation statistics based on config files in a directory.")
+	flag.StringVar(&opts.JetStreamConfigDir, "jetstream", "", "Listen for JetStream Advisories based on config files in a directory.")
 	flag.Parse()
 
 	if printVersion {

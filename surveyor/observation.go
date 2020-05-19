@@ -20,10 +20,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
-	server "github.com/nats-io/nats-server/v2/server"
-	nats "github.com/nats-io/nats.go"
+	"github.com/nats-io/jsm.go"
+	"github.com/nats-io/jsm.go/api/server/metric"
+	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -70,13 +72,18 @@ func (o *serviceObsOptions) Validate() error {
 var (
 	observationsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: prometheus.BuildFQName("nats", "survey", "observerations_count"),
-		Help: "Number of observations that are running",
+		Help: "Number of Service Latency listeners that are running",
 	})
 
 	observationsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "nats_latency_observation_count",
 		Help: "Number of observations received by this surveyor across all services",
 	}, []string{"service", "app"})
+
+	serviceRequestStatus = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "nats_latency_observation_status_count",
+		Help: "The status result codes for requests to a service",
+	}, []string{"service", "status"})
 
 	invalidObservationsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "nats_latency_observation_error_count",
@@ -112,6 +119,7 @@ var (
 func init() {
 	prometheus.MustRegister(invalidObservationsReceived)
 	prometheus.MustRegister(observationsReceived)
+	prometheus.MustRegister(serviceRequestStatus)
 	prometheus.MustRegister(serviceLatency)
 	prometheus.MustRegister(totalLatency)
 	prometheus.MustRegister(requestorRTT)
@@ -158,7 +166,10 @@ func (o *ServiceObsListener) Start() error {
 	if err != nil {
 		return fmt.Errorf("could not subscribe to observation topic for %s (%s): %s", o.opts.ServiceName, o.opts.Topic, err)
 	}
-	_ = o.nc.Flush()
+	err = o.nc.Flush()
+	if err != nil {
+		return err
+	}
 
 	observationsGauge.Inc()
 	log.Printf("Started observing stats on %s for %s", o.opts.Topic, o.opts.ServiceName)
@@ -167,20 +178,33 @@ func (o *ServiceObsListener) Start() error {
 }
 
 func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
-	obs := &server.ServiceLatency{}
-	err := json.Unmarshal(m.Data, obs)
+	kind, obs, err := jsm.ParseEvent(m.Data)
 	if err != nil {
 		invalidObservationsReceived.WithLabelValues(o.opts.ServiceName).Inc()
 		log.Printf("Unparsable observation received on %s: %s", o.opts.Topic, err)
 		return
 	}
 
-	observationsReceived.WithLabelValues(o.opts.ServiceName, obs.AppName).Inc()
-	serviceLatency.WithLabelValues(o.opts.ServiceName, obs.AppName).Observe(obs.ServiceLatency.Seconds())
-	totalLatency.WithLabelValues(o.opts.ServiceName, obs.AppName).Observe(obs.TotalLatency.Seconds())
-	requestorRTT.WithLabelValues(o.opts.ServiceName, obs.AppName).Observe(obs.NATSLatency.Requestor.Seconds())
-	responderRTT.WithLabelValues(o.opts.ServiceName, obs.AppName).Observe(obs.NATSLatency.Responder.Seconds())
-	systemRTT.WithLabelValues(o.opts.ServiceName, obs.AppName).Observe(obs.NATSLatency.System.Seconds())
+	switch obs := obs.(type) {
+	case *metric.ServiceLatencyV1:
+		observationsReceived.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Inc()
+		serviceLatency.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.ServiceLatency.Seconds())
+		totalLatency.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.TotalLatency.Seconds())
+		requestorRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.Requestor.RTT.Seconds())
+		responderRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.Responder.RTT.Seconds())
+		systemRTT.WithLabelValues(o.opts.ServiceName, obs.Responder.Name).Observe(obs.SystemLatency.Seconds())
+
+		if obs.Status == 0 {
+			serviceRequestStatus.WithLabelValues(o.opts.ServiceName, "500").Inc()
+		} else {
+			serviceRequestStatus.WithLabelValues(o.opts.ServiceName, strconv.Itoa(obs.Status)).Inc()
+		}
+
+	default:
+		invalidObservationsReceived.WithLabelValues(o.opts.ServiceName).Inc()
+		log.Printf("Unsupported observation received on %s: %s", o.opts.Topic, kind)
+		return
+	}
 }
 
 // Stop closes the connection to the network
