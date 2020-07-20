@@ -53,6 +53,7 @@ type Options struct {
 	Name                 string
 	URLs                 string
 	Credentials          string
+	Nkey                 string
 	NATSUser             string
 	NATSPassword         string
 	PollTimeout          time.Duration
@@ -112,6 +113,12 @@ func connect(opts *Options) (*nats.Conn, error) {
 	nopts := []nats.Option{nats.Name(opts.Name)}
 	if opts.Credentials != "" {
 		nopts = append(nopts, nats.UserCredentials(opts.Credentials))
+	} else if opts.Nkey != "" {
+		o, err := nats.NkeyOptionFromSeed(opts.Nkey)
+		if err != nil {
+			return nil, fmt.Errorf("unable to load nkey: %v", err)
+		}
+		nopts = append(nopts, o)
 	} else if opts.NATSUser != "" {
 		nopts = append(nopts, nats.UserInfo(opts.NATSUser, opts.NATSPassword))
 	}
