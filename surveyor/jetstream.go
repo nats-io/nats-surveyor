@@ -39,7 +39,7 @@ type JSAdvisoryListener struct {
 
 type jsAdvisoryOptions struct {
 	AccountName string `json:"name"`
-	Credentials string `json:"credentials"`
+	Credentials string `json:"credential"`
 }
 
 // Validate checks the options meet our expectations
@@ -82,6 +82,11 @@ var (
 		Help: "Advisories about JetStream Consumer Delivery Exceeded events",
 	}, []string{"account", "stream", "consumer"})
 
+	jsDeliveryTerminatedCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "jetstream_delivery_terminated_count"),
+		Help: "Advisories about JetStream Consumer Delivery Terminated events",
+	}, []string{"account", "stream", "consumer"})
+
 	// Ack Samples
 	jsAckMetricDelay = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name: prometheus.BuildFQName("nats", "survey", "jetstream_acknowledgement_duration"),
@@ -103,6 +108,44 @@ var (
 		Name: prometheus.BuildFQName("nats", "survey", "jetstream_unknown_advisories"),
 		Help: "Unsupported JetStream Advisory types received",
 	}, []string{"schema", "account"})
+
+	// Stream and Consumer actions
+	jsConsumerActionCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "jetstream_consumer_actions"),
+		Help: "Actions performed on consumers",
+	}, []string{"account", "stream", "action"})
+
+	jsStreamActionCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "jetstream_stream_actions"),
+		Help: "Actions performed on streams",
+	}, []string{"account", "stream", "action"})
+
+	// Snapshot create
+	jsSnapshotSizeCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "jetstream_snapshot_size_bytes"),
+		Help: "The size of snapshots being created",
+	}, []string{"account", "stream"})
+
+	jsSnapthotDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "jetstream_snapshot_duration"),
+		Help: "How long a snapshot takes to be processed",
+	}, []string{"account", "stream"})
+
+	// Restore
+	jsRestoreCreatedCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "jetstream_restore_created_count"),
+		Help: "How many restore operations were started",
+	}, []string{"account", "stream"})
+
+	jsRestoreSizeCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "jetstream_restore_size_bytes"),
+		Help: "The size of restores that was completed",
+	}, []string{"account", "stream"})
+
+	jsRestoreDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "jetstream_restore_duration"),
+		Help: "How long a restore took to be processed",
+	}, []string{"account", "stream"})
 )
 
 func init() {
@@ -111,8 +154,16 @@ func init() {
 	prometheus.MustRegister(jsAdvisoriesGauge)
 	prometheus.MustRegister(jsUnknownAdvisoryCtr)
 	prometheus.MustRegister(jsDeliveryExceededCtr)
+	prometheus.MustRegister(jsDeliveryTerminatedCtr)
 	prometheus.MustRegister(jsAckMetricDelay)
 	prometheus.MustRegister(jsAckMetricDeliveries)
+	prometheus.MustRegister(jsConsumerActionCtr)
+	prometheus.MustRegister(jsStreamActionCtr)
+	prometheus.MustRegister(jsSnapshotSizeCtr)
+	prometheus.MustRegister(jsSnapthotDuration)
+	prometheus.MustRegister(jsRestoreSizeCtr)
+	prometheus.MustRegister(jsRestoreDuration)
+	prometheus.MustRegister(jsRestoreCreatedCtr)
 }
 
 // NewJetStreamAdvisoryListener creates a new JetStream advisory reporter
@@ -189,6 +240,28 @@ func (o *JSAdvisoryListener) advisoryHandler(m *nats.Msg) {
 	case *metric.ConsumerAckMetricV1:
 		jsAckMetricDelay.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Observe(time.Duration(event.Delay).Seconds())
 		jsAckMetricDeliveries.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
+
+	case *advisory.JSConsumerActionAdvisoryV1:
+		jsConsumerActionCtr.WithLabelValues(o.opts.AccountName, event.Stream, event.Action.String()).Inc()
+
+	case *advisory.JSStreamActionAdvisoryV1:
+		jsStreamActionCtr.WithLabelValues(o.opts.AccountName, event.Stream, event.Action.String()).Inc()
+
+	case *advisory.JSConsumerDeliveryTerminatedAdvisoryV1:
+		jsDeliveryTerminatedCtr.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Inc()
+
+	case *advisory.JSRestoreCreateAdvisoryV1:
+		jsRestoreCreatedCtr.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
+
+	case *advisory.JSRestoreCompleteAdvisoryV1:
+		jsRestoreSizeCtr.WithLabelValues(o.opts.AccountName, event.Stream).Add(float64(event.Bytes))
+		jsRestoreDuration.WithLabelValues(o.opts.AccountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
+
+	case *advisory.JSSnapshotCreateAdvisoryV1:
+		jsSnapshotSizeCtr.WithLabelValues(o.opts.AccountName, event.Stream).Add(float64(event.BlkSize * event.NumBlks))
+
+	case *advisory.JSSnapshotCompleteAdvisoryV1:
+		jsSnapthotDuration.WithLabelValues(o.opts.AccountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
 
 	default:
 		jsUnknownAdvisoryCtr.WithLabelValues(schema, o.opts.AccountName).Inc()
