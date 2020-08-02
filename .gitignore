@@ -13,3 +13,4 @@
 *.out
 
 nats-surveyor
+dist

@@ -341,7 +341,7 @@ More information can be found [here](https://github.com/prometheus/prometheus/is
 
 Services can be observed by creating JSON files in the `observations` directory, here's an example:
 
-```
+```json
 {
   "name": "email.subscribe",
   "topic": "monitor.email.subscribe",
@@ -350,6 +350,19 @@ Services can be observed by creating JSON files in the `observations` directory,
 ```
 
 Place this in `observations/email.surbscribe.json` and create a credential giving access to this topic in `observations/email.subscribe.cred`, when you restart the service any observations published by the NATS system will be tracked and graphed.
+
+## JetStream
+
+JetStream can be monitored on a per-account basis by creating JSON files in the `jetstream` directory, here's an example:
+
+```json
+{
+  "name": "Your Account",
+  "credential": "/jetstream/youraccount.cred"
+}
+```
+
+Place this in `jetstream/youraccount.json` and create a credential giving access to `$JS.EVENT.>` in `jetstream/youraccount.cred`, when you restart the service JetStream in this account will be monitored.
 
 ## TODO
 
