@@ -67,83 +67,93 @@ func (o *jsAdvisoryOptions) Validate() error {
 var (
 	// API Audit
 	jsAPIAuditCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_api_audit"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "api_audit"),
 		Help: "JetStream API access audit events",
 	}, []string{"server", "subject", "account"})
 
 	jsAPIErrorsCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_api_errors"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "api_errors"),
 		Help: "JetStream API Errors Count",
 	}, []string{"server", "subject", "account"})
 
 	// Delivery Exceeded
 	jsDeliveryExceededCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_delivery_exceeded_count"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "delivery_exceeded_count"),
 		Help: "Advisories about JetStream Consumer Delivery Exceeded events",
 	}, []string{"account", "stream", "consumer"})
 
 	jsDeliveryTerminatedCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_delivery_terminated_count"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "delivery_terminated_count"),
 		Help: "Advisories about JetStream Consumer Delivery Terminated events",
 	}, []string{"account", "stream", "consumer"})
 
 	// Ack Samples
 	jsAckMetricDelay = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_acknowledgement_duration"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "acknowledgement_duration"),
 		Help: "How long an Acknowledged message took to be Acknowledged",
 	}, []string{"account", "stream", "consumer"})
 
 	jsAckMetricDeliveries = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_acknowledgement_deliveries"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "acknowledgement_deliveries"),
 		Help: "How many times messages took to be delivered and Acknowledged",
 	}, []string{"account", "stream", "consumer"})
 
 	// Misc
 	jsAdvisoriesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_advisory_count"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "advisory_count"),
 		Help: "Number of JetStream Advisory listeners that are running",
 	})
 
 	jsUnknownAdvisoryCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_unknown_advisories"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "unknown_advisories"),
 		Help: "Unsupported JetStream Advisory types received",
 	}, []string{"schema", "account"})
 
+	jsTotalAdvisoryCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "jetstream", "total_advisories"),
+		Help: "Unsupported JetStream Advisories handled in total",
+	}, []string{"account"})
+
+	jsAdvisoryParseErrorCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "jetstream", "advisory_parse_errors"),
+		Help: "Number of advisories that could not be parsed",
+	}, []string{"account"})
+
 	// Stream and Consumer actions
 	jsConsumerActionCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_consumer_actions"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "consumer_actions"),
 		Help: "Actions performed on consumers",
 	}, []string{"account", "stream", "action"})
 
 	jsStreamActionCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_stream_actions"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "stream_actions"),
 		Help: "Actions performed on streams",
 	}, []string{"account", "stream", "action"})
 
 	// Snapshot create
 	jsSnapshotSizeCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_snapshot_size_bytes"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "snapshot_size_bytes"),
 		Help: "The size of snapshots being created",
 	}, []string{"account", "stream"})
 
 	jsSnapthotDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_snapshot_duration"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "snapshot_duration"),
 		Help: "How long a snapshot takes to be processed",
 	}, []string{"account", "stream"})
 
 	// Restore
 	jsRestoreCreatedCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_restore_created_count"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "restore_created_count"),
 		Help: "How many restore operations were started",
 	}, []string{"account", "stream"})
 
 	jsRestoreSizeCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_restore_size_bytes"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "restore_size_bytes"),
 		Help: "The size of restores that was completed",
 	}, []string{"account", "stream"})
 
 	jsRestoreDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "jetstream_restore_duration"),
+		Name: prometheus.BuildFQName("nats", "jetstream", "restore_duration"),
 		Help: "How long a restore took to be processed",
 	}, []string{"account", "stream"})
 )
@@ -164,6 +174,8 @@ func init() {
 	prometheus.MustRegister(jsRestoreSizeCtr)
 	prometheus.MustRegister(jsRestoreDuration)
 	prometheus.MustRegister(jsRestoreCreatedCtr)
+	prometheus.MustRegister(jsTotalAdvisoryCtr)
+	prometheus.MustRegister(jsAdvisoryParseErrorCtr)
 }
 
 // NewJetStreamAdvisoryListener creates a new JetStream advisory reporter
@@ -186,7 +198,7 @@ func NewJetStreamAdvisoryListener(f string, sopts Options) (*JSAdvisoryListener,
 
 	sopts.Name = fmt.Sprintf("%s (jetstream %s)", sopts.Name, opts.AccountName)
 	sopts.Credentials = opts.Credentials
-	nc, err := connect(&sopts)
+	nc, err := connect(&sopts, fmt.Sprintf("%s JetStream %s", sopts.Name, opts.AccountName))
 	if err != nil {
 		return nil, fmt.Errorf("nats connection failed: %s", err)
 	}
@@ -222,9 +234,12 @@ func (o *JSAdvisoryListener) Start() error {
 func (o *JSAdvisoryListener) advisoryHandler(m *nats.Msg) {
 	schema, event, err := jsm.ParseEvent(m.Data)
 	if err != nil {
+		jsAdvisoryParseErrorCtr.WithLabelValues(o.opts.AccountName).Inc()
 		log.Printf("Could not parse JetStream API Audit Advisory: %s", err)
 		return
 	}
+
+	jsTotalAdvisoryCtr.WithLabelValues(o.opts.AccountName).Inc()
 
 	switch event := event.(type) {
 	case *advisory.JetStreamAPIAuditV1:

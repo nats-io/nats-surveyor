@@ -103,41 +103,43 @@ type Surveyor struct {
 	jsAPIAudits  []*JSAdvisoryListener
 }
 
-func connect(opts *Options) (*nats.Conn, error) {
-	reconnCtr := prometheus.NewCounter(prometheus.CounterOpts{
+func connect(opts *Options, name string) (*nats.Conn, error) {
+	reconnCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
 		Help: "Number of times the surveyor reconnected to the NATS cluster",
-	})
+	}, []string{"name"})
 	prometheus.Register(reconnCtr)
 
-	nopts := []nats.Option{nats.Name(opts.Name)}
-	if opts.Credentials != "" {
+	nopts := []nats.Option{nats.Name(name)}
+
+	switch {
+	case opts.Credentials != "":
 		nopts = append(nopts, nats.UserCredentials(opts.Credentials))
-	} else if opts.Nkey != "" {
+	case opts.Nkey != "":
 		o, err := nats.NkeyOptionFromSeed(opts.Nkey)
 		if err != nil {
 			return nil, fmt.Errorf("unable to load nkey: %v", err)
 		}
 		nopts = append(nopts, o)
-	} else if opts.NATSUser != "" {
+	case opts.NATSUser != "":
 		nopts = append(nopts, nats.UserInfo(opts.NATSUser, opts.NATSPassword))
 	}
 
-	nopts = append(nopts, nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
-		log.Printf("Disconnected, will possibly miss replies: %s", err)
+	nopts = append(nopts, nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
+		log.Printf("%q disconnected, will possibly miss replies: %s", c.Opts.Name, err)
 	}))
 	nopts = append(nopts, nats.ReconnectHandler(func(c *nats.Conn) {
-		reconnCtr.Inc()
-		log.Printf("Reconnected to %v", c.ConnectedAddr())
+		reconnCtr.WithLabelValues(c.Opts.Name).Inc()
+		log.Printf("%q reconnected to %v", c.Opts.Name, c.ConnectedAddr())
 	}))
-	nopts = append(nopts, nats.ClosedHandler(func(_ *nats.Conn) {
-		log.Println("Connection permanently lost!")
+	nopts = append(nopts, nats.ClosedHandler(func(c *nats.Conn) {
+		log.Printf("%q connection permanently lost!", c.Opts.Name)
 	}))
 	nopts = append(nopts, nats.ErrorHandler(func(c *nats.Conn, s *nats.Subscription, err error) {
 		if s != nil {
-			log.Printf("Error: err=%v", err)
+			log.Printf("Error: name=%q err=%v", c.Opts.Name, err)
 		} else {
-			log.Printf("Error: subject=%s, err=%v", s.Subject, err)
+			log.Printf("Error: name=%q, subject=%s, err=%v", c.Opts.Name, s.Subject, err)
 		}
 	}))
 	nopts = append(nopts, nats.MaxReconnects(10240))
@@ -161,7 +163,7 @@ func connect(opts *Options) (*nats.Conn, error) {
 
 // NewSurveyor creates a surveyor
 func NewSurveyor(opts *Options) (*Surveyor, error) {
-	nc, err := connect(opts)
+	nc, err := connect(opts, fmt.Sprintf("%s Messaging", opts.Name))
 	if err != nil {
 		return nil, err
 	}

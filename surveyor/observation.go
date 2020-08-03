@@ -71,47 +71,47 @@ func (o *serviceObsOptions) Validate() error {
 
 var (
 	observationsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "observerations_count"),
+		Name: prometheus.BuildFQName("nats", "latency", "observations_count"),
 		Help: "Number of Service Latency listeners that are running",
 	})
 
 	observationsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "nats_latency_observation_count",
+		Name: prometheus.BuildFQName("nats", "latency", "observations_received_count"),
 		Help: "Number of observations received by this surveyor across all services",
 	}, []string{"service", "app"})
 
 	serviceRequestStatus = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "nats_latency_observation_status_count",
+		Name: prometheus.BuildFQName("nats", "latency", "observation_status_count"),
 		Help: "The status result codes for requests to a service",
 	}, []string{"service", "status"})
 
 	invalidObservationsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "nats_latency_observation_error_count",
+		Name: prometheus.BuildFQName("nats", "latency", "observation_error_count"),
 		Help: "Number of observations received by this surveyor across all services that could not be handled",
 	}, []string{"service"})
 
 	serviceLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "nats_latency_service_duration",
+		Name: prometheus.BuildFQName("nats", "latency", "service_duration"),
 		Help: "Time spent serving the request in the service",
 	}, []string{"service", "app"})
 
 	totalLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "nats_latency_total_duration",
+		Name: prometheus.BuildFQName("nats", "latency", "total_duration"),
 		Help: "Total time spent serving a service including network overheads",
 	}, []string{"service", "app"})
 
 	requestorRTT = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "nats_latency_requestor_rtt",
+		Name: prometheus.BuildFQName("nats", "latency", "requestor_rtt"),
 		Help: "The RTT to the client making a request",
 	}, []string{"service", "app"})
 
 	responderRTT = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "nats_latency_responder_rtt",
+		Name: prometheus.BuildFQName("nats", "latency", "responder_rtt"),
 		Help: "The RTT to the service serving the request",
 	}, []string{"service", "app"})
 
 	systemRTT = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "nats_latency_system_rtt",
+		Name: prometheus.BuildFQName("nats", "latency", "system_rtt"),
 		Help: "The RTT within the NATS system - time traveling clusters, gateways and leaf nodes",
 	}, []string{"service", "app"})
 )
@@ -148,7 +148,7 @@ func NewServiceObservation(f string, sopts Options) (*ServiceObsListener, error)
 
 	sopts.Name = fmt.Sprintf("%s (observing %s)", sopts.Name, opts.ServiceName)
 	sopts.Credentials = opts.Credentials
-	nc, err := connect(&sopts)
+	nc, err := connect(&sopts, fmt.Sprintf("%s Service %s", sopts.Name, opts.ServiceName))
 	if err != nil {
 		return nil, fmt.Errorf("nats connection failed: %s", err)
 	}
