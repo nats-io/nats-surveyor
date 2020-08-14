@@ -103,14 +103,14 @@ type Surveyor struct {
 	jsAPIAudits  []*JSAdvisoryListener
 }
 
-func connect(opts *Options, name string) (*nats.Conn, error) {
+func connect(opts *Options) (*nats.Conn, error) {
 	reconnCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
 		Help: "Number of times the surveyor reconnected to the NATS cluster",
 	}, []string{"name"})
 	prometheus.Register(reconnCtr)
 
-	nopts := []nats.Option{nats.Name(name)}
+	var nopts []nats.Option
 
 	switch {
 	case opts.Credentials != "":
@@ -163,7 +163,7 @@ func connect(opts *Options, name string) (*nats.Conn, error) {
 
 // NewSurveyor creates a surveyor
 func NewSurveyor(opts *Options) (*Surveyor, error) {
-	nc, err := connect(opts, fmt.Sprintf("%s Messaging", opts.Name))
+	nc, err := connect(opts)
 	if err != nil {
 		return nil, err
 	}

@@ -111,7 +111,7 @@ var (
 
 	jsTotalAdvisoryCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("nats", "jetstream", "total_advisories"),
-		Help: "Unsupported JetStream Advisories handled in total",
+		Help: "Total JetStream Advisories handled",
 	}, []string{"account"})
 
 	jsAdvisoryParseErrorCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -198,7 +198,7 @@ func NewJetStreamAdvisoryListener(f string, sopts Options) (*JSAdvisoryListener,
 
 	sopts.Name = fmt.Sprintf("%s (jetstream %s)", sopts.Name, opts.AccountName)
 	sopts.Credentials = opts.Credentials
-	nc, err := connect(&sopts, fmt.Sprintf("%s JetStream %s", sopts.Name, opts.AccountName))
+	nc, err := connect(&sopts)
 	if err != nil {
 		return nil, fmt.Errorf("nats connection failed: %s", err)
 	}

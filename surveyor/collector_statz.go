@@ -88,6 +88,7 @@ type StatzCollector struct {
 	pollErrCnt  *prometheus.CounterVec
 	pollTime    *prometheus.SummaryVec
 	lateReplies *prometheus.CounterVec
+	noReplies   *prometheus.CounterVec
 }
 
 ////////////////////////////////////////////
@@ -194,6 +195,11 @@ func buildDescs(sc *StatzCollector) {
 		Name: prometheus.BuildFQName("nats", "survey", "late_replies_count"),
 		Help: "Number of times a reply was received too late counter",
 	}, []string{"timeout"})
+
+	sc.noReplies = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "no_replies_count"),
+		Help: "Number of nodes that did not reply in poll cycle",
+	}, []string{"expected"})
 }
 
 // NewStatzCollector creates a NATS Statz Collector
@@ -331,6 +337,9 @@ func (sc *StatzCollector) poll() error {
 				missingServers = append(missingServers, "["+key+"]")
 			}
 		}
+
+		sc.noReplies.WithLabelValues(strconv.Itoa(sc.numServers)).Add(float64(len(missingServers)))
+
 		log.Printf("Expected %d servers, only saw responses from %d. Missing %v", sc.numServers, ns, missingServers)
 	}
 
@@ -388,6 +397,7 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 	sc.pollErrCnt.Describe(ch)
 	sc.pollTime.Describe(ch)
 	sc.lateReplies.Describe(ch)
+	sc.noReplies.Describe(ch)
 }
 
 func newGaugeMetric(desc *prometheus.Desc, value float64, labels []string) prometheus.Metric {
@@ -412,6 +422,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		sc.surveyedCnt.Collect(ch)
 		sc.expectedCnt.Collect(ch)
 		sc.lateReplies.Collect(ch)
+		sc.noReplies.Collect(ch)
 	}()
 
 	// poll the servers
