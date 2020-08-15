@@ -148,7 +148,7 @@ func NewServiceObservation(f string, sopts Options) (*ServiceObsListener, error)
 
 	sopts.Name = fmt.Sprintf("%s (observing %s)", sopts.Name, opts.ServiceName)
 	sopts.Credentials = opts.Credentials
-	nc, err := connect(&sopts, fmt.Sprintf("%s Service %s", sopts.Name, opts.ServiceName))
+	nc, err := connect(&sopts)
 	if err != nil {
 		return nil, fmt.Errorf("nats connection failed: %s", err)
 	}
