@@ -142,7 +142,7 @@ func connect(opts *Options) (*nats.Conn, error) {
 			log.Printf("Error: name=%q, subject=%s, err=%v", c.Opts.Name, s.Subject, err)
 		}
 	}))
-	nopts = append(nopts, nats.MaxReconnects(10240))
+	nopts = append(nopts, nats.MaxReconnects(-1))
 
 	// NATS TLS Options
 	if opts.CaFile != "" {
@@ -152,13 +152,16 @@ func connect(opts *Options) (*nats.Conn, error) {
 		nopts = append(nopts, nats.ClientCert(opts.CertFile, opts.KeyFile))
 	}
 
-	nc, err := nats.Connect(opts.URLs, nopts...)
-	if err != nil {
-		return nil, err
+	for {
+		log.Printf("Connecting to %s", opts.URLs)
+		nc, err := nats.Connect(opts.URLs, nopts...)
+		if err != nil {
+			log.Printf("connection failed: %s", err)
+			continue
+		}
+		log.Printf("Connected to NATS Deployment: %v", nc.ConnectedAddr())
+		return nc, err
 	}
-	log.Printf("Connected to NATS Deployment: %v", nc.ConnectedAddr())
-
-	return nc, err
 }
 
 // NewSurveyor creates a surveyor

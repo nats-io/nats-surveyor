@@ -17,8 +17,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
+	"net/textproto"
 	"os"
 	"strconv"
 	"strings"
@@ -26,7 +28,11 @@ import (
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/api/server/metric"
 	"github.com/nats-io/nats.go"
+	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/uber/jaeger-client-go"
+	jaegercfg "github.com/uber/jaeger-client-go/config"
+	"github.com/uber/jaeger-lib/metrics"
 )
 
 // ServiceObsListener listens for observations from nats service latency checks
@@ -34,12 +40,20 @@ type ServiceObsListener struct {
 	nc    *nats.Conn
 	opts  *serviceObsOptions
 	sopts *Options
+
+	openTracingTracer opentracing.Tracer
+	openTracingCloser io.Closer
+
+	tracing bool
 }
 
 type serviceObsOptions struct {
 	ServiceName string `json:"name"`
 	Topic       string `json:"topic"`
 	Credentials string `json:"credential"`
+	JaegerHost  string `json:"jaeger_host"`
+	UserName    string `json:"username"`
+	Password    string `json:"password"`
 }
 
 func (o *serviceObsOptions) Validate() error {
@@ -53,9 +67,7 @@ func (o *serviceObsOptions) Validate() error {
 		errs = append(errs, "topic is required")
 	}
 
-	if o.Credentials == "" {
-		errs = append(errs, "credential is required")
-	} else {
+	if o.Credentials != "" {
 		_, err := os.Stat(o.Credentials)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("invalid credential file: %s", err))
@@ -114,6 +126,10 @@ var (
 		Name: prometheus.BuildFQName("nats", "latency", "system_rtt"),
 		Help: "The RTT within the NATS system - time traveling clusters, gateways and leaf nodes",
 	}, []string{"service", "app"})
+
+	trcUber = textproto.CanonicalMIMEHeaderKey("Uber-Trace-Id")
+	trcTp   = textproto.CanonicalMIMEHeaderKey("Traceparent")
+	trcB3Sm = textproto.CanonicalMIMEHeaderKey("X-B3-Sampled")
 )
 
 func init() {
@@ -148,16 +164,39 @@ func NewServiceObservation(f string, sopts Options) (*ServiceObsListener, error)
 
 	sopts.Name = fmt.Sprintf("%s (observing %s)", sopts.Name, opts.ServiceName)
 	sopts.Credentials = opts.Credentials
+	sopts.NATSUser = opts.UserName
+	sopts.NATSPassword = opts.Password
+
 	nc, err := connect(&sopts)
 	if err != nil {
 		return nil, fmt.Errorf("nats connection failed: %s", err)
 	}
 
-	return &ServiceObsListener{
+	listener := &ServiceObsListener{
 		nc:    nc,
 		opts:  opts,
 		sopts: &sopts,
-	}, nil
+	}
+
+	if opts.JaegerHost != "" {
+		cfg := jaegercfg.Configuration{
+			ServiceName: opts.ServiceName,
+			Sampler: &jaegercfg.SamplerConfig{
+				Type:  jaeger.SamplerTypeConst,
+				Param: 1,
+			},
+			Reporter: &jaegercfg.ReporterConfig{LocalAgentHostPort: opts.JaegerHost},
+		}
+
+		listener.openTracingTracer, listener.openTracingCloser, err = cfg.NewTracer(jaegercfg.Metrics(metrics.NullFactory))
+		if err != nil {
+			return nil, err
+		}
+
+		listener.tracing = true
+	}
+
+	return listener, nil
 }
 
 // Start starts listening for observations
@@ -200,6 +239,18 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 			serviceRequestStatus.WithLabelValues(o.opts.ServiceName, strconv.Itoa(obs.Status)).Inc()
 		}
 
+		if o.tracing {
+			switch {
+			case o.openTracingTracer != nil && len(obs.RequestHeader[trcUber]) > 0:
+				o.processJaegerTrace(obs)
+
+			case len(obs.RequestHeader[trcB3Sm]) > 0:
+				// TODO zipkin not supported
+			case len(obs.RequestHeader[trcTp]) > 0:
+				// TODO tracecontext not supported
+			}
+		}
+
 	default:
 		invalidObservationsReceived.WithLabelValues(o.opts.ServiceName).Inc()
 		log.Printf("Unsupported observation received on %s: %s", o.opts.Topic, kind)
@@ -207,7 +258,57 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 	}
 }
 
+func (o *ServiceObsListener) processJaegerTrace(obs *metric.ServiceLatencyV1) {
+	ctx, err := o.openTracingTracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(obs.RequestHeader))
+	if err != nil {
+		log.Printf("Could not extract open tracing headers: %s", err)
+		return
+	}
+
+	// overall request duration including all RTTs and processing times
+	natsSpan := o.openTracingTracer.StartSpan("nats service", opentracing.FollowsFrom(ctx), opentracing.StartTime(obs.RequestStart))
+	defer natsSpan.FinishWithOptions(opentracing.FinishOptions{FinishTime: obs.RequestStart.Add(obs.TotalLatency)})
+
+	if obs.Error != "" {
+		natsSpan.SetTag("error", true)
+		natsSpan.SetTag("message", obs.Error)
+	}
+
+	requestStart := obs.RequestStart
+	serviceComplete := requestStart.Add(obs.TotalLatency)
+
+	// requestor rtt
+	requestorStart := requestStart
+	requestorRtt := requestorStart.Add(obs.Requestor.RTT)
+	o.openTracingTracer.StartSpan("requestor connection", opentracing.ChildOf(natsSpan.Context()), opentracing.StartTime(requestorStart)).
+		FinishWithOptions(opentracing.FinishOptions{FinishTime: requestorRtt})
+
+	// nats network time
+	systemStart := requestorStart.Add(obs.Requestor.RTT / 2)
+	systemEnd := systemStart.Add(obs.SystemLatency)
+	o.openTracingTracer.StartSpan("nats system", opentracing.ChildOf(natsSpan.Context()), opentracing.StartTime(systemStart)).
+		FinishWithOptions(opentracing.FinishOptions{FinishTime: systemEnd})
+
+	// service
+	serviceRTTStart := serviceComplete.Add(-1 * obs.Requestor.RTT / 2).Add(-1 * obs.Responder.RTT).Add(-1 * obs.ServiceLatency)
+	serviceRTTEnd := serviceRTTStart.Add(obs.Responder.RTT)
+	serviceStart := serviceRTTStart.Add(obs.Responder.RTT / 2)
+	serviceEnd := serviceStart.Add(obs.ServiceLatency)
+
+	// service latency
+	o.openTracingTracer.StartSpan("responder latency", opentracing.ChildOf(natsSpan.Context()), opentracing.StartTime(serviceStart)).
+		FinishWithOptions(opentracing.FinishOptions{FinishTime: serviceEnd})
+
+	// service rtt
+	o.openTracingTracer.StartSpan("responder connection", opentracing.ChildOf(natsSpan.Context()), opentracing.StartTime(serviceRTTStart)).
+		FinishWithOptions(opentracing.FinishOptions{FinishTime: serviceRTTEnd})
+}
+
 // Stop closes the connection to the network
 func (o *ServiceObsListener) Stop() {
+	if o.openTracingCloser != nil {
+		o.openTracingCloser.Close()
+	}
+
 	o.nc.Close()
 }
