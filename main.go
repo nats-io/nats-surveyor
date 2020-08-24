@@ -35,11 +35,11 @@ func main() {
 
 	// Parse flags
 	flag.BoolVar(&printVersion, "version", false, "Show exporter version and exit.")
-	flag.StringVar(&opts.URLs, "s", "nats://localhost:4222", "NATS Cluster url(s)")
-	flag.StringVar(&opts.Credentials, "creds", "", "Credentials File")
-	flag.StringVar(&opts.Nkey, "nkey", "", "Nkey Seed File")
-	flag.StringVar(&opts.NATSUser, "user", "", "NATS user name or token")
-	flag.StringVar(&opts.NATSPassword, "password", "", "NATS user password")
+	flag.StringVar(&opts.URLs, "s", stringFromEnv("NATS_URL", "nats://localhost:4222"), "NATS Cluster url(s)")
+	flag.StringVar(&opts.Credentials, "creds", stringFromEnv("NATS_CREDS", ""), "Credentials File")
+	flag.StringVar(&opts.Nkey, "nkey", stringFromEnv("NATS_NKEY", ""), "Nkey Seed File")
+	flag.StringVar(&opts.NATSUser, "user", stringFromEnv("NATS_USER", ""), "NATS user name or token")
+	flag.StringVar(&opts.NATSPassword, "password", stringFromEnv("NATS_PASSWORD", ""), "NATS user password")
 	flag.IntVar(&opts.ExpectedServers, "c", 1, "Expected number of servers")
 	flag.DurationVar(&opts.PollTimeout, "timeout", 3*time.Second, "Polling timeout")
 	flag.IntVar(&opts.ListenPort, "port", surveyor.DefaultListenPort, "Port to listen on.")
@@ -94,4 +94,13 @@ func main() {
 	}()
 
 	runtime.Goexit()
+}
+
+func stringFromEnv(v string, d string) string {
+	val := os.Getenv(v)
+	if val == "" {
+		return d
+	}
+
+	return val
 }

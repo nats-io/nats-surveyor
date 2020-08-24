@@ -142,7 +142,7 @@ func connect(opts *Options) (*nats.Conn, error) {
 			log.Printf("Error: name=%q, subject=%s, err=%v", c.Opts.Name, s.Subject, err)
 		}
 	}))
-	nopts = append(nopts, nats.MaxReconnects(10240))
+	nopts = append(nopts, nats.MaxReconnects(-1))
 
 	// NATS TLS Options
 	if opts.CaFile != "" {
@@ -152,12 +152,12 @@ func connect(opts *Options) (*nats.Conn, error) {
 		nopts = append(nopts, nats.ClientCert(opts.CertFile, opts.KeyFile))
 	}
 
+	log.Printf("Connecting to %s", opts.URLs)
 	nc, err := nats.Connect(opts.URLs, nopts...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("connection to %q failed: %s", opts.URLs, err)
 	}
 	log.Printf("Connected to NATS Deployment: %v", nc.ConnectedAddr())
-
 	return nc, err
 }
 
