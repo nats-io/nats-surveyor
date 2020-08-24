@@ -152,16 +152,13 @@ func connect(opts *Options) (*nats.Conn, error) {
 		nopts = append(nopts, nats.ClientCert(opts.CertFile, opts.KeyFile))
 	}
 
-	for {
-		log.Printf("Connecting to %s", opts.URLs)
-		nc, err := nats.Connect(opts.URLs, nopts...)
-		if err != nil {
-			log.Printf("connection failed: %s", err)
-			continue
-		}
-		log.Printf("Connected to NATS Deployment: %v", nc.ConnectedAddr())
-		return nc, err
+	log.Printf("Connecting to %s", opts.URLs)
+	nc, err := nats.Connect(opts.URLs, nopts...)
+	if err != nil {
+		return nil, fmt.Errorf("connection to %q failed: %s", opts.URLs, err)
 	}
+	log.Printf("Connected to NATS Deployment: %v", nc.ConnectedAddr())
+	return nc, err
 }
 
 // NewSurveyor creates a surveyor
