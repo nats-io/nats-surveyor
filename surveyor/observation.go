@@ -40,6 +40,7 @@ type serviceObsOptions struct {
 	ServiceName string `json:"name"`
 	Topic       string `json:"topic"`
 	Credentials string `json:"credential"`
+	Nkey        string `json:"nkey"`
 }
 
 func (o *serviceObsOptions) Validate() error {
@@ -53,12 +54,21 @@ func (o *serviceObsOptions) Validate() error {
 		errs = append(errs, "topic is required")
 	}
 
-	if o.Credentials == "" {
-		errs = append(errs, "credential is required")
+	if o.Credentials == "" && o.Nkey == "" {
+		errs = append(errs, "jwt or nkey credentials are required")
+	} else if o.Credentials != "" && o.Nkey != "" {
+		errs = append(errs, "both jwt and nkey credentials found, only one can be used")
 	} else {
-		_, err := os.Stat(o.Credentials)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("invalid credential file: %s", err))
+		if o.Credentials != "" {
+			_, err := os.Stat(o.Credentials)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("invalid credential file: %s", err))
+			}
+		} else {
+			_, err := os.Stat(o.Nkey)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("invalid nkey file: %s", err))
+			}
 		}
 	}
 
@@ -148,6 +158,7 @@ func NewServiceObservation(f string, sopts Options) (*ServiceObsListener, error)
 
 	sopts.Name = fmt.Sprintf("%s (observing %s)", sopts.Name, opts.ServiceName)
 	sopts.Credentials = opts.Credentials
+	sopts.Nkey = opts.Nkey
 	nc, err := connect(&sopts)
 	if err != nil {
 		return nil, fmt.Errorf("nats connection failed: %s", err)
