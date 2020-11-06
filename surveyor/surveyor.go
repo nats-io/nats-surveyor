@@ -452,8 +452,10 @@ func (s *Surveyor) startObservations() error {
 			return fmt.Errorf("could not create observation from %s: %s", path, err)
 		}
 
-		for _, o := range s.observations {
-			if cmp.Equal(obs.opts, o.opts) {
+		// Prevent an equal observation to be loaded twice
+		// This is a problem that occurs with k8s mounts
+		for _, existingObservation := range s.observations {
+			if cmp.Equal(obs.opts, existingObservation.opts) {
 				return nil
 			}
 		}
