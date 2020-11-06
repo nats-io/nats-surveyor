@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	nats "github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -449,6 +450,12 @@ func (s *Surveyor) startObservations() error {
 		obs, err := NewServiceObservation(path, s.opts)
 		if err != nil {
 			return fmt.Errorf("could not create observation from %s: %s", path, err)
+		}
+
+		for _, o := range s.observations {
+			if cmp.Equal(obs.opts, o.opts) {
+				return nil
+			}
 		}
 
 		err = obs.Start()
