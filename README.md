@@ -23,7 +23,9 @@ Usage of ./nats-surveyor:
   -c int
     	Expected number of servers (default 1)
   -creds string
-    	Credentials File for the system account
+    	Credentials File for the system account when using jwt authentication
+  -nkey string
+      NKey Seed File for the system account when using nkey authenication
   -http_pass string
     	Set the password for HTTP scrapes. NATS bcrypt supported.
   -http_user string
@@ -339,13 +341,24 @@ More information can be found [here](https://github.com/prometheus/prometheus/is
 
 ## Service Observations
 
-Services can be observed by creating JSON files in the `observations` directory, here's an example:
+Services can be observed by creating JSON files in the `observations` directory.
+Both jwt credential files and nkey seed files are supported. The name of the observation has to unique. A second observation with a duplicate name will be ignored.
+
+Here's an example using a jwt credential file:
 
 ```json
 {
   "name": "email.subscribe",
   "topic": "monitor.email.subscribe",
   "credential": "/observations/email.subscribe.cred"
+}
+``` 
+Example with nkey seed file:
+```json
+{
+  "name": "email.subscribe",
+  "topic": "monitor.email.subscribe",
+  "nkey": "/observations/email.subscribe.nkey"
 }
 ```
 

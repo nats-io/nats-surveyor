@@ -451,6 +451,14 @@ func (s *Surveyor) startObservations() error {
 			return fmt.Errorf("could not create observation from %s: %s", path, err)
 		}
 
+		// Prevent an equal observation to be loaded twice
+		// This is a problem that occurs with k8s mounts
+		for _, existingObservation := range s.observations {
+			if obs.opts.ServiceName == existingObservation.opts.ServiceName {
+				return nil
+			}
+		}
+
 		err = obs.Start()
 		if err != nil {
 			return fmt.Errorf("could not start observation from %s: %s", path, err)
