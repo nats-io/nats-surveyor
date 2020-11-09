@@ -30,7 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	nats "github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -455,7 +454,7 @@ func (s *Surveyor) startObservations() error {
 		// Prevent an equal observation to be loaded twice
 		// This is a problem that occurs with k8s mounts
 		for _, existingObservation := range s.observations {
-			if cmp.Equal(obs.opts, existingObservation.opts) {
+			if obs.opts.ServiceName == existingObservation.opts.ServiceName {
 				return nil
 			}
 		}
