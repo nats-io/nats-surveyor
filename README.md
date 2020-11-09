@@ -23,7 +23,9 @@ Usage of ./nats-surveyor:
   -c int
     	Expected number of servers (default 1)
   -creds string
-    	Credentials File for the system account
+    	Credentials File for the system account when using jwt authentication
+  -nkey string
+      NKey File for the system account when using nkey authenication
   -http_pass string
     	Set the password for HTTP scrapes. NATS bcrypt supported.
   -http_user string
