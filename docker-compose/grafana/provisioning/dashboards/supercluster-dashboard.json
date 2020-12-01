@@ -50,9 +50,9 @@
   },
   "editable": true,
   "gnetId": null,
-  "graphTooltip": 1,
+  "graphTooltip": 0,
   "id": null,
-  "iteration": 1606827229025,
+  "iteration": 1606761502567,
   "links": [
     {
       "asDropdown": false,
@@ -62,14 +62,13 @@
       "tags": [
         "surveyor"
       ],
-      "title": "Surveyor",
+      "title": "Dashboards",
       "type": "dashboards"
     }
   ],
   "panels": [
     {
       "datasource": "${DS_PROMETHEUS}",
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -89,11 +88,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 12,
         "x": 0,
         "y": 0
       },
-      "id": 17,
+      "id": 19,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -111,9 +110,9 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "sum(nats_core_connection_count{server_cluster=~\"$cluster\"})",
+          "expr": "max(nats_core_gateway_count)",
           "interval": "",
-          "legendFormat": "Connections",
+          "legendFormat": "Clusters",
           "refId": "A"
         }
       ],
@@ -143,65 +142,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
+        "w": 12,
+        "x": 12,
         "y": 0
       },
-      "id": 19,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "vertical",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "value_and_name"
-      },
-      "pluginVersion": "7.1.1",
-      "targets": [
-        {
-          "expr": "sum(nats_core_subs_count{server_cluster=~\"$cluster\"})",
-          "interval": "",
-          "legendFormat": "Subscriptions",
-          "refId": "A"
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "",
-      "type": "stat"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "yellow",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 0
-      },
-      "id": 21,
+      "id": 17,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -219,9 +164,9 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_total_connection_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(nats_core_gateway_count{server_cluster=~\"$cluster\"})",
           "interval": "",
-          "legendFormat": "Connections / Second",
+          "legendFormat": "Connections",
           "refId": "A"
         }
       ],
@@ -231,15 +176,241 @@
       "type": "stat"
     },
     {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "hiddenSeries": false,
+      "id": 14,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": true,
+        "show": true,
+        "sort": "current",
+        "sortDesc": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "percentage": false,
+      "pluginVersion": "7.1.1",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [
+        {
+          "alias": "Sent",
+          "color": "#5794F2",
+          "transform": "negative-Y"
+        },
+        {
+          "alias": "Received",
+          "color": "#73BF69"
+        }
+      ],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "sum(rate(nats_core_gateway_sent_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "interval": "",
+          "legendFormat": "Sent",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(nats_core_gateway_recv_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "interval": "",
+          "legendFormat": "Received",
+          "refId": "B"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Super Cluster Bandwidth",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "Bps",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "hiddenSeries": false,
+      "id": 15,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": true,
+        "show": true,
+        "sort": "current",
+        "sortDesc": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "percentage": false,
+      "pluginVersion": "7.1.1",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [
+        {
+          "alias": "Sent",
+          "color": "#5794F2",
+          "transform": "negative-Y"
+        },
+        {
+          "alias": "Received",
+          "color": "#73BF69"
+        }
+      ],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "sum(rate(nats_core_gateway_sent_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Sent",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(nats_core_gateway_recv_msg_count{server_cluster=~\"$cluster\"}[1m]))",
+          "interval": "",
+          "legendFormat": "Received",
+          "refId": "B"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Super Cluster Messages",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": null,
+          "format": "pps",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "collapsed": true,
       "datasource": "${DS_PROMETHEUS}",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 16
       },
-      "id": 5,
+      "id": 6,
       "panels": [
         {
           "aliasColors": {},
@@ -247,7 +418,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_PROMETHEUS}",
-          "description": "Point in time view of clients connected to each Server",
+          "description": "Bytes sent for each gateway",
           "fieldConfig": {
             "defaults": {
               "custom": {},
@@ -261,209 +432,11 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 9
+            "y": 17
           },
           "hiddenSeries": false,
           "id": 2,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "hideEmpty": true,
-            "hideZero": true,
-            "max": true,
-            "min": true,
-            "show": true,
-            "sort": "current",
-            "sortDesc": false,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "null as zero",
-          "percentage": false,
-          "pluginVersion": "7.1.1",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": true,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "nats_core_connection_count{server_cluster=~\"$cluster\"}",
-              "interval": "",
-              "legendFormat": "{{server_name}}",
-              "refId": "A"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Current Connections",
-          "tooltip": {
-            "shared": true,
-            "sort": 2,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "short",
-              "label": "current connections",
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": "",
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_PROMETHEUS}",
-          "description": "Point in time view of clients connected to each Server",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {},
-              "links": []
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 12,
-            "y": 9
-          },
-          "hiddenSeries": false,
-          "id": 3,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "hideEmpty": true,
-            "hideZero": true,
-            "max": true,
-            "min": true,
-            "show": true,
-            "sort": "current",
-            "sortDesc": false,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "null as zero",
-          "percentage": true,
-          "pluginVersion": "7.1.1",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": true,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "nats_core_connection_count{server_cluster=~\"$cluster\"}",
-              "interval": "",
-              "legendFormat": "{{server_name}}",
-              "refId": "A"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Current Connections %",
-          "tooltip": {
-            "shared": true,
-            "sort": 2,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "decimals": null,
-              "format": "short",
-              "label": "current connections",
-              "logBase": 1,
-              "max": "110",
-              "min": null,
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": "",
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_PROMETHEUS}",
-          "description": "Connections received by the server in a second",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {},
-              "links": []
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 0,
-            "y": 16
-          },
-          "hiddenSeries": false,
-          "id": 7,
+          "interval": "",
           "legend": {
             "alignAsTable": true,
             "avg": true,
@@ -480,7 +453,7 @@
           },
           "lines": true,
           "linewidth": 1,
-          "nullPointMode": "null as zero",
+          "nullPointMode": "null",
           "percentage": false,
           "pluginVersion": "7.1.1",
           "pointradius": 2,
@@ -492,9 +465,8 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_total_connection_count{server_cluster=~\"$cluster\"}[1m])",
-              "interval": "",
-              "legendFormat": "{{server_name}}",
+              "expr": "rate(nats_core_gateway_sent_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
           ],
@@ -502,7 +474,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Connections per second",
+          "title": "Bytes Sent",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -518,9 +490,8 @@
           },
           "yaxes": [
             {
-              "decimals": null,
-              "format": "short",
-              "label": "connections / sec",
+              "format": "Bps",
+              "label": "bytes / sec",
               "logBase": 1,
               "max": null,
               "min": null,
@@ -546,7 +517,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_PROMETHEUS}",
-          "description": "Slow consumers detected by each server",
+          "description": "Bytes received for each gateway",
           "fieldConfig": {
             "defaults": {
               "custom": {},
@@ -560,11 +531,10 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 16
+            "y": 17
           },
           "hiddenSeries": false,
-          "id": 15,
-          "interval": "",
+          "id": 4,
           "legend": {
             "alignAsTable": true,
             "avg": true,
@@ -572,7 +542,7 @@
             "hideEmpty": true,
             "hideZero": true,
             "max": true,
-            "min": false,
+            "min": true,
             "show": true,
             "sort": "current",
             "sortDesc": false,
@@ -581,7 +551,7 @@
           },
           "lines": true,
           "linewidth": 1,
-          "nullPointMode": "null",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pluginVersion": "7.1.1",
           "pointradius": 2,
@@ -589,12 +559,12 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "stack": false,
+          "stack": true,
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[1m])",
-              "legendFormat": "{{server_name}}",
+              "expr": "rate(nats_core_gateway_recv_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
           ],
@@ -602,7 +572,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Slow Consumers",
+          "title": "Bytes Received",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -618,8 +588,8 @@
           },
           "yaxes": [
             {
-              "format": "short",
-              "label": "slow / second",
+              "format": "Bps",
+              "label": "bytes / sec",
               "logBase": 1,
               "max": null,
               "min": null,
@@ -640,7 +610,7 @@
           }
         }
       ],
-      "title": "Connections",
+      "title": "Super Cluster Bandwidth",
       "type": "row"
     },
     {
@@ -650,9 +620,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 17
       },
-      "id": 9,
+      "id": 8,
       "panels": [
         {
           "aliasColors": {},
@@ -660,7 +630,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_PROMETHEUS}",
-          "description": "Number of subscriptions active on the server",
+          "description": "Messages sent for each gateway",
           "fieldConfig": {
             "defaults": {
               "custom": {},
@@ -674,14 +644,16 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 10
+            "y": 18
           },
           "hiddenSeries": false,
-          "id": 11,
+          "id": 10,
           "legend": {
             "alignAsTable": true,
             "avg": true,
             "current": true,
+            "hideEmpty": true,
+            "hideZero": true,
             "max": true,
             "min": true,
             "show": true,
@@ -692,7 +664,7 @@
           },
           "lines": true,
           "linewidth": 1,
-          "nullPointMode": "null",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pluginVersion": "7.1.1",
           "pointradius": 2,
@@ -704,8 +676,9 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "nats_core_subs_count{server_cluster=~\"$cluster\"}",
-              "legendFormat": "{{server_name}}",
+              "expr": "rate(nats_core_gateway_sent_msgs_count{server_cluster=~\"$cluster\"}[1m])",
+              "interval": "",
+              "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
           ],
@@ -713,10 +686,10 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Active Subscriptions",
+          "title": "Messages Sent",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -729,9 +702,8 @@
           },
           "yaxes": [
             {
-              "decimals": null,
               "format": "short",
-              "label": "subscriptions",
+              "label": "messages / sec",
               "logBase": 1,
               "max": null,
               "min": null,
@@ -757,7 +729,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_PROMETHEUS}",
-          "description": "The difference in subscription count per minute",
+          "description": "Messages received for each gateway",
           "fieldConfig": {
             "defaults": {
               "custom": {},
@@ -771,25 +743,27 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 10
+            "y": 18
           },
           "hiddenSeries": false,
-          "id": 13,
+          "id": 12,
           "legend": {
             "alignAsTable": true,
-            "avg": false,
+            "avg": true,
             "current": true,
             "hideEmpty": true,
             "hideZero": true,
-            "max": false,
-            "min": false,
-            "show": false,
+            "max": true,
+            "min": true,
+            "show": true,
+            "sort": "current",
+            "sortDesc": false,
             "total": false,
             "values": true
           },
           "lines": true,
           "linewidth": 1,
-          "nullPointMode": "null",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pluginVersion": "7.1.1",
           "pointradius": 2,
@@ -797,13 +771,12 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "stack": false,
+          "stack": true,
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(delta(nats_core_subs_count{server_cluster=~\"$cluster\"}[1m]))",
-              "interval": "",
-              "legendFormat": "{{server_name}}",
+              "expr": "rate(nats_core_gateway_recv_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
           ],
@@ -811,10 +784,10 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Subscription Delta",
+          "title": "Messages Received",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -828,7 +801,7 @@
           "yaxes": [
             {
               "format": "short",
-              "label": "subscriptions",
+              "label": "messages / sec",
               "logBase": 1,
               "max": null,
               "min": null,
@@ -849,7 +822,7 @@
           }
         }
       ],
-      "title": "Subscriptions",
+      "title": "Super Cluster Messages",
       "type": "row"
     }
   ],
@@ -876,28 +849,6 @@
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
-        "sort": 1,
-        "tagValuesQuery": "",
-        "tags": [],
-        "tagsQuery": "",
-        "type": "query",
-        "useTags": false
-      },
-      {
-        "allValue": null,
-        "current": {},
-        "datasource": "${DS_PROMETHEUS}",
-        "definition": "query_result(nats_survey_expected_count)",
-        "hide": 2,
-        "includeAll": false,
-        "label": null,
-        "multi": false,
-        "name": "expected",
-        "options": [],
-        "query": "query_result(nats_survey_expected_count)",
-        "refresh": 1,
-        "regex": "/.* ([^\\ ]*) .*/",
-        "skipUrlSync": false,
         "sort": 0,
         "tagValuesQuery": "",
         "tags": [],
@@ -908,7 +859,7 @@
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-12h",
     "to": "now"
   },
   "timepicker": {
@@ -925,7 +876,7 @@
     ]
   },
   "timezone": "",
-  "title": "Clients",
-  "uid": "MCcOJo0Mz",
-  "version": 21
+  "title": "Super Cluster",
+  "uid": "qe4rPo0Gk",
+  "version": 13
 }
