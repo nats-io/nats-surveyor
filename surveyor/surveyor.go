@@ -110,7 +110,9 @@ func connect(opts *Options) (*nats.Conn, error) {
 	}, []string{"name"})
 	prometheus.Register(reconnCtr)
 
-	var nopts []nats.Option
+	nopts := []nats.Option{
+		nats.Name(opts.Name),
+	}
 
 	switch {
 	case opts.Credentials != "":
@@ -156,7 +158,7 @@ func connect(opts *Options) (*nats.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Connected to NATS Deployment: %v", nc.ConnectedAddr())
+	log.Printf("%s connected to NATS Deployment: %v", opts.Name, nc.ConnectedAddr())
 
 	return nc, err
 }

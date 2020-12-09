@@ -1,40 +1,4 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    }
-  ],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "7.1.1"
-    },
-    {
-      "type": "panel",
-      "id": "graph",
-      "name": "Graph",
-      "version": ""
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "stat",
-      "name": "Stat",
-      "version": ""
-    }
-  ],
   "annotations": {
     "list": [
       {
@@ -51,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": null,
-  "iteration": 1606761339148,
+  "id": 4,
+  "iteration": 1607509824021,
   "links": [
     {
       "asDropdown": false,
@@ -68,7 +32,7 @@
   ],
   "panels": [
     {
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": null,
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -122,7 +86,7 @@
       "type": "stat"
     },
     {
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": null,
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -180,7 +144,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": null,
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -221,8 +185,7 @@
       "seriesOverrides": [
         {
           "alias": "Sent",
-          "color": "#5794F2",
-          "transform": "negative-Y"
+          "color": "#5794F2"
         },
         {
           "alias": "Received",
@@ -292,7 +255,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": null,
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -333,8 +296,7 @@
       "seriesOverrides": [
         {
           "alias": "Sent",
-          "color": "#5794F2",
-          "transform": "negative-Y"
+          "color": "#5794F2"
         },
         {
           "alias": "Received",
@@ -403,7 +365,7 @@
     },
     {
       "collapsed": true,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -417,7 +379,7 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": "${DS_PROMETHEUS}",
+          "datasource": null,
           "description": "Messages sent for each route",
           "fieldConfig": {
             "defaults": {
@@ -516,7 +478,7 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": "${DS_PROMETHEUS}",
+          "datasource": null,
           "description": "Messages received for each route",
           "fieldConfig": {
             "defaults": {
@@ -616,7 +578,7 @@
     },
     {
       "collapsed": true,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -630,7 +592,7 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": "${DS_PROMETHEUS}",
+          "datasource": null,
           "description": "Bytes sent for each route",
           "fieldConfig": {
             "defaults": {
@@ -729,7 +691,7 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": "${DS_PROMETHEUS}",
+          "datasource": null,
           "description": "Bytes received for each route",
           "fieldConfig": {
             "defaults": {
@@ -828,7 +790,7 @@
     },
     {
       "collapsed": true,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -842,7 +804,7 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": "${DS_PROMETHEUS}",
+          "datasource": null,
           "description": "Data in the pending buffers that needs to be sent to remotes",
           "fieldConfig": {
             "defaults": {
@@ -940,7 +902,7 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": "${DS_PROMETHEUS}",
+          "datasource": null,
           "description": "The number of servers in each cluster",
           "fieldConfig": {
             "defaults": {
@@ -1048,17 +1010,74 @@
     "list": [
       {
         "allValue": ".*",
-        "current": {},
-        "datasource": "${DS_PROMETHEUS}",
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": "Prometheus",
         "definition": "label_values(nats_core_info, server_cluster)",
         "hide": 0,
         "includeAll": true,
         "label": "Cluster",
         "multi": true,
         "name": "cluster",
-        "options": [],
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "aws-euwest1",
+            "value": "aws-euwest1"
+          },
+          {
+            "selected": false,
+            "text": "aws-useast1",
+            "value": "aws-useast1"
+          },
+          {
+            "selected": false,
+            "text": "aws-uswest2",
+            "value": "aws-uswest2"
+          },
+          {
+            "selected": false,
+            "text": "az-westeurope",
+            "value": "az-westeurope"
+          },
+          {
+            "selected": false,
+            "text": "az-westus2",
+            "value": "az-westus2"
+          },
+          {
+            "selected": false,
+            "text": "gcp-asiaeast1",
+            "value": "gcp-asiaeast1"
+          },
+          {
+            "selected": false,
+            "text": "gcp-europewest3",
+            "value": "gcp-europewest3"
+          },
+          {
+            "selected": false,
+            "text": "gcp-useast1",
+            "value": "gcp-useast1"
+          },
+          {
+            "selected": false,
+            "text": "gcp-uswest1",
+            "value": "gcp-uswest1"
+          }
+        ],
         "query": "label_values(nats_core_info, server_cluster)",
-        "refresh": 1,
+        "refresh": 0,
         "regex": "",
         "skipUrlSync": false,
         "sort": 0,
@@ -1090,5 +1109,5 @@
   "timezone": "",
   "title": "Clusters",
   "uid": "uooGQT0Gz",
-  "version": 14
+  "version": 15
 }

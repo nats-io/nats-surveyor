@@ -40,6 +40,9 @@ type JSAdvisoryListener struct {
 type jsAdvisoryOptions struct {
 	AccountName string `json:"name"`
 	Credentials string `json:"credential"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	NKey        string `json:"nkey"`
 }
 
 // Validate checks the options meet our expectations
@@ -198,6 +201,10 @@ func NewJetStreamAdvisoryListener(f string, sopts Options) (*JSAdvisoryListener,
 
 	sopts.Name = fmt.Sprintf("%s (jetstream %s)", sopts.Name, opts.AccountName)
 	sopts.Credentials = opts.Credentials
+	sopts.NATSUser = opts.Username
+	sopts.NATSPassword = opts.Password
+	sopts.Nkey = opts.NKey
+
 	nc, err := connect(&sopts)
 	if err != nil {
 		return nil, fmt.Errorf("nats connection failed: %s", err)
@@ -222,7 +229,7 @@ func (o *JSAdvisoryListener) Start() error {
 	if err != nil {
 		return fmt.Errorf("could not subscribe to JetStream Advisory topic for %s (%s): %s", o.opts.AccountName, api.JSMetricPrefix, err)
 	}
-	log.Printf("Started JetStream Advisory listener stats on %s.> for %s", api.JSMetricPrefix, o.opts.AccountName)
+	log.Printf("Started JetStream Metric listener stats on %s.> for %s", api.JSMetricPrefix, o.opts.AccountName)
 
 	_ = o.nc.Flush()
 
