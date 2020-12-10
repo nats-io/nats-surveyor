@@ -8,6 +8,5 @@ require (
 	github.com/nats-io/nats.go v1.10.1-0.20201111151633-9e1f4a0d80d8
 	github.com/nats-io/nuid v1.0.1
 	github.com/prometheus/client_golang v1.7.1
-	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
 )

@@ -43,7 +43,7 @@ func TestServiceObservation_Load(t *testing.T) {
 	}
 
 	_, err = NewServiceObservation("testdata/badobs/bad.json", *opt)
-	if err.Error() != "invalid service observation configuration: testdata/badobs/bad.json: name is required, topic is required, credential is required" {
+	if err.Error() != "invalid service observation configuration: testdata/badobs/bad.json: name is required, topic is required, jwt or nkey credentials is required" {
 		t.Fatalf("observation load error: %s", err)
 	}
 
@@ -70,9 +70,9 @@ func TestServiceObservation_Handle(t *testing.T) {
 	defer obs.Stop()
 
 	expected := `
-# HELP nats_survey_observerations_count Number of Service Latency listeners that are running
-# TYPE nats_survey_observerations_count gauge
-nats_survey_observerations_count 1
+# HELP nats_latency_observations_count Number of Service Latency listeners that are running
+# TYPE nats_latency_observations_count gauge
+nats_latency_observations_count 1
 `
 	err = ptu.CollectAndCompare(observationsGauge, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -135,11 +135,11 @@ nats_survey_observerations_count 1
 	}
 
 	// sleep a bit just in case of slower delivery to the observer
-	time.Sleep(250 * time.Microsecond)
+	time.Sleep(time.Second)
 	expected = `
-# HELP nats_latency_observation_count Number of observations received by this surveyor across all services
-# TYPE nats_latency_observation_count counter
-nats_latency_observation_count{app="testing_service",service="testing"} 10
+# HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
+# TYPE nats_latency_observations_received_count counter
+nats_latency_observations_received_count{app="testing_service",service="testing"} 10
 `
 	err = ptu.CollectAndCompare(observationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -166,7 +166,7 @@ nats_latency_observation_count{app="testing_service",service="testing"} 10
 		}
 	}
 
-	time.Sleep(250 * time.Microsecond)
+	time.Sleep(time.Second)
 
 	expected = `
 # HELP nats_latency_observation_error_count Number of observations received by this surveyor across all services that could not be handled
@@ -179,9 +179,9 @@ nats_latency_observation_error_count{service="testing"} 10
 	}
 
 	expected = `
-# HELP nats_latency_observation_count Number of observations received by this surveyor across all services
-# TYPE nats_latency_observation_count counter
-nats_latency_observation_count{app="testing_service",service="testing"} 10
+# HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
+# TYPE nats_latency_observations_received_count counter
+nats_latency_observations_received_count{app="testing_service",service="testing"} 10
 `
 	err = ptu.CollectAndCompare(observationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {

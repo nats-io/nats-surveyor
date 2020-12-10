@@ -19,7 +19,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 	"testing"
@@ -108,7 +107,6 @@ func pollAndCheckDefault(t *testing.T, result string) (string, error) {
 		return "", err
 	}
 	if !strings.Contains(results, result) {
-		log.Printf("\n\nRESULTS: %s\n\n", results)
 		return results, fmt.Errorf("response did not have NATS data")
 	}
 	return results, nil
@@ -211,31 +209,6 @@ func TestSurveyor_Reconnect(t *testing.T) {
 	}
 	if err != nil {
 		t.Fatalf("Reconnect failed: %v.", err)
-	}
-}
-
-func TestSurveyor_NoSystemAccount(t *testing.T) {
-	ns := st.StartBasicServer()
-	defer ns.Shutdown()
-
-	s, err := NewSurveyor(getTestOptions())
-	if err != nil {
-		t.Fatalf("couldn't create surveyor: %v", err)
-	}
-	if err = s.Start(); err != nil {
-		t.Fatalf("start error: %v", err)
-	}
-	defer s.Stop()
-
-	results, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
-	if err != nil {
-		t.Fatalf("Couldn't poll exporter: %v", err)
-	}
-	if len(results) == 0 {
-		t.Fatalf("Should have received some non-nats data")
-	}
-	if strings.Contains(results, "nats_core_mem_bytes") {
-		t.Fatalf(("Should NOT have NATS data"))
 	}
 }
 

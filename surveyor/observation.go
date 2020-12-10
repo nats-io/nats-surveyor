@@ -56,7 +56,7 @@ func (o *serviceObsOptions) Validate() error {
 
 	switch {
 	case o.Credentials == "" && o.Nkey == "":
-		errs = append(errs, "jwt or nkey credentials are required")
+		errs = append(errs, "jwt or nkey credentials is required")
 	case o.Credentials != "" && o.Nkey != "":
 		errs = append(errs, "both jwt and nkey credentials found, only one can be used")
 	case o.Credentials != "":
