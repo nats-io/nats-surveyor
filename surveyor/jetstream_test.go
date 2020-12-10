@@ -36,6 +36,23 @@ func TestJetStream_Load(t *testing.T) {
 	}
 }
 
+func TestJetStream_limitJSSubject(t *testing.T) {
+	tests := [][]string{
+		{"$JS.API.STREAM.CREATE.ORDERS", "$JS.API.STREAM.CREATE"},
+		{"$JS.API.STREAM.MSG.GET.ORDERS", "$JS.API.STREAM.MSG.GET"},
+		{"$JS.API.STREAM.LIST", "$JS.API.STREAM.LIST"},
+		{"$JS.API.CONSUMER.CREATE.ORDERS", "$JS.API.CONSUMER.CREATE"},
+		{"$JS.API.CONSUMER.DURABLE.CREATE.ORDERS.NEW", "$JS.API.CONSUMER.DURABLE.CREATE"},
+	}
+
+	for _, c := range tests {
+		limited := limitJSSubject(c[0])
+		if limited != c[1] {
+			t.Fatalf("incorrect subject received: expected %q got %q", c[1], limited)
+		}
+	}
+}
+
 func TestJetStream_Handle(t *testing.T) {
 	js := st.NewJetStreamServer(t)
 	defer js.Shutdown()
@@ -59,11 +76,16 @@ func TestJetStream_Handle(t *testing.T) {
 		t.Fatalf("could not connect nats client: %s", err)
 	}
 
-	if known, _ := jsm.IsKnownStream("SURVEYOR"); known {
+	mgr, err := jsm.New(nc, jsm.WithTimeout(1100*time.Millisecond))
+	if err != nil {
+		t.Fatalf("could not get manager: %s", err)
+	}
+
+	if known, _ := mgr.IsKnownStream("SURVEYOR"); known {
 		t.Fatalf("SURVEYOR stream already exist")
 	}
 
-	str, err := jsm.NewStream("SURVEYOR", jsm.StreamConnection(jsm.WithConnection(nc)), jsm.Subjects("js.in.surveyor"), jsm.MemoryStorage())
+	str, err := mgr.NewStream("SURVEYOR", jsm.Subjects("js.in.surveyor"), jsm.MemoryStorage())
 	if err != nil {
 		t.Fatalf("could not create stream: %s", err)
 	}
@@ -81,8 +103,8 @@ func TestJetStream_Handle(t *testing.T) {
 		t.Fatalf("could not create consumer: %s", err)
 	}
 
-	consumer.NextMsg(jsm.WithTimeout(1100 * time.Millisecond))
-	consumer.NextMsg(jsm.WithTimeout(1100 * time.Millisecond))
+	consumer.NextMsg()
+	consumer.NextMsg()
 
 	msg, err = nc.Request("js.in.surveyor", []byte("2"), time.Second)
 	if err != nil {
@@ -92,7 +114,7 @@ func TestJetStream_Handle(t *testing.T) {
 		t.Fatalf("publish failed: %s", string(msg.Data))
 	}
 
-	msg, err = consumer.NextMsg(jsm.WithTimeout(time.Second))
+	msg, err = consumer.NextMsg()
 	if err != nil {
 		t.Fatalf("next failed: %s", err)
 	}
@@ -102,9 +124,9 @@ func TestJetStream_Handle(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	expected := `
-# HELP nats_survey_jetstream_delivery_exceeded_count Advisories about JetStream Consumer Delivery Exceeded events
-# TYPE nats_survey_jetstream_delivery_exceeded_count counter
-nats_survey_jetstream_delivery_exceeded_count{account="global",consumer="OUT",stream="SURVEYOR"} 1
+# HELP nats_jetstream_delivery_exceeded_count Advisories about JetStream Consumer Delivery Exceeded events
+# TYPE nats_jetstream_delivery_exceeded_count counter
+nats_jetstream_delivery_exceeded_count{account="global",consumer="OUT",stream="SURVEYOR"} 1
 `
 	err = ptu.CollectAndCompare(jsDeliveryExceededCtr, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -112,11 +134,12 @@ nats_survey_jetstream_delivery_exceeded_count{account="global",consumer="OUT",st
 	}
 
 	expected = `
-# HELP nats_survey_jetstream_api_audit JetStream API access audit events
-# TYPE nats_survey_jetstream_api_audit counter
-nats_survey_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.CONSUMER.DURABLE.CREATE.SURVEYOR.OUT"} 1
-nats_survey_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.CONSUMER.INFO.SURVEYOR.OUT"} 1
-nats_survey_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.STREAM.CREATE.SURVEYOR"} 1
+# HELP nats_jetstream_api_audit JetStream API access audit events
+# TYPE nats_jetstream_api_audit counter
+nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.CONSUMER.DURABLE.CREATE"} 1
+nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.CONSUMER.INFO"} 1
+nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.STREAM.CREATE"} 1
+nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.STREAM.INFO"} 1
 `
 	err = ptu.CollectAndCompare(jsAPIAuditCtr, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -124,9 +147,9 @@ nats_survey_jetstream_api_audit{account="global",server="jetstream",subject="$JS
 	}
 
 	expected = `
-# HELP nats_survey_jetstream_acknowledgement_deliveries How many times messages took to be delivered and Acknowledged
-# TYPE nats_survey_jetstream_acknowledgement_deliveries counter
-nats_survey_jetstream_acknowledgement_deliveries{account="global",consumer="OUT",stream="SURVEYOR"} 1
+# HELP nats_jetstream_acknowledgement_deliveries How many times messages took to be delivered and Acknowledged
+# TYPE nats_jetstream_acknowledgement_deliveries counter
+nats_jetstream_acknowledgement_deliveries{account="global",consumer="OUT",stream="SURVEYOR"} 1
 `
 	err = ptu.CollectAndCompare(jsAckMetricDeliveries, bytes.NewReader([]byte(expected)))
 	if err != nil {

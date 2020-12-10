@@ -91,10 +91,6 @@ type StatzCollector struct {
 	noReplies   *prometheus.CounterVec
 }
 
-////////////////////////////////////////////
-// LABELS
-////////////////////////////////////////////
-
 var (
 	serverLabels     = []string{"server_cluster", "server_name", "server_id"}
 	serverInfoLabels = []string{"server_cluster", "server_name", "server_id", "server_version"}

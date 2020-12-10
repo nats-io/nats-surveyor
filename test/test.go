@@ -52,7 +52,11 @@ func StartBasicServer() *ns.Server {
 		NoSigs:   true,
 	}
 
-	s := ns.New(opts)
+	s, err := ns.NewServer(opts)
+	if err != nil {
+		panic(err)
+	}
+
 	if s == nil {
 		panic("No NATS Server object returned.")
 	}

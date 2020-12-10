@@ -54,21 +54,20 @@ func (o *serviceObsOptions) Validate() error {
 		errs = append(errs, "topic is required")
 	}
 
-	if o.Credentials == "" && o.Nkey == "" {
-		errs = append(errs, "jwt or nkey credentials are required")
-	} else if o.Credentials != "" && o.Nkey != "" {
+	switch {
+	case o.Credentials == "" && o.Nkey == "":
+		errs = append(errs, "jwt or nkey credentials is required")
+	case o.Credentials != "" && o.Nkey != "":
 		errs = append(errs, "both jwt and nkey credentials found, only one can be used")
-	} else {
-		if o.Credentials != "" {
-			_, err := os.Stat(o.Credentials)
-			if err != nil {
-				errs = append(errs, fmt.Sprintf("invalid credential file: %s", err))
-			}
-		} else {
-			_, err := os.Stat(o.Nkey)
-			if err != nil {
-				errs = append(errs, fmt.Sprintf("invalid nkey file: %s", err))
-			}
+	case o.Credentials != "":
+		_, err := os.Stat(o.Credentials)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("invalid credential file: %s", err))
+		}
+	case o.Nkey != "":
+		_, err := os.Stat(o.Nkey)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("invalid nkey file: %s", err))
 		}
 	}
 
