@@ -36,6 +36,23 @@ func TestJetStream_Load(t *testing.T) {
 	}
 }
 
+func TestJetStream_limitJSSubject(t *testing.T) {
+	tests := [][]string{
+		{"$JS.API.STREAM.CREATE.ORDERS", "$JS.API.STREAM.CREATE"},
+		{"$JS.API.STREAM.MSG.GET.ORDERS", "$JS.API.STREAM.MSG.GET"},
+		{"$JS.API.STREAM.LIST", "$JS.API.STREAM.LIST"},
+		{"$JS.API.CONSUMER.CREATE.ORDERS", "$JS.API.CONSUMER.CREATE"},
+		{"$JS.API.CONSUMER.DURABLE.CREATE.ORDERS.NEW", "$JS.API.CONSUMER.DURABLE.CREATE"},
+	}
+
+	for _, c := range tests {
+		limited := limitJSSubject(c[0])
+		if limited != c[1] {
+			t.Fatalf("incorrect subject received: expected %q got %q", c[1], limited)
+		}
+	}
+}
+
 func TestJetStream_Handle(t *testing.T) {
 	js := st.NewJetStreamServer(t)
 	defer js.Shutdown()
@@ -119,10 +136,10 @@ nats_jetstream_delivery_exceeded_count{account="global",consumer="OUT",stream="S
 	expected = `
 # HELP nats_jetstream_api_audit JetStream API access audit events
 # TYPE nats_jetstream_api_audit counter
-nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.CONSUMER.DURABLE.CREATE.SURVEYOR.OUT"} 1
-nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.CONSUMER.INFO.SURVEYOR.OUT"} 1
-nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.STREAM.CREATE.SURVEYOR"} 1
-nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.STREAM.INFO.SURVEYOR"} 1
+nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.CONSUMER.DURABLE.CREATE"} 1
+nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.CONSUMER.INFO"} 1
+nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.STREAM.CREATE"} 1
+nats_jetstream_api_audit{account="global",server="jetstream",subject="$JS.API.STREAM.INFO"} 1
 `
 	err = ptu.CollectAndCompare(jsAPIAuditCtr, bytes.NewReader([]byte(expected)))
 	if err != nil {

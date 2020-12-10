@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -72,11 +73,6 @@ var (
 	jsAPIAuditCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("nats", "jetstream", "api_audit"),
 		Help: "JetStream API access audit events",
-	}, []string{"server", "subject", "account"})
-
-	jsAPIErrorsCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "jetstream", "api_errors"),
-		Help: "JetStream API Errors Count",
 	}, []string{"server", "subject", "account"})
 
 	// Delivery Exceeded
@@ -159,11 +155,15 @@ var (
 		Name: prometheus.BuildFQName("nats", "jetstream", "restore_duration"),
 		Help: "How long a restore took to be processed",
 	}, []string{"account", "stream"})
+
+	streamCrudRe   = regexp.MustCompile(`\$JS.API.STREAM.(CREATE|UPDATE|DELETE|INFO|SNAPSHOT|RESTORE)`)
+	streamMsgRe    = regexp.MustCompile(`\$JS.API.STREAM.MSG.(GET|DELETE)`)
+	consumerCrudRe = regexp.MustCompile(`\$JS.API.CONSUMER.(CREATE|UPDATE|DELETE|INFO|SNAPSHOT|RESTORE|NAMES)`)
+	templateCrudRe = regexp.MustCompile(`\$JS.API.STREAM.TEMPLATE.(CREATE|DELETE|INFO)`)
 )
 
 func init() {
 	prometheus.MustRegister(jsAPIAuditCtr)
-	prometheus.MustRegister(jsAPIErrorsCtr)
 	prometheus.MustRegister(jsAdvisoriesGauge)
 	prometheus.MustRegister(jsUnknownAdvisoryCtr)
 	prometheus.MustRegister(jsDeliveryExceededCtr)
@@ -238,6 +238,42 @@ func (o *JSAdvisoryListener) Start() error {
 	return nil
 }
 
+// this removes much of the dynamic details off the api subjects to limit the number of labels,
+// without doing this the dimensions in the data will explode and consume vast resources
+//
+// bit janky in having to maintain this, but seems to be the best we can do atm without modifying
+// the advisories to include a API type in the subject
+func limitJSSubject(subj string) string {
+	var parts [][]string
+
+	switch {
+	case streamMsgRe.MatchString(subj):
+		parts = streamMsgRe.FindAllStringSubmatch(subj, -1)
+
+	case streamCrudRe.MatchString(subj):
+		parts = streamCrudRe.FindAllStringSubmatch(subj, -1)
+
+	case consumerCrudRe.MatchString(subj):
+		parts = consumerCrudRe.FindAllStringSubmatch(subj, -1)
+
+	case templateCrudRe.MatchString(subj):
+		parts = templateCrudRe.FindAllStringSubmatch(subj, -1)
+
+	case strings.HasPrefix(subj, "$JS.API.CONSUMER.DURABLE.CREATE"):
+		return "$JS.API.CONSUMER.DURABLE.CREATE"
+
+	case strings.HasPrefix(subj, "$JS.API.CONSUMER.MSG.NEXT"):
+		return "$JS.API.CONSUMER.MSG.NEXT"
+
+	}
+
+	if len(parts) > 0 {
+		return parts[0][0]
+	}
+
+	return subj
+}
+
 func (o *JSAdvisoryListener) advisoryHandler(m *nats.Msg) {
 	schema, event, err := jsm.ParseEvent(m.Data)
 	if err != nil {
@@ -250,11 +286,7 @@ func (o *JSAdvisoryListener) advisoryHandler(m *nats.Msg) {
 
 	switch event := event.(type) {
 	case *advisory.JetStreamAPIAuditV1:
-		if strings.HasPrefix(event.Response, api.ErrPrefix) {
-			jsAPIErrorsCtr.WithLabelValues(event.Server, event.Subject, o.opts.AccountName).Inc()
-		}
-
-		jsAPIAuditCtr.WithLabelValues(event.Server, event.Subject, o.opts.AccountName).Inc()
+		jsAPIAuditCtr.WithLabelValues(event.Server, limitJSSubject(event.Subject), o.opts.AccountName).Inc()
 
 	case *advisory.ConsumerDeliveryExceededAdvisoryV1:
 		jsDeliveryExceededCtr.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
