@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 4,
-  "iteration": 1607509824021,
+  "iteration": 1608137190616,
   "links": [
     {
       "asDropdown": false,
@@ -1011,7 +1011,7 @@
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "All",
           "value": [
             "$__all"
@@ -1024,60 +1024,9 @@
         "label": "Cluster",
         "multi": true,
         "name": "cluster",
-        "options": [
-          {
-            "selected": true,
-            "text": "All",
-            "value": "$__all"
-          },
-          {
-            "selected": false,
-            "text": "aws-euwest1",
-            "value": "aws-euwest1"
-          },
-          {
-            "selected": false,
-            "text": "aws-useast1",
-            "value": "aws-useast1"
-          },
-          {
-            "selected": false,
-            "text": "aws-uswest2",
-            "value": "aws-uswest2"
-          },
-          {
-            "selected": false,
-            "text": "az-westeurope",
-            "value": "az-westeurope"
-          },
-          {
-            "selected": false,
-            "text": "az-westus2",
-            "value": "az-westus2"
-          },
-          {
-            "selected": false,
-            "text": "gcp-asiaeast1",
-            "value": "gcp-asiaeast1"
-          },
-          {
-            "selected": false,
-            "text": "gcp-europewest3",
-            "value": "gcp-europewest3"
-          },
-          {
-            "selected": false,
-            "text": "gcp-useast1",
-            "value": "gcp-useast1"
-          },
-          {
-            "selected": false,
-            "text": "gcp-uswest1",
-            "value": "gcp-uswest1"
-          }
-        ],
+        "options": [],
         "query": "label_values(nats_core_info, server_cluster)",
-        "refresh": 0,
+        "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
         "sort": 0,
