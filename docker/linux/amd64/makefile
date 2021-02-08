@@ -1,4 +1,4 @@
-IMAGE := synadia/nats-surveyor
+IMAGE := natsio/nats-surveyor
 
 TAG := 0.2.0
 
