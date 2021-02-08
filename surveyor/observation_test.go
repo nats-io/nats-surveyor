@@ -90,20 +90,21 @@ nats_latency_observations_count 1
 
 	// send a bunch of observations
 	for i := 0; i < 10; i++ {
+		now := time.Now()
 		observation := &server.ServiceLatency{
 			TypedEvent: server.TypedEvent{
 				Type: "io.nats.server.metric.v1.service_latency",
 				ID:   nuid.New().Next(),
 				Time: time.Now().UTC(),
 			},
-			Requestor: server.LatencyClient{
-				Start: time.Now(),
+			Requestor: &server.ClientInfo{
+				Start: &now,
 				RTT:   333 * time.Second,
 			},
-			Responder: server.LatencyClient{
+			Responder: &server.ClientInfo{
 				Name:  "testing_service",
 				RTT:   time.Second,
-				Start: time.Now(),
+				Start: &now,
 			},
 			RequestStart:   time.Now(),
 			ServiceLatency: 333 * time.Microsecond,
