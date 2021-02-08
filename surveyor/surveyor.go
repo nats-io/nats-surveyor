@@ -128,7 +128,7 @@ func connect(opts *Options) (*nats.Conn, error) {
 	}
 
 	nopts = append(nopts, nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
-		log.Printf("%q disconnected, will possibly miss replies: %s", c.Opts.Name, err)
+		log.Printf("%q disconnected, will possibly miss replies: %v", c.Opts.Name, err)
 	}))
 	nopts = append(nopts, nats.ReconnectHandler(func(c *nats.Conn) {
 		reconnCtr.WithLabelValues(c.Opts.Name).Inc()

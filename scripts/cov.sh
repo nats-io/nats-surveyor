@@ -8,7 +8,7 @@ if [[ "$OSTYPE" != "linux-gnu" ]]; then
 	exit 0
 fi
 
-if [[ "$(go version)" != *"1.13"* ]]; then
+if [[ "$(go version)" != *"1.14"* ]]; then
 	echo "$(go version) detected, skipping upload overage"
 	exit 0
 fi

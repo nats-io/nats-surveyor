@@ -26,7 +26,7 @@ import (
 	"github.com/nats-io/nats-surveyor/surveyor"
 )
 
-var version = "0.1.1"
+var version = "v0.2.0"
 
 func main() {
 	var printVersion bool
@@ -60,7 +60,7 @@ func main() {
 	flag.Parse()
 
 	if printVersion {
-		fmt.Println("nats-surveyor v", version)
+		fmt.Println("nats-surveyor", version)
 		os.Exit(0)
 	}
 
