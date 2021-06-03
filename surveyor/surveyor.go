@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	nats "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/crypto/bcrypt"
@@ -177,7 +177,7 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 	}, nil
 }
 
-func (s *Surveyor) createCollector() error {
+func (s *Surveyor) createStatszCollector() error {
 	if s.opts.ExpectedServers == 0 {
 		return nil
 	}
@@ -193,10 +193,7 @@ func (s *Surveyor) createCollector() error {
 			return nil
 		}
 
-		// If we're here usually the Prometheus server is unreachable.
-		// Prometheus error types are not documented.
-		log.Printf("Error registering collector: %v", err)
-		log.Printf("Retrying in 500 ms...")
+		log.Printf("Error registering statsz collector, will retry after 500ms: %v", err)
 		time.Sleep(500 * time.Millisecond)
 		err = prometheus.Register(s.statzC)
 	}
@@ -480,7 +477,7 @@ func (s *Surveyor) Start() error {
 		return err
 	}
 
-	if err := s.createCollector(); err != nil {
+	if err := s.createStatszCollector(); err != nil {
 		return err
 	}
 

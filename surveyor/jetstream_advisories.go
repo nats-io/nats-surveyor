@@ -73,7 +73,7 @@ var (
 	jsAPIAuditCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("nats", "jetstream", "api_audit"),
 		Help: "JetStream API access audit events",
-	}, []string{"server", "subject", "account"})
+	}, []string{"subject", "account"})
 
 	// Delivery Exceeded
 	jsDeliveryExceededCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -156,6 +156,26 @@ var (
 		Help: "How long a restore took to be processed",
 	}, []string{"account", "stream"})
 
+	jsConsumerLeaderElected = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "jetstream", "consumer_leader_elected"),
+		Help: "How many times leader elections were done for consumers",
+	}, []string{"account", "stream"})
+
+	jsConsumerQuorumLost = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "jetstream", "consumer_quorum_lost"),
+		Help: "How many times a consumer lost quorum leading to new leader elections",
+	}, []string{"account", "stream"})
+
+	jsStreamLeaderElected = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "jetstream", "stream_leader_elected"),
+		Help: "How many times leader elections were done for streams",
+	}, []string{"account", "stream"})
+
+	jsStreamQuorumLost = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "jetstream", "stream_quorum_lost"),
+		Help: "How many times a stream lost quorum leading to new leader elections",
+	}, []string{"account", "stream"})
+
 	streamCrudRe   = regexp.MustCompile(`\$JS.API.STREAM.(CREATE|UPDATE|DELETE|INFO|SNAPSHOT|RESTORE)`)
 	streamMsgRe    = regexp.MustCompile(`\$JS.API.STREAM.MSG.(GET|DELETE)`)
 	consumerCrudRe = regexp.MustCompile(`\$JS.API.CONSUMER.(CREATE|UPDATE|DELETE|INFO|SNAPSHOT|RESTORE|NAMES)`)
@@ -179,6 +199,10 @@ func init() {
 	prometheus.MustRegister(jsRestoreCreatedCtr)
 	prometheus.MustRegister(jsTotalAdvisoryCtr)
 	prometheus.MustRegister(jsAdvisoryParseErrorCtr)
+	prometheus.MustRegister(jsConsumerLeaderElected)
+	prometheus.MustRegister(jsConsumerQuorumLost)
+	prometheus.MustRegister(jsStreamLeaderElected)
+	prometheus.MustRegister(jsStreamQuorumLost)
 }
 
 // NewJetStreamAdvisoryListener creates a new JetStream advisory reporter
@@ -286,7 +310,7 @@ func (o *JSAdvisoryListener) advisoryHandler(m *nats.Msg) {
 
 	switch event := event.(type) {
 	case *advisory.JetStreamAPIAuditV1:
-		jsAPIAuditCtr.WithLabelValues(event.Server, limitJSSubject(event.Subject), o.opts.AccountName).Inc()
+		jsAPIAuditCtr.WithLabelValues(limitJSSubject(event.Subject), o.opts.AccountName).Inc()
 
 	case *advisory.ConsumerDeliveryExceededAdvisoryV1:
 		jsDeliveryExceededCtr.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
@@ -316,6 +340,18 @@ func (o *JSAdvisoryListener) advisoryHandler(m *nats.Msg) {
 
 	case *advisory.JSSnapshotCompleteAdvisoryV1:
 		jsSnapthotDuration.WithLabelValues(o.opts.AccountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
+
+	case *advisory.JSConsumerLeaderElectedV1:
+		jsConsumerLeaderElected.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
+
+	case *advisory.JSConsumerQuorumLostV1:
+		jsConsumerQuorumLost.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
+
+	case *advisory.JSStreamLeaderElectedV1:
+		jsStreamLeaderElected.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
+
+	case *advisory.JSStreamQuorumLostV1:
+		jsStreamQuorumLost.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
 
 	default:
 		jsUnknownAdvisoryCtr.WithLabelValues(schema, o.opts.AccountName).Inc()
