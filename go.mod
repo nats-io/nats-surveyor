@@ -1,6 +1,6 @@
 module github.com/nats-io/nats-surveyor
 
-go 1.14
+go 1.16
 
 require (
 	github.com/minio/highwayhash v1.0.1 // indirect
