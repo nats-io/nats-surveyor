@@ -44,6 +44,9 @@ type jsAdvisoryOptions struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	NKey        string `json:"nkey"`
+	TLSCert     string `json:"tls_cert"`
+	TLSKey      string `json:"tls_key"`
+	TLSCA       string `json:"tls_ca"`
 }
 
 // Validate checks the options meet our expectations
@@ -228,6 +231,12 @@ func NewJetStreamAdvisoryListener(f string, sopts Options) (*JSAdvisoryListener,
 	sopts.NATSUser = opts.Username
 	sopts.NATSPassword = opts.Password
 	sopts.Nkey = opts.NKey
+
+	if opts.TLSKey != "" && opts.TLSCert != "" && opts.TLSCA != "" {
+		sopts.CaFile = opts.TLSCA
+		sopts.CertFile = opts.TLSCert
+		sopts.KeyFile = opts.TLSKey
+	}
 
 	nc, err := connect(&sopts)
 	if err != nil {
