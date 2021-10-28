@@ -366,8 +366,14 @@ Place this in `observations/email.surbscribe.json` and create a credential givin
 
 ## JetStream
 
-JetStream can be monitored on a per-account basis by creating JSON files in the `jetstream` directory, here's an example:
+JetStream can be monitored on a per-account basis by creating JSON files in the `jetstream` directory.
+Place those files in `jetstream/youraccount.json`. Be sure that you give access to the `$JS.EVENT.>` subject to your user. 
 
+When you add/modify account files, you'll need restart the NATS Surveyor service in order for the JetStream in this account to be monitored.
+
+There are some ways to establish authentication, here are some examples:
+
+### Credentials
 ```json
 {
   "name": "Your Account",
@@ -375,7 +381,32 @@ JetStream can be monitored on a per-account basis by creating JSON files in the 
 }
 ```
 
-Place this in `jetstream/youraccount.json` and create a credential giving access to `$JS.EVENT.>` in `jetstream/youraccount.cred`, when you restart the service JetStream in this account will be monitored.
+### User/Password
+```json
+{
+  "name": "Your Account",
+  "username": "accounta",
+  "password": "changeit"
+}
+```
+
+### NKeys 
+```json
+{
+  "name": "Your Account",
+  "nkey": "UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4"
+}
+```
+### mTLS
+
+```json
+{
+  "name": "Your Account",
+  "tls_ca": "/etc/nats-certs/your-account/ca.crt",
+  "tls_cert": "/etc/nats-certs/your-account/tls.crt",
+  "tls_key": "/etc/nats-certs/your-account/tls.key"
+}
+```
 
 ## TODO
 
