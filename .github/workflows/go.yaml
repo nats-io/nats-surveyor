@@ -32,6 +32,7 @@ jobs:
         run: |
           export GOPATH="$RUNNER_WORKSPACE"
 
+          go mod tidy
           go vet ./...
           $(go env GOPATH)/bin/golangci-lint run \
              --no-config --exclude-use-default=false --max-same-issues=0 \
