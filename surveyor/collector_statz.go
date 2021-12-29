@@ -61,6 +61,31 @@ type statzDescs struct {
 	GatewayRecvMsgs   *prometheus.Desc
 	GatewayRecvBytes  *prometheus.Desc
 	GatewayNumInbound *prometheus.Desc
+
+	// Jetstream Info
+	JetstreamInfo *prometheus.Desc
+	// Jetstream Server
+	JetstreamEnabled                    *prometheus.Desc
+	JetstreamFilestoreSizeBytes         *prometheus.Desc
+	JetstreamMemstoreSizeBytes          *prometheus.Desc
+	JetstreamFilestoreUsedBytes         *prometheus.Desc
+	JetstreamFilestoreReservedBytes     *prometheus.Desc
+	JetstreamFilestoreReservedUsedBytes *prometheus.Desc
+	JetstreamMemstoreUsedBytes          *prometheus.Desc
+	JetstreamMemstoreReservedBytes      *prometheus.Desc
+	JetstreamMemstoreReservedUsedBytes  *prometheus.Desc
+	JetstreamAccounts                   *prometheus.Desc
+	JetstreamAPIRequests                *prometheus.Desc
+	JetstreamAPIErrors                  *prometheus.Desc
+	// Jetstream Cluster
+	JetstreamClusterRaftGroupInfo     *prometheus.Desc
+	JetstreamClusterRaftGroupSize     *prometheus.Desc
+	JetstreamClusterRaftGroupLeader   *prometheus.Desc
+	JetstreamClusterRaftGroupReplicas *prometheus.Desc
+	// Jetstream Cluster Replicas
+	JetstreamClusterRaftGroupReplicaActive  *prometheus.Desc
+	JetstreamClusterRaftGroupReplicaCurrent *prometheus.Desc
+	JetstreamClusterRaftGroupReplicaOffline *prometheus.Desc
 }
 
 // StatzCollector collects statz from a server deployment
@@ -101,6 +126,21 @@ func serverName(sm *server.ServerStatsMsg) string {
 	}
 
 	return sm.Server.Name
+}
+
+func jsDomainLabelValue(sm *server.ServerStatsMsg) string {
+	if sm.Server.Domain == "" {
+		// Labels with empty values are ignored by Prometheus, but a JS Domain of "" is a valid configuration.
+		// Use a name with '*' as a placeholder. This is an invalid JS Domain.
+		return "*EMPTY*"
+	}
+	return sm.Server.Domain
+}
+
+func jetstreamInfoLabelValues(sm *server.ServerStatsMsg) []string {
+	// Maybe also "meta_leader", "store_dir"?
+	return []string{sm.Server.Name, sm.Server.Host, sm.Server.ID, sm.Server.Cluster, jsDomainLabelValue(sm), sm.Server.Version,
+		strconv.FormatBool(sm.Server.JetStream)}
 }
 
 func (sc *StatzCollector) serverLabelValues(sm *server.ServerStatsMsg) []string {
@@ -161,6 +201,41 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.GatewayRecvMsgs = newPromDesc("gateway_recv_msg_count", "Number of messages sent over the gateway gauge", sc.gatewayLabels)
 	sc.descs.GatewayRecvBytes = newPromDesc("gateway_recv_bytes", "Number of messages sent over the gateway gauge", sc.gatewayLabels)
 	sc.descs.GatewayNumInbound = newPromDesc("gateway_inbound_msg_count", "Number inbound messages through the gateway gauge", sc.gatewayLabels)
+
+	// Jetstream Info
+	sc.descs.JetstreamInfo = newPromDesc("jetstream_info", " Always 1. Contains metadata for cross-reference from other time-series",
+		[]string{"server_name", "server_host", "server_id", "server_cluster", "server_domain", "server_version", "server_jetstream"})
+
+	// Jetstream Server
+	// Maybe this should be server_id since we can lookup server_name from info?
+	jsServerLabelKeys := []string{"server_id"}
+	sc.descs.JetstreamEnabled = newPromDesc("jetstream_enabled", "1 if Jetstream is enabled, 0 otherwise.  A gauge.", jsServerLabelKeys)
+	sc.descs.JetstreamFilestoreSizeBytes = newPromDesc("jetstream_filestore_size_bytes", "Capacity of jetstream filesystem storage in bytes", jsServerLabelKeys)
+	sc.descs.JetstreamMemstoreSizeBytes = newPromDesc("jetstream_memstore_size_bytes", "Capacity of jetstream in-memory store in bytes", jsServerLabelKeys)
+	sc.descs.JetstreamFilestoreUsedBytes = newPromDesc("jetstream_filestore_used_bytes", "Consumption of jetstream filesystem storage in bytes", jsServerLabelKeys)
+	sc.descs.JetstreamFilestoreReservedBytes = newPromDesc("jetstream_filestore_reserved_bytes", "Account Reservations of jetstream filesystem storage in bytes", jsServerLabelKeys)
+	sc.descs.JetstreamFilestoreReservedUsedBytes = newPromDesc("jetstream_filestore_reserved_used_bytes", "Consumption of Account Reservation of jetstream filesystem storage in bytes", jsServerLabelKeys)
+	sc.descs.JetstreamMemstoreUsedBytes = newPromDesc("jetstream_memstore_used_bytes", "Consumption of jetstream in-memory store in bytes", jsServerLabelKeys)
+	sc.descs.JetstreamMemstoreReservedBytes = newPromDesc("jetstream_memstore_reserved_bytes", "Account Reservations of  jetstream in-memory store in bytes", jsServerLabelKeys)
+	sc.descs.JetstreamMemstoreReservedUsedBytes = newPromDesc("jetstream_memstore_reserved_used_bytes", "Consumption of Account Reservation of jetstream in-memory store in bytes. ", jsServerLabelKeys)
+	sc.descs.JetstreamAccounts = newPromDesc("jetstream_accounts", "Number of NATS Accounts present on a Jetstream server", jsServerLabelKeys)
+	sc.descs.JetstreamAPIRequests = newPromDesc("jetstream_api_requests", "Number of Jetstream API Requests processed. Value is 0 when server starts", jsServerLabelKeys)
+	sc.descs.JetstreamAPIErrors = newPromDesc("jetstream_api_errors", "Number of Jetstream API Errors. Value is 0 when server starts", jsServerLabelKeys)
+
+	// Jetstream Raft Groups
+	jsRaftGroupInfoLabelKeys := []string{"jetstream_domain", "raft_group", "server_id", "cluster_name", "leader"}
+	sc.descs.JetstreamClusterRaftGroupInfo = newPromDesc("jetstream_cluster_raft_group_info", "Provides metadata about a RAFT Group", jsRaftGroupInfoLabelKeys)
+	jsRaftGroupLabelKeys := []string{"server_id"}
+	sc.descs.JetstreamClusterRaftGroupSize = newPromDesc("jetstream_cluster_raft_group_size", "Number of peers in a RAFT group", jsRaftGroupLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupLeader = newPromDesc("jetstream_cluster_raft_group_leader", "1 if this server is leader of raft group, 0 otherwise", jsRaftGroupLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupReplicas = newPromDesc("jetstream_cluster_raft_group_replicas", "Info about replicas from leaders perspective", jsRaftGroupLabelKeys)
+
+	// Jetstream Cluster Replicas
+	jsClusterReplicaLabelKeys := []string{"server_id", "peer"}
+	// FIXME: help could use some work...
+	sc.descs.JetstreamClusterRaftGroupReplicaActive = newPromDesc("jetstream_cluster_raft_group_replica_peer_active", "Jetstream RAFT Group Peer last Active time. Very large values may imply raft is stalled", jsClusterReplicaLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupReplicaCurrent = newPromDesc("jetstream_cluster_raft_group_replica_peer_current", "Jetstream RAFT Group Peer is current: 1 or not: 0", jsClusterReplicaLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupReplicaOffline = newPromDesc("jetstream_cluster_raft_group_replica_peer_offline", "Jetstream RAFT Group Peer is offline: 1 or online: 0", jsClusterReplicaLabelKeys)
 
 	// Surveyor
 	sc.surveyedCnt = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -389,6 +464,32 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- sc.descs.GatewayRecvBytes
 	ch <- sc.descs.GatewayNumInbound
 
+	// Jetstream Descriptions
+	// Jetstream Info
+	ch <- sc.descs.JetstreamInfo
+	// Jetstream Server
+	ch <- sc.descs.JetstreamEnabled
+	ch <- sc.descs.JetstreamFilestoreSizeBytes
+	ch <- sc.descs.JetstreamMemstoreSizeBytes
+	ch <- sc.descs.JetstreamFilestoreUsedBytes
+	ch <- sc.descs.JetstreamFilestoreReservedBytes
+	ch <- sc.descs.JetstreamFilestoreReservedUsedBytes
+	ch <- sc.descs.JetstreamMemstoreUsedBytes
+	ch <- sc.descs.JetstreamMemstoreReservedBytes
+	ch <- sc.descs.JetstreamMemstoreReservedUsedBytes
+	ch <- sc.descs.JetstreamAccounts
+	ch <- sc.descs.JetstreamAPIRequests
+	ch <- sc.descs.JetstreamAPIErrors
+	// Jetstream Cluster
+	ch <- sc.descs.JetstreamClusterRaftGroupInfo
+	ch <- sc.descs.JetstreamClusterRaftGroupSize
+	ch <- sc.descs.JetstreamClusterRaftGroupLeader
+	ch <- sc.descs.JetstreamClusterRaftGroupReplicas
+	// Jetstream Cluster Replicas
+	ch <- sc.descs.JetstreamClusterRaftGroupReplicaActive
+	ch <- sc.descs.JetstreamClusterRaftGroupReplicaCurrent
+	ch <- sc.descs.JetstreamClusterRaftGroupReplicaOffline
+
 	// Surveyor
 	sc.surveyedCnt.Describe(ch)
 	sc.expectedCnt.Describe(ch)
@@ -461,6 +562,72 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- newGaugeMetric(sc.descs.Routes, float64(len(sm.Stats.Routes)), labels)
 		ch <- newGaugeMetric(sc.descs.Gateways, float64(len(sm.Stats.Gateways)), labels)
 
+		ch <- newGaugeMetric(sc.descs.JetstreamInfo, float64(1), jetstreamInfoLabelValues(sm))
+		// Any / All Meta-data in sc.descs.JetstreamInfo can be xrefed by the server_id.
+		// labels define the "uniqueness" of a time series, any associations beyond that should be left to prometheus
+		lblServerID := []string{sm.Server.ID}
+		if sm.Stats.JetStream == nil {
+			ch <- newGaugeMetric(sc.descs.JetstreamEnabled, float64(0), lblServerID)
+		} else {
+			ch <- newGaugeMetric(sc.descs.JetstreamEnabled, float64(1), lblServerID)
+			if sm.Stats.JetStream.Config != nil {
+				ch <- newGaugeMetric(sc.descs.JetstreamFilestoreSizeBytes, float64(sm.Stats.JetStream.Config.MaxStore), lblServerID)
+				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreSizeBytes, float64(sm.Stats.JetStream.Config.MaxMemory), lblServerID)
+				// StoreDir  At present, '$SYS.REQ.SERVER.PING', server.sendStatsz() squashes StoreDir to "".
+				// Domain is also at 'sm.Server.Domain'. Unknown if there's a semantic difference at present. See jsDomainLabelValue().
+			}
+			if sm.Stats.JetStream.Stats != nil {
+				ch <- newGaugeMetric(sc.descs.JetstreamFilestoreUsedBytes, float64(sm.Stats.JetStream.Stats.Store), lblServerID)
+				ch <- newGaugeMetric(sc.descs.JetstreamFilestoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedStore), lblServerID)
+				ch <- newGaugeMetric(sc.descs.JetstreamFilestoreReservedUsedBytes, float64(sm.Stats.JetStream.Stats.ReserveStoreUsed), lblServerID)
+				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreUsedBytes, float64(sm.Stats.JetStream.Stats.Memory), lblServerID)
+				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedMemory), lblServerID)
+				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreReservedUsedBytes, float64(sm.Stats.JetStream.Stats.ReservedMemoryUsed), lblServerID)
+				ch <- newGaugeMetric(sc.descs.JetstreamAccounts, float64(sm.Stats.JetStream.Stats.Accounts), lblServerID)
+				// NIT: Technically these should be Counters, not Gauges.
+				// At present, Total does not include Errors. Keeping them separate
+				ch <- newGaugeMetric(sc.descs.JetstreamAPIRequests, float64(sm.Stats.JetStream.Stats.API.Total), lblServerID)
+				ch <- newGaugeMetric(sc.descs.JetstreamAPIErrors, float64(sm.Stats.JetStream.Stats.API.Errors), lblServerID)
+			}
+
+			if sm.Stats.JetStream.Meta == nil {
+				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(0), []string{"", "", sm.Server.ID, "", ""})
+			} else {
+				jsRaftGroupInfoLabelValues := []string{jsDomainLabelValue(sm), "_meta_", sm.Server.ID, sm.Stats.JetStream.Meta.Name, sm.Stats.JetStream.Meta.Leader}
+				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(1), jsRaftGroupInfoLabelValues)
+
+				jsRaftGroupLabelValues := []string{sm.Server.ID}
+				// FIXME: add labels needed or remove...
+
+				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupSize, float64(sm.Stats.JetStream.Meta.Size), jsRaftGroupLabelValues)
+
+				// Could provide false positive if two server have the same server_name in the same or different clusters in the super-cluster...
+				// At present, in this statsz only a peer that thinks it's a Leader will have `sm.Stats.JetStream.Meta.Replicas != nil`.
+				if sm.Stats.JetStream.Meta.Leader != "" && sm.Server.Name != "" && sm.Server.Name == sm.Stats.JetStream.Meta.Leader {
+					ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupLeader, float64(1), jsRaftGroupLabelValues)
+				} else {
+					ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupLeader, float64(0), jsRaftGroupLabelValues)
+				}
+				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicas, float64(len(sm.Stats.JetStream.Meta.Replicas)), jsRaftGroupLabelValues)
+				for _, jsr := range sm.Stats.JetStream.Meta.Replicas {
+					if jsr == nil {
+						continue
+					}
+					jsClusterReplicaLabelValues := []string{sm.Server.ID, jsr.Name}
+					ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaActive, float64(jsr.Active), jsClusterReplicaLabelValues)
+					if jsr.Current {
+						ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(1), jsClusterReplicaLabelValues)
+					} else {
+						ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(0), jsClusterReplicaLabelValues)
+					}
+					if jsr.Offline {
+						ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(1), jsClusterReplicaLabelValues)
+					} else {
+						ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(0), jsClusterReplicaLabelValues)
+					}
+				}
+			}
+		}
 		for _, rs := range sm.Stats.Routes {
 			labels = sc.routeLabelValues(sm, rs)
 			ch <- newGaugeMetric(sc.descs.RouteSentMsgs, float64(rs.Sent.Msgs), labels)
