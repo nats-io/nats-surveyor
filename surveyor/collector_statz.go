@@ -579,10 +579,8 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			if sm.Stats.JetStream.Stats != nil {
 				ch <- newGaugeMetric(sc.descs.JetstreamFilestoreUsedBytes, float64(sm.Stats.JetStream.Stats.Store), lblServerID)
 				ch <- newGaugeMetric(sc.descs.JetstreamFilestoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedStore), lblServerID)
-				ch <- newGaugeMetric(sc.descs.JetstreamFilestoreReservedUsedBytes, float64(sm.Stats.JetStream.Stats.ReserveStoreUsed), lblServerID)
 				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreUsedBytes, float64(sm.Stats.JetStream.Stats.Memory), lblServerID)
 				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedMemory), lblServerID)
-				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreReservedUsedBytes, float64(sm.Stats.JetStream.Stats.ReservedMemoryUsed), lblServerID)
 				ch <- newGaugeMetric(sc.descs.JetstreamAccounts, float64(sm.Stats.JetStream.Stats.Accounts), lblServerID)
 				// NIT: Technically these should be Counters, not Gauges.
 				// At present, Total does not include Errors. Keeping them separate
