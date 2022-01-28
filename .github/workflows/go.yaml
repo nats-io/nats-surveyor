@@ -5,7 +5,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [1.16]
+        go: [1.17]
         os: [ubuntu-latest, macOS-latest]
     runs-on: ${{matrix.os}}
     steps:
@@ -37,9 +37,7 @@ jobs:
           $(go env GOPATH)/bin/golangci-lint run \
              --no-config --exclude-use-default=false --max-same-issues=0 \
                --disable errcheck \
-               --enable golint \
                --enable stylecheck \
-               --enable interfacer \
                --enable unconvert \
                --enable gocyclo \
                --enable gofmt \
@@ -48,7 +46,6 @@ jobs:
                --enable unparam \
                --enable nakedret \
                --enable prealloc \
-               --enable scopelint \
                --enable gocritic \
                ./...
 
