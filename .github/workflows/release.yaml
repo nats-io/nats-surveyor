@@ -21,8 +21,8 @@ jobs:
         GO111MODULE: 'on'
       run: |
         export GOPATH="$RUNNER_WORKSPACE"
-        go get -v github.com/wadey/gocovmerge
-        go get -v github.com/golangci/golangci-lint/cmd/golangci-lint
+        cd /tmp && go install -v github.com/wadey/gocovmerge@latest
+        cd /tmp && go install -v github.com/golangci/golangci-lint/cmd/golangci-lint@latest
     - name: Release
       shell: bash --noprofile --norc -x -eo pipefail {0}
       env:
