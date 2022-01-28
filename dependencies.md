@@ -11,7 +11,6 @@ go install github.com/mitchellh/golicense@latest
 
 go build
 export GITHUB_TOKEN='...'
-golicense nats-surveyor
 golicense -plain nats-surveyor | sort > licenses
 
 go list -f '{{with .Module}}{{if .Version}}{{.Path}}{{"\t"}}{{.Version}}{{end}}{{end}}' all | sort -u > versions
