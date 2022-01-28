@@ -6,7 +6,7 @@ networks:
 
 services:
   surveyor:
-    image: synadia/nats-surveyor:${SURVEYOR_DOCKER_TAG}
+    image: natsio/nats-surveyor:${SURVEYOR_DOCKER_TAG}
     container_name: nats-surveyor
     restart: always
     volumes:
