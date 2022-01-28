@@ -48,4 +48,3 @@ rm versions licenses
 | golang.org/x/sys | v0.0.0-20220114195835-da31bd327af9 | BSD |
 | golang.org/x/time | v0.0.0-20211116232009-f0f3c7e86c11 | BSD |
 | google.golang.org/protobuf | v1.27.1 | BSD |
-

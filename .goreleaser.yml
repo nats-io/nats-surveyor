@@ -29,8 +29,6 @@ builds:
   main: .
   binary: nats-surveyor
 
-  lang: go
-
 archives:
   - id: zipfiles
     wrap_in_directory: true
@@ -43,7 +41,7 @@ archives:
     - nats-surveyor*
 
 nfpms:
-  - 
+  -
     formats:
       - deb
     file_name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
