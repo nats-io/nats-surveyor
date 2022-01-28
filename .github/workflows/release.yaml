@@ -18,7 +18,7 @@ jobs:
     - name: Install deps
       shell: bash --noprofile --norc -x -eo pipefail {0}
       env:
-        GO111MODULE: 'off'
+        GO111MODULE: 'on'
       run: |
         export GOPATH="$RUNNER_WORKSPACE"
         go get -v github.com/wadey/gocovmerge
