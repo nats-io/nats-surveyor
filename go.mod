@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/nats-io/jsm.go v0.0.27
-	github.com/nats-io/nats-server/v2 v2.7.1
+	github.com/nats-io/nats-server/v2 v2.7.2
 	github.com/nats-io/nats.go v1.13.1-0.20220121202836-972a071d373d
 	github.com/nats-io/nuid v1.0.1
 	github.com/prometheus/client_golang v1.12.0
