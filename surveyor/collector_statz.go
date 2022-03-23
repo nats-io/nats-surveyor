@@ -75,6 +75,7 @@ type statzDescs struct {
 	JetstreamMemstoreReservedBytes      *prometheus.Desc
 	JetstreamMemstoreReservedUsedBytes  *prometheus.Desc
 	JetstreamAccounts                   *prometheus.Desc
+	JetstreamHAAssets                   *prometheus.Desc
 	JetstreamAPIRequests                *prometheus.Desc
 	JetstreamAPIErrors                  *prometheus.Desc
 	// Jetstream Cluster
@@ -219,6 +220,7 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.JetstreamMemstoreReservedBytes = newPromDesc("jetstream_memstore_reserved_bytes", "Account Reservations of  jetstream in-memory store in bytes", jsServerLabelKeys)
 	sc.descs.JetstreamMemstoreReservedUsedBytes = newPromDesc("jetstream_memstore_reserved_used_bytes", "Consumption of Account Reservation of jetstream in-memory store in bytes. ", jsServerLabelKeys)
 	sc.descs.JetstreamAccounts = newPromDesc("jetstream_accounts", "Number of NATS Accounts present on a Jetstream server", jsServerLabelKeys)
+	sc.descs.JetstreamHAAssets = newPromDesc("jetstream_ha_assets", "Number of Raft nodes used by NATS", jsServerLabelKeys)
 	sc.descs.JetstreamAPIRequests = newPromDesc("jetstream_api_requests", "Number of Jetstream API Requests processed. Value is 0 when server starts", jsServerLabelKeys)
 	sc.descs.JetstreamAPIErrors = newPromDesc("jetstream_api_errors", "Number of Jetstream API Errors. Value is 0 when server starts", jsServerLabelKeys)
 
@@ -582,6 +584,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreUsedBytes, float64(sm.Stats.JetStream.Stats.Memory), lblServerID)
 				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedMemory), lblServerID)
 				ch <- newGaugeMetric(sc.descs.JetstreamAccounts, float64(sm.Stats.JetStream.Stats.Accounts), lblServerID)
+				ch <- newGaugeMetric(sc.descs.JetstreamHAAssets, float64(sm.Stats.JetStream.Stats.HAAssets), lblServerID)
 				// NIT: Technically these should be Counters, not Gauges.
 				// At present, Total does not include Errors. Keeping them separate
 				ch <- newGaugeMetric(sc.descs.JetstreamAPIRequests, float64(sm.Stats.JetStream.Stats.API.Total), lblServerID)
