@@ -161,6 +161,46 @@ func TestSurveyor_Basic(t *testing.T) {
 	}
 }
 
+func TestSurveyor_Account(t *testing.T) {
+	sc := st.NewSuperCluster(t)
+	defer sc.Shutdown()
+
+	opt := getTestOptions()
+	opt.Accounts = true
+	s, err := NewSurveyor(opt)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	output, err := PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{
+		"nats_core_account_bytes_recv",
+		"nats_core_account_bytes_sent",
+		"nats_core_account_conn_count",
+		"nats_core_account_count",
+		"nats_core_account_jetstream_enabled",
+		"nats_core_account_jetstream_stream_count",
+		"nats_core_account_leaf_count",
+		"nats_core_account_msgs_recv",
+		"nats_core_account_msgs_sent",
+		"nats_core_account_sub_count",
+	}
+	for _, m := range want {
+		if !strings.Contains(output, m) {
+			t.Logf("output: %s", output)
+			t.Fatalf("missing: %s", m)
+		}
+	}
+}
+
 func TestSurveyor_Reconnect(t *testing.T) {
 	ns := st.NewSingleServer(t)
 	defer ns.Shutdown()

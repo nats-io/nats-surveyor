@@ -57,6 +57,7 @@ func main() {
 	flag.StringVar(&opts.Prefix, "prefix", "", "Replace the default prefix for all the metrics.")
 	flag.StringVar(&opts.ObservationConfigDir, "observe", "", "Listen for observation statistics based on config files in a directory.")
 	flag.StringVar(&opts.JetStreamConfigDir, "jetstream", "", "Listen for JetStream Advisories based on config files in a directory.")
+	flag.BoolVar(&opts.Accounts, "accounts", false, "Export per account metrics")
 	flag.Parse()
 
 	if printVersion {
