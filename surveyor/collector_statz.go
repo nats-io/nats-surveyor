@@ -87,26 +87,46 @@ type statzDescs struct {
 	JetstreamClusterRaftGroupReplicaActive  *prometheus.Desc
 	JetstreamClusterRaftGroupReplicaCurrent *prometheus.Desc
 	JetstreamClusterRaftGroupReplicaOffline *prometheus.Desc
+
+	// Account scope metrics
+	accCount                    *prometheus.Desc
+	accConnCount                *prometheus.Desc
+	accLeafCount                *prometheus.Desc
+	accSubCount                 *prometheus.Desc
+	accBytesSent                *prometheus.Desc
+	accBytesRecv                *prometheus.Desc
+	accMsgsSent                 *prometheus.Desc
+	accMsgsRecv                 *prometheus.Desc
+	accJetstreamEnabled         *prometheus.Desc
+	accJetstreamMemoryUsed      *prometheus.Desc
+	accJetstreamStorageUsed     *prometheus.Desc
+	accJetstreamMemoryReserved  *prometheus.Desc
+	accJetstreamStorageReserved *prometheus.Desc
+	accJetstreamStreamCount     *prometheus.Desc
+	accJetstreamConsumerCount   *prometheus.Desc
+	accJetstreamReplicaCount    *prometheus.Desc
 }
 
 // StatzCollector collects statz from a server deployment
 type StatzCollector struct {
 	sync.Mutex
-	nc          *nats.Conn
-	start       time.Time
-	stats       []*server.ServerStatsMsg
-	rtts        map[string]time.Duration
-	pollTimeout time.Duration
-	reply       string
-	polling     bool
-	pollkey     string
-	numServers  int
-	more        int
-	servers     map[string]bool
-	doneCh      chan struct{}
-	moreCh      chan struct{}
-	descs       statzDescs
-	natsUp      *prometheus.Desc
+	nc              *nats.Conn
+	start           time.Time
+	stats           []*server.ServerStatsMsg
+	accStats        []accountStats
+	rtts            map[string]time.Duration
+	pollTimeout     time.Duration
+	reply           string
+	polling         bool
+	pollkey         string
+	numServers      int
+	more            int
+	servers         map[string]bool
+	doneCh          chan struct{}
+	moreCh          chan struct{}
+	descs           statzDescs
+	collectAccounts bool
+	natsUp          *prometheus.Desc
 
 	serverLabels     []string
 	serverInfoLabels []string
@@ -119,6 +139,33 @@ type StatzCollector struct {
 	pollTime    *prometheus.SummaryVec
 	lateReplies *prometheus.CounterVec
 	noReplies   *prometheus.CounterVec
+}
+
+type accountStats struct {
+	accountID string
+
+	connCount float64
+	subCount  float64
+	leafCount float64
+
+	bytesSent float64
+	bytesRecv float64
+	msgsSent  float64
+	msgsRecv  float64
+
+	jetstreamEnabled         float64
+	jetstreamMemoryUsed      float64
+	jetstreamStorageUsed     float64
+	jetstreamMemoryReserved  float64
+	jetstreamStorageReserved float64
+	jetstreamStreamCount     float64
+	jetstreamStreams         []streamAccountStats
+}
+
+type streamAccountStats struct {
+	streamName    string
+	consumerCount float64
+	replicaCount  float64
 }
 
 func serverName(sm *server.ServerStatsMsg) string {
@@ -239,6 +286,30 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.JetstreamClusterRaftGroupReplicaCurrent = newPromDesc("jetstream_cluster_raft_group_replica_peer_current", "Jetstream RAFT Group Peer is current: 1 or not: 0", jsClusterReplicaLabelKeys)
 	sc.descs.JetstreamClusterRaftGroupReplicaOffline = newPromDesc("jetstream_cluster_raft_group_replica_peer_offline", "Jetstream RAFT Group Peer is offline: 1 or online: 0", jsClusterReplicaLabelKeys)
 
+	// Account scope metrics
+	if sc.collectAccounts {
+		accLabel := []string{"account"}
+		sc.descs.accCount = newPromDesc("account_count", "The number of accounts detected", nil)
+
+		sc.descs.accConnCount = newPromDesc("account_conn_count", "The number of client connections to this account", accLabel)
+		sc.descs.accLeafCount = newPromDesc("account_leaf_count", "The number of leafnode connections to this account", accLabel)
+		sc.descs.accSubCount = newPromDesc("account_sub_count", "The number of subscriptions on this account", accLabel)
+
+		sc.descs.accBytesSent = newPromDesc("account_bytes_sent", "The number of bytes sent on this account", accLabel)
+		sc.descs.accBytesRecv = newPromDesc("account_bytes_recv", "The number of bytes received on this account", accLabel)
+		sc.descs.accMsgsSent = newPromDesc("account_msgs_sent", "The number of messages sent on this account", accLabel)
+		sc.descs.accMsgsRecv = newPromDesc("account_msgs_recv", "The number of messages received on this account", accLabel)
+
+		sc.descs.accJetstreamEnabled = newPromDesc("account_jetstream_enabled", "Whether JetStream is enabled or not for this account", accLabel)
+		sc.descs.accJetstreamMemoryUsed = newPromDesc("account_jetstream_memory_used", "The number of bytes used by JetStream memory", accLabel)
+		sc.descs.accJetstreamStorageUsed = newPromDesc("account_jetstream_storage_used", "The number of bytes used by JetStream storage", accLabel)
+		sc.descs.accJetstreamMemoryReserved = newPromDesc("account_jetstream_memory_reserved", "The number of bytes reserved by JetStream memory", accLabel)
+		sc.descs.accJetstreamStorageReserved = newPromDesc("account_jetstream_storage_reserved", "The number of bytes reserved by JetStream storage", accLabel)
+		sc.descs.accJetstreamStreamCount = newPromDesc("account_jetstream_stream_count", "The number of streams in this account", accLabel)
+		sc.descs.accJetstreamConsumerCount = newPromDesc("account_jetstream_consumer_count", "The number of consumers per stream for this account", append(accLabel, "stream"))
+		sc.descs.accJetstreamReplicaCount = newPromDesc("account_jetstream_replica_count", "The number of replicas per stream for this account", append(accLabel, "stream"))
+	}
+
 	// Surveyor
 	sc.surveyedCnt = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: prometheus.BuildFQName("nats", "survey", "surveyed_count"),
@@ -272,15 +343,16 @@ func (sc *StatzCollector) buildDescs() {
 }
 
 // NewStatzCollector creates a NATS Statz Collector
-func NewStatzCollector(nc *nats.Conn, numServers int, pollTimeout time.Duration) *StatzCollector {
+func NewStatzCollector(nc *nats.Conn, numServers int, pollTimeout time.Duration, accounts bool) *StatzCollector {
 	sc := &StatzCollector{
-		nc:          nc,
-		numServers:  numServers,
-		reply:       nc.NewRespInbox(),
-		pollTimeout: pollTimeout,
-		servers:     make(map[string]bool, numServers),
-		doneCh:      make(chan struct{}, 1),
-		moreCh:      make(chan struct{}, 1),
+		nc:              nc,
+		numServers:      numServers,
+		reply:           nc.NewRespInbox(),
+		pollTimeout:     pollTimeout,
+		servers:         make(map[string]bool, numServers),
+		doneCh:          make(chan struct{}, 1),
+		moreCh:          make(chan struct{}, 1),
+		collectAccounts: accounts,
 
 		serverLabels:     []string{"server_cluster", "server_name", "server_id"},
 		serverInfoLabels: []string{"server_cluster", "server_name", "server_id", "server_version"},
@@ -427,7 +499,160 @@ func (sc *StatzCollector) poll() error {
 		}
 	}
 
+	if sc.collectAccounts {
+		return sc.pollAccountInfo()
+	}
 	return nil
+}
+
+func (sc *StatzCollector) pollAccountInfo() error {
+	nc := sc.nc
+	accs, err := getAccounts(nc)
+	if err != nil {
+		return err
+	}
+
+	accStats := make([]accountStats, 0, len(accs))
+	for _, acc := range accs {
+		sts := accountStats{accountID: acc}
+
+		accInfo, err := getAccountInfo(nc, acc)
+		if err != nil {
+			return err
+		}
+
+		if accInfo.JetStream {
+			sts.jetstreamEnabled = 1.0
+
+			jsInfo, err := getJSInfo(nc, acc)
+			if err != nil {
+				return err
+			}
+
+			sts.jetstreamMemoryUsed = float64(jsInfo.Memory)
+			sts.jetstreamStorageUsed = float64(jsInfo.Store)
+			sts.jetstreamMemoryReserved = float64(jsInfo.ReservedStore)
+			sts.jetstreamStorageReserved = float64(jsInfo.ReservedMemory)
+
+			sts.jetstreamStreamCount = float64(len(jsInfo.Streams))
+			for _, stream := range jsInfo.Streams {
+				sts.jetstreamStreams = append(sts.jetstreamStreams, streamAccountStats{
+					streamName:    stream.Name,
+					consumerCount: float64(len(stream.Consumer)),
+					replicaCount:  float64(stream.Config.Replicas),
+				})
+			}
+		}
+
+		sts.connCount = float64(accInfo.ClientCnt)
+		sts.leafCount = float64(accInfo.LeafCnt)
+		sts.subCount = float64(accInfo.SubCnt)
+
+		agg, err := getConnzAggregate(nc, acc)
+		if err != nil {
+			return err
+		}
+		sts.bytesSent = agg.bytesSent
+		sts.bytesRecv = agg.bytesRecv
+		sts.msgsSent = agg.msgsSent
+		sts.msgsRecv = agg.msgsRecv
+
+		accStats = append(accStats, sts)
+	}
+
+	sc.Lock()
+	sc.accStats = accStats
+	sc.Unlock()
+
+	return nil
+}
+
+func getAccounts(nc *nats.Conn) ([]string, error) {
+	const subj = "$SYS.REQ.SERVER.PING.ACCOUNTZ"
+	msg, err := nc.Request(subj, nil, 3*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	var r server.ServerAPIResponse
+	var d server.Accountz
+	r.Data = &d
+	if err := json.Unmarshal(msg.Data, &r); err != nil {
+		return nil, err
+	}
+
+	sort.Strings(d.Accounts)
+	return d.Accounts, nil
+}
+func getAccountInfo(nc *nats.Conn, account string) (server.AccountInfo, error) {
+	subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.INFO", account)
+	msg, err := nc.Request(subj, nil, 3*time.Second)
+	if err != nil {
+		return server.AccountInfo{}, err
+	}
+
+	var r server.ServerAPIResponse
+	var d server.AccountInfo
+	r.Data = &d
+	if err := json.Unmarshal(msg.Data, &r); err != nil {
+		return server.AccountInfo{}, err
+	}
+
+	return d, nil
+}
+
+func getJSInfo(nc *nats.Conn, account string) (server.AccountDetail, error) {
+	subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.JSZ", account)
+	opts := []byte(`{"streams": true, "consumer": true, "config": true}`)
+	msg, err := nc.Request(subj, opts, 3*time.Second)
+	if err != nil {
+		return server.AccountDetail{}, err
+	}
+
+	var r server.ServerAPIResponse
+	var d server.AccountDetail
+	r.Data = &d
+	if err := json.Unmarshal(msg.Data, &r); err != nil {
+		return server.AccountDetail{}, err
+	}
+
+	return d, nil
+}
+
+type connzAggregate struct {
+	bytesSent float64
+	bytesRecv float64
+	msgsSent  float64
+	msgsRecv  float64
+}
+
+func getConnzAggregate(nc *nats.Conn, account string) (connzAggregate, error) {
+	// TODO: Replace with "$SYS.REQ.ACCOUNT.%s.CONNS" after NATS 2.8.4.
+	// CONNS returns bytes sent/recv at the account level without needing the
+	// following code.
+	subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.CONNZ", account)
+	msg, err := nc.Request(subj, nil, 3*time.Second)
+	if err != nil {
+		return connzAggregate{}, err
+	}
+
+	var r server.ServerAPIResponse
+	var d server.Connz
+	r.Data = &d
+	if err := json.Unmarshal(msg.Data, &r); err != nil {
+		return connzAggregate{}, err
+	}
+
+	var agg connzAggregate
+	for _, c := range d.Conns {
+		agg.bytesSent += float64(c.InBytes)
+		agg.bytesRecv += float64(c.OutBytes)
+
+		agg.msgsSent += float64(c.InMsgs)
+		agg.msgsRecv += float64(c.OutMsgs)
+	}
+
+	return agg, nil
 }
 
 // Describe is the Prometheus interface to describe metrics for
@@ -492,6 +717,26 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- sc.descs.JetstreamClusterRaftGroupReplicaCurrent
 	ch <- sc.descs.JetstreamClusterRaftGroupReplicaOffline
 
+	// Account scope metrics
+	if sc.collectAccounts {
+		ch <- sc.descs.accCount
+		ch <- sc.descs.accConnCount
+		ch <- sc.descs.accLeafCount
+		ch <- sc.descs.accSubCount
+		ch <- sc.descs.accBytesSent
+		ch <- sc.descs.accBytesRecv
+		ch <- sc.descs.accMsgsSent
+		ch <- sc.descs.accMsgsRecv
+		ch <- sc.descs.accJetstreamEnabled
+		ch <- sc.descs.accJetstreamMemoryUsed
+		ch <- sc.descs.accJetstreamStorageUsed
+		ch <- sc.descs.accJetstreamMemoryReserved
+		ch <- sc.descs.accJetstreamStorageReserved
+		ch <- sc.descs.accJetstreamStreamCount
+		ch <- sc.descs.accJetstreamConsumerCount
+		ch <- sc.descs.accJetstreamReplicaCount
+	}
+
 	// Surveyor
 	sc.surveyedCnt.Describe(ch)
 	sc.expectedCnt.Describe(ch)
@@ -503,6 +748,10 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func newGaugeMetric(desc *prometheus.Desc, value float64, labels []string) prometheus.Metric {
 	return prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, value, labels...)
+}
+
+func newCounterMetric(desc *prometheus.Desc, value float64, labels []string) prometheus.Metric {
+	return prometheus.MustNewConstMetric(desc, prometheus.CounterValue, value, labels...)
 }
 
 func (sc *StatzCollector) newNatsUpGaugeMetric(value bool) prometheus.Metric {
@@ -645,6 +894,35 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			ch <- newGaugeMetric(sc.descs.GatewayRecvMsgs, float64(gw.Received.Msgs), labels)
 			ch <- newGaugeMetric(sc.descs.GatewayRecvBytes, float64(gw.Received.Bytes), labels)
 			ch <- newGaugeMetric(sc.descs.GatewayNumInbound, float64(gw.NumInbound), labels)
+		}
+	}
+
+	// Account scope metrics
+	if sc.collectAccounts {
+		ch <- newGaugeMetric(sc.descs.accCount, float64(len(sc.accStats)), nil)
+		for _, stat := range sc.accStats {
+			id := []string{stat.accountID}
+
+			ch <- newGaugeMetric(sc.descs.accConnCount, stat.connCount, id)
+			ch <- newGaugeMetric(sc.descs.accLeafCount, stat.leafCount, id)
+			ch <- newGaugeMetric(sc.descs.accSubCount, stat.subCount, id)
+
+			ch <- newCounterMetric(sc.descs.accBytesSent, stat.bytesSent, id)
+			ch <- newCounterMetric(sc.descs.accBytesRecv, stat.bytesRecv, id)
+			ch <- newCounterMetric(sc.descs.accMsgsSent, stat.msgsSent, id)
+			ch <- newCounterMetric(sc.descs.accMsgsRecv, stat.msgsRecv, id)
+
+			ch <- newGaugeMetric(sc.descs.accJetstreamEnabled, stat.jetstreamEnabled, id)
+			ch <- newGaugeMetric(sc.descs.accJetstreamMemoryUsed, stat.jetstreamMemoryUsed, id)
+			ch <- newGaugeMetric(sc.descs.accJetstreamStorageUsed, stat.jetstreamStorageUsed, id)
+			ch <- newGaugeMetric(sc.descs.accJetstreamMemoryReserved, stat.jetstreamMemoryReserved, id)
+			ch <- newGaugeMetric(sc.descs.accJetstreamStorageReserved, stat.jetstreamStorageReserved, id)
+
+			ch <- newGaugeMetric(sc.descs.accJetstreamStreamCount, stat.jetstreamStreamCount, id)
+			for _, streamStat := range stat.jetstreamStreams {
+				ch <- newGaugeMetric(sc.descs.accJetstreamConsumerCount, streamStat.consumerCount, append(id, streamStat.streamName))
+				ch <- newGaugeMetric(sc.descs.accJetstreamReplicaCount, streamStat.replicaCount, append(id, streamStat.streamName))
+			}
 		}
 	}
 }

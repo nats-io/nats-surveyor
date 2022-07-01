@@ -72,6 +72,7 @@ type Options struct {
 	Prefix               string // TODO
 	ObservationConfigDir string
 	JetStreamConfigDir   string
+	Accounts             bool
 }
 
 // GetDefaultOptions returns the default set of options
@@ -182,8 +183,13 @@ func (s *Surveyor) createStatszCollector() error {
 		return nil
 	}
 
+	if !s.opts.Accounts {
+		log.Printf("Skipping per account exports")
+	}
+
 	s.Lock()
-	s.statzC = NewStatzCollector(s.nc, s.opts.ExpectedServers, s.opts.PollTimeout)
+	s.statzC = NewStatzCollector(s.nc, s.opts.ExpectedServers, s.opts.PollTimeout,
+		s.opts.Accounts)
 	s.Unlock()
 
 	err := prometheus.Register(s.statzC)
