@@ -18,37 +18,35 @@ must be enabled to use surveyor.
 Usage of ./nats-surveyor:
   -a string
     	Network host to listen on. (default "0.0.0.0")
-  --addr string
+  -addr string
     	Network host to listen on. (default "0.0.0.0")
   -c int
     	Expected number of servers (default 1)
-  --creds string
+  -creds string
     	Credentials File for the system account when using jwt authentication
-  --nkey string
+  -nkey string
       NKey Seed File for the system account when using nkey authenication
-  --http_pass string
+  -http_pass string
     	Set the password for HTTP scrapes. NATS bcrypt supported.
-  --http_user string
+  -http_user string
     	Enable basic auth and set user name for HTTP scrapes.
   -p int
     	Port to listen on. (default 7777)
-  --port int
+  -port int
     	Port to listen on. (default 7777)
-  --prefix string
+  -prefix string
     	Replace the default prefix for all the metrics.
   -s string
     	NATS Cluster url(s) (default "nats://localhost:4222")
-  --servers string
-      NATS Cluster url(s) (default "nats:// localhost:4222")
-  --timeout duration
+  -timeout duration
     	Polling timeout (default 3s)
-  --tlscacert string
+  -tlscacert string
     	Client certificate CA for verification (used with HTTPS).
-  --tlscert string
+  -tlscert string
     	Server certificate file (Enables HTTPS).
-  --tlskey string
+  -tlskey string
     	Private key for server certificate (used with HTTPS).
-  --version
+  -version
     	Show exporter version and exit.
 ```
 
@@ -60,26 +58,6 @@ At this time, NATS 2.0 System credentials are required for meaningful usage.
 2019/10/14 21:35:40 No certificate file specified; using http.
 2019/10/14 21:35:40 Prometheus exporter listening at http://0.0.0.0:7777/metrics
 ```
-
-## Config
-
-### Config Files
-
-Surveyor uses Viper to read configs so it will support all file types that Viper supports (JSON, TOML, YAML, HCL, envfile, and Java properties)
-
-To use a config file pass the `--config` flag. The defaults are `/etc/nats-surveyor` and `./nats-surveyor` with one of the supported extensions.
-
-The config is simple, just set each flag in the config file. For example:
-
-```
-servers: nats://127.0.0.1:4222
-accounts: true
-```
-
-### Environment Variables
-Environment variables are also taken into account. Any environment variable that is prefixed with `NATS_SURVEYOR` will be read. 
-
-For example to enable accounts set `NATS_SURVEYOR_ACCOUNTS=true`
 
 ## Metrics
 
