@@ -66,12 +66,10 @@ func initConfig() {
 			os.Exit(1)
 		}
 
-		log.Printf("Config file %s not found\n", viper.ConfigFileUsed())
-		os.Exit(1)
-
+	} else {
+		log.Printf("Using config:  %s\n", viper.ConfigFileUsed())
 	}
 
-	log.Printf("Using config:  %s\n", viper.ConfigFileUsed())
 }
 
 func init() {
