@@ -59,6 +59,26 @@ At this time, NATS 2.0 System credentials are required for meaningful usage.
 2019/10/14 21:35:40 Prometheus exporter listening at http://0.0.0.0:7777/metrics
 ```
 
+## Config
+
+### Config Files
+
+Surveyor uses Viper to read configs so it will support all file types that Viper supports (JSON, TOML, YAML, HCL, envfile, and Java properties)
+
+To use a config file pass the `--config` flag. The defaults are `/etc/nats-surveyor` and `./nats-surveyor` with one of the supported extensions.
+
+The config is simple, just set each flag in the config file. For example:
+
+```
+servers: nats://127.0.0.1:4222
+accounts: true
+```
+
+### Environment Variables
+Environment variables are also taken into account. Any environment variable that is prefixed with `NATS_SURVEYOR` will be read. 
+
+For example to enable accounts set `NATS_SURVEYOR_ACCOUNTS=true`
+
 ## Metrics
 
 Scrape output is the in form of nats_core_NNNN_metric, where NNN is `server`, `route`, or `gateway`.
