@@ -230,9 +230,9 @@ a convenience.
 | NATS_SURVEYOR_CREDS   | ./SYS.creds          | NATS 2.0 System Account credentials |
 | NATS_SURVEYOR_SERVER_COUNT | 9               | Number of expected NATS servers |
 | PROMETHEUS_STORAGE    | ./storage/prometheus | Path to store prometheus data locally |
-| SURVEYOR_DOCKER_TAG   | latest               | Surveyor docker tag to pull | 
-| PROMETHEUS_DOCKER_TAG | latest               | Prometheus docker tag to pull | 
-| GRAFANA_DOCKER_TAG    | latest               | Grafana docker tag to pull | 
+| SURVEYOR_DOCKER_TAG   | latest               | Surveyor docker tag to pull |
+| PROMETHEUS_DOCKER_TAG | latest               | Prometheus docker tag to pull |
+| GRAFANA_DOCKER_TAG    | latest               | Grafana docker tag to pull |
 
 Note:  For referencing files and paths, docker always expects volume mounts
 to be either a fully qualified directory, or a relative directory beginning
@@ -279,7 +279,7 @@ volume mount problems or connectivity problems.
 
 Next, with your browser, navigate to `http://127.0.0.1:3000`, or if you are
 running the Surveyor stack remotely, the hostname of the host running the
-NATS surveyor stack, e.g. `http://yourremotehost:3000`.  
+NATS surveyor stack, e.g. `http://yourremotehost:3000`.
 
 The first time you connect, you'll need to login:
 
@@ -352,7 +352,7 @@ Here's an example using a jwt credential file:
   "topic": "monitor.email.subscribe",
   "credential": "/observations/email.subscribe.cred"
 }
-``` 
+```
 Example with nkey seed file:
 ```json
 {
@@ -367,7 +367,7 @@ Place this in `observations/email.surbscribe.json` and create a credential givin
 ## JetStream
 
 JetStream can be monitored on a per-account basis by creating JSON files in the `jetstream` directory.
-Place those files in `jetstream/youraccount.json`. Be sure that you give access to the `$JS.EVENT.>` subject to your user. 
+Place those files in `jetstream/youraccount.json`. Be sure that you give access to the `$JS.EVENT.>` subject to your user.
 
 When you add/modify account files, you'll need restart the NATS Surveyor service in order for the JetStream in this account to be monitored.
 
@@ -390,7 +390,7 @@ There are some ways to establish authentication, here are some examples:
 }
 ```
 
-### NKeys 
+### NKeys
 ```json
 {
   "name": "Your Account",
@@ -419,4 +419,4 @@ There are some ways to establish authentication, here are some examples:
 [Build-Status-Image]: https://github.com/nats-io/nats-surveyor/workflows/Testing/badge.svg
 [Build-Status-Url]: https://github.com/nats-io/nats-surveyor/workflows/Testing/badge.svg
 [Coverage-Url]: https://codecov.io/gh/nats-io/nats-surveyor
-[Coverage-image]: https://codecov.io/gh/nats-io/nats-surveyor/branch/master/graph/badge.svg
+[Coverage-image]: https://codecov.io/gh/nats-io/nats-surveyor/branch/main/graph/badge.svg
