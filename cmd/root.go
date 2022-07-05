@@ -49,20 +49,29 @@ func Execute() {
 }
 
 func initConfig() {
-	viper.SetEnvPrefix("surveyor")
+	viper.SetEnvPrefix("nats_surveyor")
 	viper.AutomaticEnv()
 
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
+	} else {
+		viper.SetConfigName("nats-surveyor")
+		viper.AddConfigPath("/etc/nats-surveyor")
+		viper.AddConfigPath(".")
 	}
 
-	viper.SetConfigName("nats-surveyor")
-	viper.AddConfigPath("/etc/nats-surveyor")
-	viper.AddConfigPath(".")
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			log.Println(err)
+			os.Exit(1)
+		}
 
-	if err := viper.ReadInConfig(); err == nil {
-		log.Printf("Using config:  %s\n", viper.ConfigFileUsed())
+		log.Printf("Config file %s not found\n", viper.ConfigFileUsed())
+		os.Exit(1)
+
 	}
+
+	log.Printf("Using config:  %s\n", viper.ConfigFileUsed())
 }
 
 func init() {
@@ -113,6 +122,7 @@ func init() {
 	viper.BindPFlag("jetstream", rootCmd.Flags().Lookup("jetstream"))
 	rootCmd.Flags().Bool("accounts", false, "Export per account metrics")
 	viper.BindPFlag("accounts", rootCmd.Flags().Lookup("accounts"))
+
 	cobra.OnInitialize(initConfig)
 
 }
