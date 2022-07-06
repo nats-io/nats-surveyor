@@ -41,8 +41,8 @@ var (
 	DefaultListenPort      = 7777
 	DefaultListenAddress   = "0.0.0.0"
 	DefaultURL             = nats.DefaultURL
-	DefaultExpectedServers = 3
-	DefaultPollTimeout     = time.Second * 5
+	DefaultExpectedServers = 1
+	DefaultPollTimeout     = time.Second * 3
 
 	// bcryptPrefix from nats-server
 	bcryptPrefix = "$2a$"
