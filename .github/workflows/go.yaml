@@ -1,12 +1,16 @@
 name: Testing
-on: [push, pull_request]
+on:
+  pull_request: {}
+  push:
+    branches:
+      - main
 
 jobs:
   test:
     strategy:
       matrix:
-        go: [1.17]
-        os: [ubuntu-latest, macOS-latest]
+        go: [ 1.18 ]
+        os: [ ubuntu-latest, macOS-latest ]
     runs-on: ${{matrix.os}}
     steps:
       - name: Checkout code

@@ -15,39 +15,34 @@ must be enabled to use surveyor.
 ## Usage
 
 ```text
-Usage of ./nats-surveyor:
-  -a string
-    	Network host to listen on. (default "0.0.0.0")
-  -addr string
-    	Network host to listen on. (default "0.0.0.0")
-  -c int
-    	Expected number of servers (default 1)
-  -creds string
-    	Credentials File for the system account when using jwt authentication
-  -nkey string
-      NKey Seed File for the system account when using nkey authenication
-  -http_pass string
-    	Set the password for HTTP scrapes. NATS bcrypt supported.
-  -http_user string
-    	Enable basic auth and set user name for HTTP scrapes.
-  -p int
-    	Port to listen on. (default 7777)
-  -port int
-    	Port to listen on. (default 7777)
-  -prefix string
-    	Replace the default prefix for all the metrics.
-  -s string
-    	NATS Cluster url(s) (default "nats://localhost:4222")
-  -timeout duration
-    	Polling timeout (default 3s)
-  -tlscacert string
-    	Client certificate CA for verification (used with HTTPS).
-  -tlscert string
-    	Server certificate file (Enables HTTPS).
-  -tlskey string
-    	Private key for server certificate (used with HTTPS).
-  -version
-    	Show exporter version and exit.
+Usage:
+  nats-surveyor [flags]
+
+Flags:
+      --accounts                Export per account metrics
+  -a, --addr string             Network host to listen on. (default "0.0.0.0")
+      --config string           config file (default is ./nats-surveyor.yaml)
+  -c, --count int               Expected number of servers (default 1)
+      --creds string            Credentials File
+  -h, --help                    help for nats-surveyor
+      --http-pass string        Set the password for HTTP scrapes. NATS bcrypt supported.
+      --http-tlscacert string   Client certificate CA for verification (used with HTTPS).
+      --http-tlscert string     Server certificate file (Enables HTTPS).
+      --http-tlskey string      Private key for server certificate (used with HTTPS).
+      --http-user string        Enable basic auth and set user name for HTTP scrapes.
+      --jetstream string        Listen for JetStream Advisories based on config files in a directory.
+      --nkey string             Nkey Seed File
+      --observe string          Listen for observation statistics based on config files in a directory.
+      --password string         NATS user password
+  -p, --port int                Port to listen on. (default 7777)
+      --prefix string           Replace the default prefix for all the metrics.
+  -s, --servers string          NATS Cluster url(s) (default "nats://127.0.0.1:4222")
+      --timeout duration        Polling timeout (default 3s)
+      --tlscacert string        Client certificate CA on NATS connecctions.
+      --tlscert string          Client certificate file for NATS connections.
+      --tlskey string           Client private key for NATS connections.
+      --user string             NATS user name or token
+  -v, --version                 version for nats-surveyor
 ```
 
 At this time, NATS 2.0 System credentials are required for meaningful usage.
@@ -58,6 +53,27 @@ At this time, NATS 2.0 System credentials are required for meaningful usage.
 2019/10/14 21:35:40 No certificate file specified; using http.
 2019/10/14 21:35:40 Prometheus exporter listening at http://0.0.0.0:7777/metrics
 ```
+
+## Config
+
+### Config Files
+
+Surveyor uses Viper to read configs so it will support all file types that Viper supports (JSON, TOML, YAML, HCL, envfile, and Java properties)
+
+To use a config file pass the `--config` flag. The defaults are `/etc/nats-surveyor/nats-surveyor[.ext]` and `./nats-surveyor[.ext]` with one of the supported extensions.
+
+The config is simple, just set each flag in the config file. For example:
+
+```
+servers: nats://127.0.0.1:4222
+accounts: true
+```
+
+### Environment Variables
+
+Environment variables are also taken into account. Any environment variable that is prefixed with `NATS_SURVEYOR` will be read. 
+
+For example to enable accounts set `NATS_SURVEYOR_ACCOUNTS=true`
 
 ## Metrics
 
