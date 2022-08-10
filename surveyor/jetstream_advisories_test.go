@@ -120,6 +120,20 @@ func TestJetStream_Handle(t *testing.T) {
 	}
 	msg.Respond(nil)
 
+	msg, err = nc.Request("js.in.surveyor", []byte("3"), time.Second)
+	if err != nil {
+		t.Fatalf("publish failed: %s", err)
+	}
+	if jsm.IsErrorResponse(msg) {
+		t.Fatalf("publish failed: %s", string(msg.Data))
+	}
+
+	msg, err = consumer.NextMsg()
+	if err != nil {
+		t.Fatalf("next failed: %s", err)
+	}
+	msg.Nak()
+
 	// time for advisories to be sent and handled
 	time.Sleep(5 * time.Millisecond)
 
@@ -151,6 +165,16 @@ nats_jetstream_api_audit{account="global",subject="$JS.API.STREAM.INFO"} 1
 nats_jetstream_acknowledgement_deliveries{account="global",consumer="OUT",stream="SURVEYOR"} 1
 `
 	err = ptu.CollectAndCompare(jsAckMetricDeliveries, bytes.NewReader([]byte(expected)))
+	if err != nil {
+		t.Fatalf("metrics failed: %s", err)
+	}
+
+	expected = `
+	# HELP nats_jetstream_consumer_nak How many times a consumer sent a NAK
+	# TYPE nats_jetstream_consumer_nak counter
+	nats_jetstream_consumer_nak{account="global",consumer="OUT",stream="SURVEYOR"} 1
+	`
+	err = ptu.CollectAndCompare(jsConsumerDeliveryNAK, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("metrics failed: %s", err)
 	}

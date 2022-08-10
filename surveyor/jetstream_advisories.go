@@ -16,7 +16,6 @@ package surveyor
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"regexp"
@@ -179,6 +178,11 @@ var (
 		Help: "How many times a stream lost quorum leading to new leader elections",
 	}, []string{"account", "stream"})
 
+	jsConsumerDeliveryNAK = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "jetstream", "consumer_nak"),
+		Help: "How many times a consumer sent a NAK",
+	}, []string{"account", "stream", "consumer"})
+
 	streamCrudRe   = regexp.MustCompile(`\$JS.API.STREAM.(CREATE|UPDATE|DELETE|INFO|SNAPSHOT|RESTORE)`)
 	streamMsgRe    = regexp.MustCompile(`\$JS.API.STREAM.MSG.(GET|DELETE)`)
 	consumerCrudRe = regexp.MustCompile(`\$JS.API.CONSUMER.(CREATE|UPDATE|DELETE|INFO|SNAPSHOT|RESTORE|NAMES)`)
@@ -206,11 +210,12 @@ func init() {
 	prometheus.MustRegister(jsConsumerQuorumLost)
 	prometheus.MustRegister(jsStreamLeaderElected)
 	prometheus.MustRegister(jsStreamQuorumLost)
+	prometheus.MustRegister(jsConsumerDeliveryNAK)
 }
 
 // NewJetStreamAdvisoryListener creates a new JetStream advisory reporter
 func NewJetStreamAdvisoryListener(f string, sopts Options) (*JSAdvisoryListener, error) {
-	js, err := ioutil.ReadFile(f)
+	js, err := os.ReadFile(f)
 	if err != nil {
 		return nil, err
 	}
@@ -361,6 +366,9 @@ func (o *JSAdvisoryListener) advisoryHandler(m *nats.Msg) {
 
 	case *advisory.JSStreamQuorumLostV1:
 		jsStreamQuorumLost.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
+
+	case *advisory.JSConsumerDeliveryNakAdvisoryV1:
+		jsConsumerDeliveryNAK.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Inc()
 
 	default:
 		jsUnknownAdvisoryCtr.WithLabelValues(schema, o.opts.AccountName).Inc()

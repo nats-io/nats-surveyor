@@ -19,7 +19,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -227,7 +226,7 @@ func (s *Surveyor) generateHTTPTLSConfig() (*tls.Config, error) {
 	}
 	// Add in CAs if applicable.
 	if s.opts.HTTPCaFile != "" {
-		rootPEM, err := ioutil.ReadFile(s.opts.HTTPCaFile)
+		rootPEM, err := os.ReadFile(s.opts.HTTPCaFile)
 		if err != nil || rootPEM == nil {
 			return nil, fmt.Errorf("failed to load root ca certificate (%s): %v", s.opts.HTTPCaFile, err)
 		}
