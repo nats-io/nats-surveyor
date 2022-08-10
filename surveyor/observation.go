@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -139,7 +138,7 @@ func init() {
 
 // NewServiceObservation creates a new performance observation listener
 func NewServiceObservation(f string, sopts Options) (*ServiceObsListener, error) {
-	js, err := ioutil.ReadFile(f)
+	js, err := os.ReadFile(f)
 	if err != nil {
 		return nil, err
 	}
