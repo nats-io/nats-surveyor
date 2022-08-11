@@ -35,7 +35,7 @@ var (
 		Use:     "nats-surveyor",
 		Short:   "Prometheus exporter for NATS",
 		RunE:    run,
-		Version: "v0.2.3-alpha2",
+		Version: "v0.2.3",
 	}
 )
 
