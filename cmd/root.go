@@ -67,8 +67,8 @@ func rootCmdArgs(args []string) []string {
 		"-http_pass":       "--http-pass",
 		"--http_pass":      "--http-pass",
 		"-prefix":          "--prefix",
-		"-observe":         "-observe",
-		"-jetstream":       "-jetstream",
+		"-observe":         "--observe",
+		"-jetstream":       "--jetstream",
 	}
 	newArgs := make([]string, 0)
 

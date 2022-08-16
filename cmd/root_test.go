@@ -30,8 +30,8 @@ func TestRootCmdArgs(t *testing.T) {
 		},
 		{
 			"compound",
-			[]string{"-http_tlscert", "a", "--http_tlskey", "b", "-http_tlscacert=c", "--", "-version"},
-			"--http-tlscert a --http-tlskey b --http-tlscacert=c -- -version",
+			[]string{"-http_tlscert", "a", "--http_tlskey", "b", "-http_tlscacert=c", "-jetstream=/jetstream", "-observe=/observe", "--", "-version"},
+			"--http-tlscert a --http-tlskey b --http-tlscacert=c --jetstream=/jetstream --observe=/observe -- -version",
 		},
 	}
 
