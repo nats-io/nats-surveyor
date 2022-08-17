@@ -19,7 +19,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -32,6 +31,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -72,6 +72,7 @@ type Options struct {
 	ObservationConfigDir string
 	JetStreamConfigDir   string
 	Accounts             bool
+	Logger               *logrus.Logger
 }
 
 // GetDefaultOptions returns the default set of options
@@ -88,6 +89,7 @@ func GetDefaultOptions() *Options {
 		URLs:            DefaultURL,
 		PollTimeout:     DefaultPollTimeout,
 		ExpectedServers: DefaultExpectedServers,
+		Logger:          logrus.New(),
 	}
 	return opts
 }
@@ -96,6 +98,7 @@ func GetDefaultOptions() *Options {
 type Surveyor struct {
 	sync.Mutex
 	opts         Options
+	logger       *logrus.Logger
 	nc           *nats.Conn
 	http         net.Listener
 	statzC       *StatzCollector
@@ -128,20 +131,20 @@ func connect(opts *Options) (*nats.Conn, error) {
 	}
 
 	nopts = append(nopts, nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
-		log.Printf("%q disconnected, will possibly miss replies: %v", c.Opts.Name, err)
+		opts.Logger.Infof("%q disconnected, will possibly miss replies: %v", c.Opts.Name, err)
 	}))
 	nopts = append(nopts, nats.ReconnectHandler(func(c *nats.Conn) {
 		reconnCtr.WithLabelValues(c.Opts.Name).Inc()
-		log.Printf("%q reconnected to %v", c.Opts.Name, c.ConnectedAddr())
+		opts.Logger.Infof("%q reconnected to %v", c.Opts.Name, c.ConnectedAddr())
 	}))
 	nopts = append(nopts, nats.ClosedHandler(func(c *nats.Conn) {
-		log.Printf("%q connection permanently lost!", c.Opts.Name)
+		opts.Logger.Warnf("%q connection permanently lost!", c.Opts.Name)
 	}))
 	nopts = append(nopts, nats.ErrorHandler(func(c *nats.Conn, s *nats.Subscription, err error) {
 		if s != nil {
-			log.Printf("Error: name=%q err=%v", c.Opts.Name, err)
+			opts.Logger.Warnf("Error: name=%q err=%v", c.Opts.Name, err)
 		} else {
-			log.Printf("Error: name=%q, subject=%s, err=%v", c.Opts.Name, s.Subject, err)
+			opts.Logger.Warnf("Error: name=%q, subject=%s, err=%v", c.Opts.Name, s.Subject, err)
 		}
 	}))
 	nopts = append(nopts, nats.MaxReconnects(10240))
@@ -158,7 +161,7 @@ func connect(opts *Options) (*nats.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("%s connected to NATS Deployment: %v", opts.Name, nc.ConnectedAddr())
+	opts.Logger.Infof("%s connected to NATS Deployment: %v", opts.Name, nc.ConnectedAddr())
 
 	return nc, err
 }
@@ -172,6 +175,7 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 	return &Surveyor{
 		nc:           nc,
 		opts:         *opts,
+		logger:       opts.Logger,
 		observations: []*ServiceObsListener{},
 		jsAPIAudits:  []*JSAdvisoryListener{},
 	}, nil
@@ -183,12 +187,11 @@ func (s *Surveyor) createStatszCollector() error {
 	}
 
 	if !s.opts.Accounts {
-		log.Printf("Skipping per account exports")
+		s.logger.Debugln("Skipping per-account exports")
 	}
 
 	s.Lock()
-	s.statzC = NewStatzCollector(s.nc, s.opts.ExpectedServers, s.opts.PollTimeout,
-		s.opts.Accounts)
+	s.statzC = NewStatzCollector(s.nc, s.logger, s.opts.ExpectedServers, s.opts.PollTimeout, s.opts.Accounts)
 	s.Unlock()
 
 	err := prometheus.Register(s.statzC)
@@ -198,7 +201,7 @@ func (s *Surveyor) createStatszCollector() error {
 			return nil
 		}
 
-		log.Printf("Error registering statsz collector, will retry after 500ms: %v", err)
+		s.logger.Warnf("Error registering statsz collector, will retry after 500ms: %v", err)
 		time.Sleep(500 * time.Millisecond)
 		err = prometheus.Register(s.statzC)
 	}
@@ -299,7 +302,7 @@ func (s *Surveyor) httpConcurrentPollBlockMiddleware(next http.Handler) http.Han
 		if sz.Polling() {
 			rw.WriteHeader(http.StatusServiceUnavailable)
 			rw.Write([]byte("Concurrent polls are not supported"))
-			log.Printf("Concurrent access detected and blocked\n")
+			s.logger.Warnln("Concurrent access detected and blocked")
 			return
 		}
 
@@ -329,7 +332,7 @@ func (s *Surveyor) startHTTP() error {
 	if s.opts.HTTPCertFile != "" {
 		proto = "https"
 		// debug
-		log.Printf("Certificate file specfied; using https.")
+		s.logger.Debugln("Certificate file specfied; using https.")
 		config, err = s.generateHTTPTLSConfig()
 		if err != nil {
 			return err
@@ -339,14 +342,14 @@ func (s *Surveyor) startHTTP() error {
 		proto = "http"
 
 		// debug
-		log.Printf("No certificate file specified; using http.")
+		s.logger.Debugln("No certificate file specified; using http.")
 		s.http, err = net.Listen("tcp", hp)
 	}
 
-	log.Printf("Prometheus exporter listening at %s://%s/metrics", proto, hp)
+	s.logger.Infof("Prometheus exporter listening at %s://%s/metrics", proto, hp)
 
 	if err != nil {
-		log.Printf("can't start HTTP listener: %v", err)
+		s.logger.Errorf("can't start HTTP listener: %v", err)
 		return err
 	}
 
@@ -370,7 +373,7 @@ func (s *Surveyor) startHTTP() error {
 			if err = srv.Serve(sHTTP); err != nil {
 				// In a test environment, this can fail because the server is already running.
 				// debugf
-				log.Printf("Unable to start HTTP server (may already be running): %v", err)
+				s.logger.Errorf("Unable to start HTTP server (may already be running): %v", err)
 			}
 		}
 	}()
@@ -383,7 +386,7 @@ func (s *Surveyor) startJetStreamAdvisories() error {
 
 	dir := s.opts.JetStreamConfigDir
 	if dir == "" {
-		log.Printf("Skipping JetStream API Audit startup, no directory configured")
+		s.logger.Debugln("Skipping JetStream API Audit startup, no directory configured")
 		return nil
 	}
 
@@ -428,7 +431,7 @@ func (s *Surveyor) startObservations() error {
 
 	dir := s.opts.ObservationConfigDir
 	if dir == "" {
-		log.Printf("Skipping observation startup, no directory configured")
+		s.logger.Debugln("Skipping observation startup, no directory configured")
 		return nil
 	}
 

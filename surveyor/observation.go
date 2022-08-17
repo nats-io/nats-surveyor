@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -26,13 +25,15 @@ import (
 	"github.com/nats-io/jsm.go/api/server/metric"
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 // ServiceObsListener listens for observations from nats service latency checks
 type ServiceObsListener struct {
-	nc    *nats.Conn
-	opts  *serviceObsOptions
-	sopts *Options
+	nc     *nats.Conn
+	logger *logrus.Logger
+	opts   *serviceObsOptions
+	sopts  *Options
 }
 
 type serviceObsOptions struct {
@@ -163,9 +164,10 @@ func NewServiceObservation(f string, sopts Options) (*ServiceObsListener, error)
 	}
 
 	return &ServiceObsListener{
-		nc:    nc,
-		opts:  opts,
-		sopts: &sopts,
+		nc:     nc,
+		logger: sopts.Logger,
+		opts:   opts,
+		sopts:  &sopts,
 	}, nil
 }
 
@@ -181,7 +183,7 @@ func (o *ServiceObsListener) Start() error {
 	}
 
 	observationsGauge.Inc()
-	log.Printf("Started observing stats on %s for %s", o.opts.Topic, o.opts.ServiceName)
+	o.logger.Infof("Started observing stats on %s for %s", o.opts.Topic, o.opts.ServiceName)
 
 	return nil
 }
@@ -190,7 +192,7 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 	kind, obs, err := jsm.ParseEvent(m.Data)
 	if err != nil {
 		invalidObservationsReceived.WithLabelValues(o.opts.ServiceName).Inc()
-		log.Printf("Unparsable observation received on %s: %s", o.opts.Topic, err)
+		o.logger.Warnf("Unparsable observation received on %s: %s", o.opts.Topic, err)
 		return
 	}
 
@@ -211,7 +213,7 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 
 	default:
 		invalidObservationsReceived.WithLabelValues(o.opts.ServiceName).Inc()
-		log.Printf("Unsupported observation received on %s: %s", o.opts.Topic, kind)
+		o.logger.Warnf("Unsupported observation received on %s: %s", o.opts.Topic, kind)
 		return
 	}
 }

@@ -16,15 +16,17 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
+	nested "github.com/antonfisher/nested-logrus-formatter"
 	"github.com/nats-io/nats-surveyor/surveyor"
 	"github.com/nats-io/nats.go"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -37,9 +39,10 @@ var (
 		RunE:    run,
 		Version: "v0.3.1",
 	}
+	logger = logrus.New()
 )
 
-// long flags that introduced <=v0.2.2 originally used 'flag' package must be parsed as legacy flags
+// long flags that were introduced <=v0.2.2 originally used 'flag' package must be parsed as legacy flags
 // to preserve the behavior where long flags could be supplied with a single dash
 func rootCmdArgs(args []string) []string {
 	// old flag: new flag
@@ -79,7 +82,7 @@ func rootCmdArgs(args []string) []string {
 		argSplit := strings.SplitN(arg, "=", 2)
 		newArg, exists := legacyFlagMap[argSplit[0]]
 		if exists {
-			log.Printf("flag '%s' is deprecated and may be removed in a future relese, use '%s' instead", argSplit[0], newArg)
+			logger.Warnf("flag '%s' is deprecated and may be removed in a future relese, use '%s' instead", argSplit[0], newArg)
 			if len(argSplit) == 1 {
 				newArgs = append(newArgs, newArg)
 			} else {
@@ -116,101 +119,108 @@ func initConfig() {
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			log.Println(err)
-			os.Exit(1)
+			logger.Fatalln(err)
 		}
 	} else {
-		log.Printf("Using config:  %s\n", viper.ConfigFileUsed())
+		logger.Infof("Using config:  %s", viper.ConfigFileUsed())
 	}
 }
 
 func init() {
+	logger.SetFormatter(&nested.Formatter{
+		TimestampFormat: time.RFC3339,
+	})
+
 	// config
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./nats-surveyor.yaml)")
 
 	// servers
 	rootCmd.Flags().StringP("servers", "s", nats.DefaultURL, "NATS Cluster url(s)")
-	viper.BindPFlag("servers", rootCmd.Flags().Lookup("servers"))
+	_ = viper.BindPFlag("servers", rootCmd.Flags().Lookup("servers"))
 
 	// creds
 	rootCmd.Flags().String("creds", "", "Credentials File")
-	viper.BindPFlag("creds", rootCmd.Flags().Lookup("creds"))
+	_ = viper.BindPFlag("creds", rootCmd.Flags().Lookup("creds"))
 
 	// nkey
 	rootCmd.Flags().String("nkey", "", "Nkey Seed File")
-	viper.BindPFlag("nkey", rootCmd.Flags().Lookup("nkey"))
+	_ = viper.BindPFlag("nkey", rootCmd.Flags().Lookup("nkey"))
 
 	// user
 	rootCmd.Flags().String("user", "", "NATS user name or token")
-	viper.BindPFlag("user", rootCmd.Flags().Lookup("user"))
+	_ = viper.BindPFlag("user", rootCmd.Flags().Lookup("user"))
 
 	// password
 	rootCmd.Flags().String("password", "", "NATS user password")
-	viper.BindPFlag("password", rootCmd.Flags().Lookup("password"))
+	_ = viper.BindPFlag("password", rootCmd.Flags().Lookup("password"))
 
 	// count
 	rootCmd.Flags().IntP("count", "c", 1, "Expected number of servers")
-	viper.BindPFlag("count", rootCmd.Flags().Lookup("count"))
+	_ = viper.BindPFlag("count", rootCmd.Flags().Lookup("count"))
 
 	// timeout
 	rootCmd.Flags().Duration("timeout", surveyor.DefaultPollTimeout, "Polling timeout")
-	viper.BindPFlag("timeout", rootCmd.Flags().Lookup("timeout"))
+	_ = viper.BindPFlag("timeout", rootCmd.Flags().Lookup("timeout"))
 
 	// port
 	rootCmd.Flags().IntP("port", "p", surveyor.DefaultListenPort, "Port to listen on.")
-	viper.BindPFlag("port", rootCmd.Flags().Lookup("port"))
+	_ = viper.BindPFlag("port", rootCmd.Flags().Lookup("port"))
 
 	// addr
 	rootCmd.Flags().StringP("addr", "a", surveyor.DefaultListenAddress, "Network host to listen on.")
-	viper.BindPFlag("addr", rootCmd.Flags().Lookup("addr"))
+	_ = viper.BindPFlag("addr", rootCmd.Flags().Lookup("addr"))
 
 	// tlscert
 	rootCmd.Flags().String("tlscert", "", "Client certificate file for NATS connections.")
-	viper.BindPFlag("tlscert", rootCmd.Flags().Lookup("tlscert"))
+	_ = viper.BindPFlag("tlscert", rootCmd.Flags().Lookup("tlscert"))
 
 	// tlskey
 	rootCmd.Flags().String("tlskey", "", "Client private key for NATS connections.")
-	viper.BindPFlag("tlskey", rootCmd.Flags().Lookup("tlskey"))
+	_ = viper.BindPFlag("tlskey", rootCmd.Flags().Lookup("tlskey"))
 
 	// tlscacert
-	rootCmd.Flags().String("tlscacert", "", "Client certificate CA on NATS connecctions.")
-	viper.BindPFlag("tlscacert", rootCmd.Flags().Lookup("tlscacert"))
+	rootCmd.Flags().String("tlscacert", "", "Client certificate CA on NATS connections.")
+	_ = viper.BindPFlag("tlscacert", rootCmd.Flags().Lookup("tlscacert"))
 
 	// http-tlscert
 	rootCmd.Flags().String("http-tlscert", "", "Server certificate file (Enables HTTPS).")
-	viper.BindPFlag("http-tlscert", rootCmd.Flags().Lookup("http-tlscert"))
+	_ = viper.BindPFlag("http-tlscert", rootCmd.Flags().Lookup("http-tlscert"))
 
 	// http-tlskey
 	rootCmd.Flags().String("http-tlskey", "", "Private key for server certificate (used with HTTPS).")
-	viper.BindPFlag("http-tlskey", rootCmd.Flags().Lookup("http-tlskey"))
+	_ = viper.BindPFlag("http-tlskey", rootCmd.Flags().Lookup("http-tlskey"))
 
 	// http-tlscacert
 	rootCmd.Flags().String("http-tlscacert", "", "Client certificate CA for verification (used with HTTPS).")
-	viper.BindPFlag("http-tlscacert", rootCmd.Flags().Lookup("http-tlscacert"))
+	_ = viper.BindPFlag("http-tlscacert", rootCmd.Flags().Lookup("http-tlscacert"))
 
 	// http-user
 	rootCmd.Flags().String("http-user", "", "Enable basic auth and set user name for HTTP scrapes.")
-	viper.BindPFlag("http-user", rootCmd.Flags().Lookup("http-user"))
+	_ = viper.BindPFlag("http-user", rootCmd.Flags().Lookup("http-user"))
 
 	// http-pass
 	rootCmd.Flags().String("http-pass", "", "Set the password for HTTP scrapes. NATS bcrypt supported.")
-	viper.BindPFlag("http-pass", rootCmd.Flags().Lookup("http-pass"))
+	_ = viper.BindPFlag("http-pass", rootCmd.Flags().Lookup("http-pass"))
 
 	// prefix
 	rootCmd.Flags().String("prefix", "", "Replace the default prefix for all the metrics.")
-	viper.BindPFlag("prefix", rootCmd.Flags().Lookup("prefix"))
+	_ = viper.BindPFlag("prefix", rootCmd.Flags().Lookup("prefix"))
 
 	// observe
 	rootCmd.Flags().String("observe", "", "Listen for observation statistics based on config files in a directory.")
-	viper.BindPFlag("observe", rootCmd.Flags().Lookup("observe"))
+	_ = viper.BindPFlag("observe", rootCmd.Flags().Lookup("observe"))
 
 	// jetstream
 	rootCmd.Flags().String("jetstream", "", "Listen for JetStream Advisories based on config files in a directory.")
-	viper.BindPFlag("jetstream", rootCmd.Flags().Lookup("jetstream"))
+	_ = viper.BindPFlag("jetstream", rootCmd.Flags().Lookup("jetstream"))
 
 	// accounts
 	rootCmd.Flags().Bool("accounts", false, "Export per account metrics")
-	viper.BindPFlag("accounts", rootCmd.Flags().Lookup("accounts"))
+	_ = viper.BindPFlag("accounts", rootCmd.Flags().Lookup("accounts"))
+
+	// log-level
+	rootCmd.Flags().String("log-level", "", "Log level, must be trace, debug, info, warn, error, fatal, or panic.  Defaults to info")
+	_ = viper.BindPFlag("log-level", rootCmd.Flags().Lookup("log-level"))
 
 	cobra.OnInitialize(initConfig)
 }
@@ -239,6 +249,28 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.JetStreamConfigDir = viper.GetString("jetstream")
 	opts.Accounts = viper.GetBool("accounts")
 
+	switch logLevel := strings.ToLower(viper.GetString("log-level")); logLevel {
+	case "":
+		break
+	case "trace":
+		logger.SetLevel(logrus.TraceLevel)
+	case "debug":
+		logger.SetLevel(logrus.DebugLevel)
+	case "info":
+		logger.SetLevel(logrus.InfoLevel)
+	case "warn":
+		logger.SetLevel(logrus.WarnLevel)
+	case "error":
+		logger.SetLevel(logrus.ErrorLevel)
+	case "fatal":
+		logger.SetLevel(logrus.FatalLevel)
+	case "panic":
+		logger.SetLevel(logrus.PanicLevel)
+	default:
+		logger.Warnf("Unknown log-level %s, defaulting to info", logLevel)
+	}
+	opts.Logger = logger
+
 	return opts
 }
 
@@ -254,7 +286,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("couldn't start surveyor: %s", err)
 	}
 
-	// Setup the interrupt handler to gracefully exit.
+	// set up the interrupt handler to gracefully exit.
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGQUIT)
 	go func() {
@@ -265,7 +297,7 @@ func run(cmd *cobra.Command, args []string) error {
 			case syscall.SIGQUIT:
 				buf := make([]byte, 1<<20)
 				stacklen := runtime.Stack(buf, true)
-				fmt.Fprintln(os.Stderr, string(buf[:stacklen]))
+				logger.Warnln(string(buf[:stacklen]))
 
 			default:
 				s.Stop()
@@ -275,6 +307,5 @@ func run(cmd *cobra.Command, args []string) error {
 	}()
 
 	runtime.Goexit()
-
 	return nil
 }
