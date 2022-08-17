@@ -31,6 +31,7 @@ Flags:
       --http-tlskey string      Private key for server certificate (used with HTTPS).
       --http-user string        Enable basic auth and set user name for HTTP scrapes.
       --jetstream string        Listen for JetStream Advisories based on config files in a directory.
+      --log-level string        Log level, one of: trace|debug|info|warn|error|fatal|panic (default: info)
       --nkey string             Nkey Seed File
       --observe string          Listen for observation statistics based on config files in a directory.
       --password string         NATS user password
@@ -38,7 +39,7 @@ Flags:
       --prefix string           Replace the default prefix for all the metrics.
   -s, --servers string          NATS Cluster url(s) (default "nats://127.0.0.1:4222")
       --timeout duration        Polling timeout (default 3s)
-      --tlscacert string        Client certificate CA on NATS connecctions.
+      --tlscacert string        Client certificate CA on NATS connections.
       --tlscert string          Client certificate file for NATS connections.
       --tlskey string           Client private key for NATS connections.
       --user string             NATS user name or token

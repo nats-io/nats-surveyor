@@ -219,7 +219,7 @@ func init() {
 	_ = viper.BindPFlag("accounts", rootCmd.Flags().Lookup("accounts"))
 
 	// log-level
-	rootCmd.Flags().String("log-level", "", "Log level, must be trace, debug, info, warn, error, fatal, or panic.  Defaults to info")
+	rootCmd.Flags().String("log-level", "", "Log level, one of: trace|debug|info|warn|error|fatal|panic (default: info)")
 	_ = viper.BindPFlag("log-level", rootCmd.Flags().Lookup("log-level"))
 
 	cobra.OnInitialize(initConfig)
