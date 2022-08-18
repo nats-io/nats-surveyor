@@ -107,6 +107,7 @@ func Execute() {
 
 func initConfig() {
 	viper.SetEnvPrefix("nats_surveyor")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
 
 	if cfgFile != "" {
@@ -219,7 +220,7 @@ func init() {
 	_ = viper.BindPFlag("accounts", rootCmd.Flags().Lookup("accounts"))
 
 	// log-level
-	rootCmd.Flags().String("log-level", "", "Log level, one of: trace|debug|info|warn|error|fatal|panic (default: info)")
+	rootCmd.Flags().String("log-level", "info", "Log level, one of: trace|debug|info|warn|error|fatal|panic")
 	_ = viper.BindPFlag("log-level", rootCmd.Flags().Lookup("log-level"))
 
 	cobra.OnInitialize(initConfig)
@@ -249,25 +250,11 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.JetStreamConfigDir = viper.GetString("jetstream")
 	opts.Accounts = viper.GetBool("accounts")
 
-	switch logLevel := strings.ToLower(viper.GetString("log-level")); logLevel {
-	case "":
-		break
-	case "trace":
-		logger.SetLevel(logrus.TraceLevel)
-	case "debug":
-		logger.SetLevel(logrus.DebugLevel)
-	case "info":
-		logger.SetLevel(logrus.InfoLevel)
-	case "warn":
-		logger.SetLevel(logrus.WarnLevel)
-	case "error":
-		logger.SetLevel(logrus.ErrorLevel)
-	case "fatal":
-		logger.SetLevel(logrus.FatalLevel)
-	case "panic":
-		logger.SetLevel(logrus.PanicLevel)
-	default:
-		logger.Warnf("Unknown log-level %s, defaulting to info", logLevel)
+	logLevel, err := logrus.ParseLevel(viper.GetString("log-level"))
+	if err == nil {
+		logger.SetLevel(logLevel)
+	} else {
+		logger.Warnln(err)
 	}
 	opts.Logger = logger
 
