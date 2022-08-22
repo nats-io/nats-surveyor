@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/nats-io/jsm.go"
-	"github.com/nats-io/nats.go"
-	ptu "github.com/prometheus/client_golang/prometheus/testutil"
-
 	st "github.com/nats-io/nats-surveyor/test"
+	"github.com/nats-io/nats.go"
+	"github.com/prometheus/client_golang/prometheus"
+	ptu "github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func TestJetStream_Load(t *testing.T) {
@@ -18,19 +18,24 @@ func TestJetStream_Load(t *testing.T) {
 
 	opt := GetDefaultOptions()
 	opt.URLs = js.ClientURL()
+	metrics := NewJetStreamAdvisoryMetrics(prometheus.NewRegistry())
+	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
+		Help: "Number of times the surveyor reconnected to the NATS cluster",
+	}, []string{"name"})
 
-	obs, err := NewJetStreamAdvisoryListener("testdata/goodjs/global.json", *opt)
+	obs, err := NewJetStreamAdvisoryListener("testdata/goodjs/global.json", *opt, metrics, reconnectCtr)
 	if err != nil {
 		t.Fatalf("jetstream load error: %s", err)
 	}
 	obs.Stop()
 
-	_, err = NewJetStreamAdvisoryListener("testdata/badjs/missing.json", *opt)
+	_, err = NewJetStreamAdvisoryListener("testdata/badjs/missing.json", *opt, metrics, reconnectCtr)
 	if err.Error() != "open testdata/badjs/missing.json: no such file or directory" {
 		t.Fatalf("jetstream load error: %s", err)
 	}
 
-	_, err = NewJetStreamAdvisoryListener("testdata/badobs/bad.json", *opt)
+	_, err = NewJetStreamAdvisoryListener("testdata/badobs/bad.json", *opt, metrics, reconnectCtr)
 	if err.Error() != "invalid JetStream advisory configuration: testdata/badobs/bad.json: name is required" {
 		t.Fatalf("jetstream load error: %s", err)
 	}
@@ -59,8 +64,13 @@ func TestJetStream_Handle(t *testing.T) {
 
 	opt := GetDefaultOptions()
 	opt.URLs = js.ClientURL()
+	metrics := NewJetStreamAdvisoryMetrics(prometheus.NewRegistry())
+	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
+		Help: "Number of times the surveyor reconnected to the NATS cluster",
+	}, []string{"name"})
 
-	obs, err := NewJetStreamAdvisoryListener("testdata/goodjs/global.json", *opt)
+	obs, err := NewJetStreamAdvisoryListener("testdata/goodjs/global.json", *opt, metrics, reconnectCtr)
 	if err != nil {
 		t.Fatalf("jetstream load error: %s", err)
 	}
@@ -142,7 +152,7 @@ func TestJetStream_Handle(t *testing.T) {
 # TYPE nats_jetstream_delivery_exceeded_count counter
 nats_jetstream_delivery_exceeded_count{account="global",consumer="OUT",stream="SURVEYOR"} 1
 `
-	err = ptu.CollectAndCompare(jsDeliveryExceededCtr, bytes.NewReader([]byte(expected)))
+	err = ptu.CollectAndCompare(metrics.jsDeliveryExceededCtr, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("metrics failed: %s", err)
 	}
@@ -154,7 +164,7 @@ nats_jetstream_api_audit{account="global",subject="$JS.API.CONSUMER.DURABLE.CREA
 nats_jetstream_api_audit{account="global",subject="$JS.API.STREAM.CREATE"} 1
 nats_jetstream_api_audit{account="global",subject="$JS.API.STREAM.INFO"} 1
 `
-	err = ptu.CollectAndCompare(jsAPIAuditCtr, bytes.NewReader([]byte(expected)))
+	err = ptu.CollectAndCompare(metrics.jsAPIAuditCtr, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("metrics failed: %s", err)
 	}
@@ -164,7 +174,7 @@ nats_jetstream_api_audit{account="global",subject="$JS.API.STREAM.INFO"} 1
 # TYPE nats_jetstream_acknowledgement_deliveries counter
 nats_jetstream_acknowledgement_deliveries{account="global",consumer="OUT",stream="SURVEYOR"} 1
 `
-	err = ptu.CollectAndCompare(jsAckMetricDeliveries, bytes.NewReader([]byte(expected)))
+	err = ptu.CollectAndCompare(metrics.jsAckMetricDeliveries, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("metrics failed: %s", err)
 	}
@@ -174,7 +184,7 @@ nats_jetstream_acknowledgement_deliveries{account="global",consumer="OUT",stream
 	# TYPE nats_jetstream_consumer_nak counter
 	nats_jetstream_consumer_nak{account="global",consumer="OUT",stream="SURVEYOR"} 1
 	`
-	err = ptu.CollectAndCompare(jsConsumerDeliveryNAK, bytes.NewReader([]byte(expected)))
+	err = ptu.CollectAndCompare(metrics.jsConsumerDeliveryNAK, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("metrics failed: %s", err)
 	}
