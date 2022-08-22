@@ -24,26 +24,43 @@ rm versions licenses
 
 ## Dependency Table
 
-| Dependency | Version | License |
-|-|-|-|
-| github.com/beorn7/perks | v1.0.1 | MIT |
-| github.com/cespare/xxhash | v2.1.2 | MIT |
-| github.com/dustin/go-humanize | v1.0.0 | MIT |
-| github.com/golang/protobuf | v1.5.2 | BSD |
-| github.com/klauspost/compress | v1.14.2 | MIT |
-| github.com/matttproud/golang_protobuf_extensions | v1.0.1 | Apache |
-| github.com/minio/highwayhash | v1.0.2 | Apache |
-| github.com/nats-io/jsm.go | v0.0.27 | Apache |
-| github.com/nats-io/jwt | v2.2.1-0.20220113022732-58e87895b296 | Apache |
-| github.com/nats-io/nats.go | v1.13.1-0.20220121202836-972a071d373d | Apache |
-| github.com/nats-io/nats-server | v2.7.1 | Apache |
-| github.com/nats-io/nkeys | v0.3.0 | Apache |
-| github.com/nats-io/nuid | v1.0.1 | Apache |
-| github.com/prometheus/client_golang | v1.12.0 | Apache |
-| github.com/prometheus/client_model | v0.2.0 | Apache |
-| github.com/prometheus/common | v0.32.1 | Apache |
-| github.com/prometheus/procfs | v0.7.3 | Apache |
-| golang.org/x/crypto | v0.0.0-20220126234351-aa10faf2a1f8 | BSD |
-| golang.org/x/sys | v0.0.0-20220114195835-da31bd327af9 | BSD |
-| golang.org/x/time | v0.0.0-20211116232009-f0f3c7e86c11 | BSD |
-| google.golang.org/protobuf | v1.27.1 | BSD |
+| Dependency                                                       | License      |
+|------------------------------------------------------------------|--------------|
+| github.com/beorn7/perks/quantile                                 | MIT          |
+| github.com/cespare/xxhash/v2                                     | MIT          |
+| github.com/dustin/go-humanize                                    | MIT          |
+| github.com/fsnotify/fsnotify                                     | BSD-3-Clause |
+| github.com/golang/protobuf                                       | BSD-3-Clause |
+| github.com/hashicorp/hcl                                         | MPL-2.0      |
+| github.com/klauspost/compress/s2                                 | BSD-3-Clause |
+| github.com/magiconair/properties                                 | BSD-2-Clause |
+| github.com/matttproud/golang_protobuf_extensions/pbutil          | Apache-2.0   |
+| github.com/minio/highwayhash                                     | Apache-2.0   |
+| github.com/mitchellh/mapstructure                                | MIT          |
+| github.com/nats-io/jsm.go                                        | Apache-2.0   |
+| github.com/nats-io/jwt/v2                                        | Apache-2.0   |
+| github.com/nats-io/nats-server/v2                                | Apache-2.0   |
+| github.com/nats-io/nats-surveyor                                 | Apache-2.0   |
+| github.com/nats-io/nats.go                                       | Apache-2.0   |
+| github.com/nats-io/nkeys                                         | Apache-2.0   |
+| github.com/nats-io/nuid                                          | Apache-2.0   |
+| github.com/pelletier/go-toml/v2                                  | MIT          |
+| github.com/prometheus/client_golang/prometheus                   | Apache-2.0   |
+| github.com/prometheus/client_model/go                            | Apache-2.0   |
+| github.com/prometheus/common                                     | Apache-2.0   |
+| github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg | BSD-3-Clause |
+| github.com/prometheus/procfs                                     | Apache-2.0   |
+| github.com/spf13/afero                                           | Apache-2.0   |
+| github.com/spf13/cast                                            | MIT          |
+| github.com/spf13/cobra                                           | Apache-2.0   |
+| github.com/spf13/jwalterweatherman                               | MIT          |
+| github.com/spf13/pflag                                           | BSD-3-Clause |
+| github.com/spf13/viper                                           | MIT          |
+| github.com/subosito/gotenv                                       | MIT          |
+| golang.org/x/crypto                                              | BSD-3-Clause |
+| golang.org/x/sys                                                 | BSD-3-Clause |
+| golang.org/x/text                                                | BSD-3-Clause |
+| golang.org/x/time/rate                                           | BSD-3-Clause |
+| google.golang.org/protobuf                                       | BSD-3-Clause |
+| gopkg.in/ini.v1                                                  | Apache-2.0   |
+| gopkg.in/yaml.v3                                                 | MIT          |
