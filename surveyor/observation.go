@@ -40,51 +40,60 @@ type ServiceObsMetrics struct {
 	systemRTT                   *prometheus.HistogramVec
 }
 
-func NewServiceObservationMetrics(registry *prometheus.Registry) *ServiceObsMetrics {
+func NewServiceObservationMetrics(registry *prometheus.Registry, constLabels prometheus.Labels) *ServiceObsMetrics {
 	metrics := &ServiceObsMetrics{
 		observationsGauge: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: prometheus.BuildFQName("nats", "latency", "observations_count"),
-			Help: "Number of Service Latency listeners that are running",
+			Name:        prometheus.BuildFQName("nats", "latency", "observations_count"),
+			Help:        "Number of Service Latency listeners that are running",
+			ConstLabels: constLabels,
 		}),
 
 		observationsReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "latency", "observations_received_count"),
-			Help: "Number of observations received by this surveyor across all services",
+			Name:        prometheus.BuildFQName("nats", "latency", "observations_received_count"),
+			Help:        "Number of observations received by this surveyor across all services",
+			ConstLabels: constLabels,
 		}, []string{"service", "app"}),
 
 		serviceRequestStatus: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "latency", "observation_status_count"),
-			Help: "The status result codes for requests to a service",
+			Name:        prometheus.BuildFQName("nats", "latency", "observation_status_count"),
+			Help:        "The status result codes for requests to a service",
+			ConstLabels: constLabels,
 		}, []string{"service", "status"}),
 
 		invalidObservationsReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "latency", "observation_error_count"),
-			Help: "Number of observations received by this surveyor across all services that could not be handled",
+			Name:        prometheus.BuildFQName("nats", "latency", "observation_error_count"),
+			Help:        "Number of observations received by this surveyor across all services that could not be handled",
+			ConstLabels: constLabels,
 		}, []string{"service"}),
 
 		serviceLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: prometheus.BuildFQName("nats", "latency", "service_duration"),
-			Help: "Time spent serving the request in the service",
+			Name:        prometheus.BuildFQName("nats", "latency", "service_duration"),
+			Help:        "Time spent serving the request in the service",
+			ConstLabels: constLabels,
 		}, []string{"service", "app"}),
 
 		totalLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: prometheus.BuildFQName("nats", "latency", "total_duration"),
-			Help: "Total time spent serving a service including network overheads",
+			Name:        prometheus.BuildFQName("nats", "latency", "total_duration"),
+			Help:        "Total time spent serving a service including network overheads",
+			ConstLabels: constLabels,
 		}, []string{"service", "app"}),
 
 		requestorRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: prometheus.BuildFQName("nats", "latency", "requestor_rtt"),
-			Help: "The RTT to the client making a request",
+			Name:        prometheus.BuildFQName("nats", "latency", "requestor_rtt"),
+			Help:        "The RTT to the client making a request",
+			ConstLabels: constLabels,
 		}, []string{"service", "app"}),
 
 		responderRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: prometheus.BuildFQName("nats", "latency", "responder_rtt"),
-			Help: "The RTT to the service serving the request",
+			Name:        prometheus.BuildFQName("nats", "latency", "responder_rtt"),
+			Help:        "The RTT to the service serving the request",
+			ConstLabels: constLabels,
 		}, []string{"service", "app"}),
 
 		systemRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: prometheus.BuildFQName("nats", "latency", "system_rtt"),
-			Help: "The RTT within the NATS system - time traveling clusters, gateways and leaf nodes",
+			Name:        prometheus.BuildFQName("nats", "latency", "system_rtt"),
+			Help:        "The RTT within the NATS system - time traveling clusters, gateways and leaf nodes",
+			ConstLabels: constLabels,
 		}, []string{"service", "app"}),
 	}
 

@@ -18,7 +18,7 @@ func TestJetStream_Load(t *testing.T) {
 
 	opt := GetDefaultOptions()
 	opt.URLs = js.ClientURL()
-	metrics := NewJetStreamAdvisoryMetrics(prometheus.NewRegistry())
+	metrics := NewJetStreamAdvisoryMetrics(prometheus.NewRegistry(), nil)
 	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
 		Help: "Number of times the surveyor reconnected to the NATS cluster",
@@ -64,7 +64,7 @@ func TestJetStream_Handle(t *testing.T) {
 
 	opt := GetDefaultOptions()
 	opt.URLs = js.ClientURL()
-	metrics := NewJetStreamAdvisoryMetrics(prometheus.NewRegistry())
+	metrics := NewJetStreamAdvisoryMetrics(prometheus.NewRegistry(), nil)
 	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
 		Help: "Number of times the surveyor reconnected to the NATS cluster",
