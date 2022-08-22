@@ -31,6 +31,7 @@ Flags:
       --http-tlskey string      Private key for server certificate (used with HTTPS).
       --http-user string        Enable basic auth and set user name for HTTP scrapes.
       --jetstream string        Listen for JetStream Advisories based on config files in a directory.
+      --log-level string        Log level, one of: trace|debug|info|warn|error|fatal|panic (default "info")
       --nkey string             Nkey Seed File
       --observe string          Listen for observation statistics based on config files in a directory.
       --password string         NATS user password
@@ -38,7 +39,7 @@ Flags:
       --prefix string           Replace the default prefix for all the metrics.
   -s, --servers string          NATS Cluster url(s) (default "nats://127.0.0.1:4222")
       --timeout duration        Polling timeout (default 3s)
-      --tlscacert string        Client certificate CA on NATS connecctions.
+      --tlscacert string        Client certificate CA on NATS connections.
       --tlscert string          Client certificate file for NATS connections.
       --tlskey string           Client private key for NATS connections.
       --user string             NATS user name or token
@@ -58,22 +59,29 @@ At this time, NATS 2.0 System credentials are required for meaningful usage.
 
 ### Config Files
 
-Surveyor uses Viper to read configs so it will support all file types that Viper supports (JSON, TOML, YAML, HCL, envfile, and Java properties)
+Surveyor uses Viper to read configs, so it will support all file types that Viper supports (JSON, TOML, YAML, HCL, envfile, and Java properties)
 
 To use a config file pass the `--config` flag. The defaults are `/etc/nats-surveyor/nats-surveyor[.ext]` and `./nats-surveyor[.ext]` with one of the supported extensions.
 
-The config is simple, just set each flag in the config file. For example:
+The config is simple, just set each flag in the config file. Example `nats-surveyor.yaml`:
 
-```
+```yaml
 servers: nats://127.0.0.1:4222
 accounts: true
+log-level: debug
 ```
 
 ### Environment Variables
 
-Environment variables are also taken into account. Any environment variable that is prefixed with `NATS_SURVEYOR` will be read. 
+Environment variables are also taken into account. Any environment variable that is prefixed with `NATS_SURVEYOR_` will be read.
 
-For example to enable accounts set `NATS_SURVEYOR_ACCOUNTS=true`
+Each flag has a matching environment variable, flag names should be converted to uppercase and dashes replaced with underscores.  Example: 
+
+```
+NATS_SURVEYOR_SERVERS=nats://127.0.0.1:4222
+NATS_SURVEYOR_ACCOUNTS=true
+NATS_SURVEYOR_LOG_LEVEL=debug
+```
 
 ## Metrics
 

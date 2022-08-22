@@ -16,7 +16,6 @@ package surveyor
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -28,13 +27,15 @@ import (
 	"github.com/nats-io/jsm.go/api/jetstream/metric"
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 // JSAdvisoryListener listens for JetStream advisories and expose them as prometheus data
 type JSAdvisoryListener struct {
-	nc    *nats.Conn
-	opts  *jsAdvisoryOptions
-	sopts *Options
+	nc     *nats.Conn
+	logger *logrus.Logger
+	opts   *jsAdvisoryOptions
+	sopts  *Options
 }
 
 type jsAdvisoryOptions struct {
@@ -249,9 +250,10 @@ func NewJetStreamAdvisoryListener(f string, sopts Options) (*JSAdvisoryListener,
 	}
 
 	return &JSAdvisoryListener{
-		nc:    nc,
-		opts:  opts,
-		sopts: &sopts,
+		nc:     nc,
+		logger: sopts.Logger,
+		opts:   opts,
+		sopts:  &sopts,
 	}, nil
 }
 
@@ -261,13 +263,13 @@ func (o *JSAdvisoryListener) Start() error {
 	if err != nil {
 		return fmt.Errorf("could not subscribe to JetStream Advisory topic for %s (%s): %s", o.opts.AccountName, api.JSAdvisoryPrefix, err)
 	}
-	log.Printf("Started JetStream Advisory listener stats on %s.> for %s", api.JSAdvisoryPrefix, o.opts.AccountName)
+	o.logger.Infof("Started JetStream Advisory listener stats on %s.> for %s", api.JSAdvisoryPrefix, o.opts.AccountName)
 
 	_, err = o.nc.Subscribe(api.JSMetricPrefix+".>", o.advisoryHandler)
 	if err != nil {
 		return fmt.Errorf("could not subscribe to JetStream Advisory topic for %s (%s): %s", o.opts.AccountName, api.JSMetricPrefix, err)
 	}
-	log.Printf("Started JetStream Metric listener stats on %s.> for %s", api.JSMetricPrefix, o.opts.AccountName)
+	o.logger.Infof("Started JetStream Metric listener stats on %s.> for %s", api.JSMetricPrefix, o.opts.AccountName)
 
 	_ = o.nc.Flush()
 
@@ -316,7 +318,7 @@ func (o *JSAdvisoryListener) advisoryHandler(m *nats.Msg) {
 	schema, event, err := jsm.ParseEvent(m.Data)
 	if err != nil {
 		jsAdvisoryParseErrorCtr.WithLabelValues(o.opts.AccountName).Inc()
-		log.Printf("Could not parse JetStream API Audit Advisory: %s", err)
+		o.logger.Warnf("Could not parse JetStream API Audit Advisory: %s", err)
 		return
 	}
 
@@ -372,7 +374,7 @@ func (o *JSAdvisoryListener) advisoryHandler(m *nats.Msg) {
 
 	default:
 		jsUnknownAdvisoryCtr.WithLabelValues(schema, o.opts.AccountName).Inc()
-		log.Printf("Could not handle event as an JetStream Advisory with schema %s", schema)
+		o.logger.Warnf("Could not handle event as an JetStream Advisory with schema %s", schema)
 	}
 }
 

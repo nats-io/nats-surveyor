@@ -16,7 +16,6 @@ package surveyor
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +25,7 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 // statzDescs holds the metric descriptions
@@ -111,6 +111,7 @@ type statzDescs struct {
 type StatzCollector struct {
 	sync.Mutex
 	nc              *nats.Conn
+	logger          *logrus.Logger
 	start           time.Time
 	stats           []*server.ServerStatsMsg
 	accStats        []accountStats
@@ -343,9 +344,10 @@ func (sc *StatzCollector) buildDescs() {
 }
 
 // NewStatzCollector creates a NATS Statz Collector
-func NewStatzCollector(nc *nats.Conn, numServers int, pollTimeout time.Duration, accounts bool) *StatzCollector {
+func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, pollTimeout time.Duration, accounts bool) *StatzCollector {
 	sc := &StatzCollector{
 		nc:              nc,
+		logger:          logger,
 		numServers:      numServers,
 		reply:           nc.NewRespInbox(),
 		pollTimeout:     pollTimeout,
@@ -379,7 +381,7 @@ func (sc *StatzCollector) Polling() bool {
 func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 	m := &server.ServerStatsMsg{}
 	if err := json.Unmarshal(msg.Data, m); err != nil {
-		log.Printf("Error unmarshalling statz json: %v", err)
+		sc.logger.Warnf("Error unmarshalling statz json: %v", err)
 	}
 
 	sc.Lock()
@@ -393,10 +395,10 @@ func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 			sc.doneCh <- struct{}{}
 		}
 	} else if !isCurrent || len(sc.stats) < sc.numServers {
-		log.Printf("Late reply for server [%15s : %15s : %s]: %v", m.Server.Cluster, serverName(m), m.Server.ID, rtt)
+		sc.logger.Infof("Late reply for server [%15s : %15s : %s]: %v", m.Server.Cluster, serverName(m), m.Server.ID, rtt)
 		sc.lateReplies.WithLabelValues(fmt.Sprintf("%.1f", sc.pollTimeout.Seconds())).Inc()
 	} else {
-		log.Printf("Extra reply from server [%15s : %15s : %s]: %v", m.Server.Cluster, serverName(m), m.Server.ID, rtt)
+		sc.logger.Infof("Extra reply from server [%15s : %15s : %s]: %v", m.Server.Cluster, serverName(m), m.Server.ID, rtt)
 		sc.more++
 		if sc.more == 1 {
 			sc.moreCh <- struct{}{}
@@ -444,7 +446,7 @@ func (sc *StatzCollector) poll() error {
 	select {
 	case <-sc.doneCh:
 	case <-time.After(sc.pollTimeout):
-		log.Printf("Poll timeout after %v while waiting for %d responses\n", sc.pollTimeout, sc.numServers)
+		sc.logger.Warnf("Poll timeout after %v while waiting for %d responses", sc.pollTimeout, sc.numServers)
 	}
 
 	sc.Lock()
@@ -467,27 +469,27 @@ func (sc *StatzCollector) poll() error {
 			sc.servers[key] = false
 		}
 
-		log.Println("RTTs for responding servers:")
+		sc.logger.Debugln("RTTs for responding servers:")
 		for _, stat := range stats {
 			// We use for key the cluster name followed by ID which is unique per server
 			key := fmt.Sprintf("%s:%s", stat.Server.Cluster, stat.Server.ID)
 			// Mark this server has been seen
 			sc.servers[key] = true
-			log.Printf("Server [%15s : %15s : %15s : %s]: %v\n", stat.Server.Cluster, serverName(stat), stat.Server.Host, stat.Server.ID, rtts[stat.Server.ID])
+			sc.logger.Debugf("Server [%15s : %15s : %15s : %s]: %v", stat.Server.Cluster, serverName(stat), stat.Server.Host, stat.Server.ID, rtts[stat.Server.ID])
 		}
 
-		log.Println("Missing servers:")
+		sc.logger.Debugln("Missing servers:")
 		var missingServers []string
 		for key, seen := range sc.servers {
 			if !seen {
-				log.Println(key)
+				sc.logger.Debugln(key)
 				missingServers = append(missingServers, "["+key+"]")
 			}
 		}
 
 		sc.noReplies.WithLabelValues(strconv.Itoa(sc.numServers)).Add(float64(len(missingServers)))
 
-		log.Printf("Expected %d servers, only saw responses from %d. Missing %v", sc.numServers, ns, missingServers)
+		sc.logger.Infof("Expected %d servers, only saw responses from %d. Missing %v", sc.numServers, ns, missingServers)
 	}
 
 	if ns == sc.numServers {
@@ -777,7 +779,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 
 	// poll the servers
 	if err := sc.poll(); err != nil {
-		log.Printf("Error polling NATS server: %v", err)
+		sc.logger.Warnf("Error polling NATS server: %v", err)
 		sc.pollErrCnt.WithLabelValues().Inc()
 		ch <- sc.newNatsUpGaugeMetric(false)
 		return
