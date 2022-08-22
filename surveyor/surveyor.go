@@ -97,22 +97,20 @@ func GetDefaultOptions() *Options {
 // A Surveyor instance
 type Surveyor struct {
 	sync.Mutex
-	opts         Options
-	logger       *logrus.Logger
-	nc           *nats.Conn
-	http         net.Listener
-	statzC       *StatzCollector
-	observations []*ServiceObsListener
-	jsAPIAudits  []*JSAdvisoryListener
+	opts               Options
+	logger             *logrus.Logger
+	nc                 *nats.Conn
+	http               net.Listener
+	promRegistry       *prometheus.Registry
+	reconnectCtr       *prometheus.CounterVec
+	statzC             *StatzCollector
+	observationMetrics *ServiceObsMetrics
+	observations       []*ServiceObsListener
+	jsAPIMetrics       *JSAdvisoryMetrics
+	jsAPIAudits        []*JSAdvisoryListener
 }
 
-func connect(opts *Options) (*nats.Conn, error) {
-	reconnCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
-		Help: "Number of times the surveyor reconnected to the NATS cluster",
-	}, []string{"name"})
-	prometheus.Register(reconnCtr)
-
+func connect(opts *Options, reconnectCtr *prometheus.CounterVec) (*nats.Conn, error) {
 	nopts := []nats.Option{
 		nats.Name(opts.Name),
 	}
@@ -134,7 +132,7 @@ func connect(opts *Options) (*nats.Conn, error) {
 		opts.Logger.Infof("%q disconnected, will possibly miss replies: %v", c.Opts.Name, err)
 	}))
 	nopts = append(nopts, nats.ReconnectHandler(func(c *nats.Conn) {
-		reconnCtr.WithLabelValues(c.Opts.Name).Inc()
+		reconnectCtr.WithLabelValues(c.Opts.Name).Inc()
 		opts.Logger.Infof("%q reconnected to %v", c.Opts.Name, c.ConnectedAddr())
 	}))
 	nopts = append(nopts, nats.ClosedHandler(func(c *nats.Conn) {
@@ -168,16 +166,26 @@ func connect(opts *Options) (*nats.Conn, error) {
 
 // NewSurveyor creates a surveyor
 func NewSurveyor(opts *Options) (*Surveyor, error) {
-	nc, err := connect(opts)
+	promRegistry := prometheus.NewRegistry()
+	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
+		Help: "Number of times the surveyor reconnected to the NATS cluster",
+	}, []string{"name"})
+	promRegistry.MustRegister(reconnectCtr)
+	nc, err := connect(opts, reconnectCtr)
 	if err != nil {
 		return nil, err
 	}
 	return &Surveyor{
-		nc:           nc,
-		opts:         *opts,
-		logger:       opts.Logger,
-		observations: []*ServiceObsListener{},
-		jsAPIAudits:  []*JSAdvisoryListener{},
+		nc:                 nc,
+		opts:               *opts,
+		logger:             opts.Logger,
+		promRegistry:       promRegistry,
+		reconnectCtr:       reconnectCtr,
+		observations:       []*ServiceObsListener{},
+		observationMetrics: NewServiceObservationMetrics(promRegistry),
+		jsAPIAudits:        []*JSAdvisoryListener{},
+		jsAPIMetrics:       NewJetStreamAdvisoryMetrics(promRegistry),
 	}, nil
 }
 
@@ -194,7 +202,7 @@ func (s *Surveyor) createStatszCollector() error {
 	s.statzC = NewStatzCollector(s.nc, s.logger, s.opts.ExpectedServers, s.opts.PollTimeout, s.opts.Accounts)
 	s.Unlock()
 
-	err := prometheus.Register(s.statzC)
+	err := s.promRegistry.Register(s.statzC)
 	for i := 0; i < 50 && err != nil; i++ {
 		if _, ok := err.(prometheus.AlreadyRegisteredError); ok {
 			// ignore
@@ -203,7 +211,7 @@ func (s *Surveyor) createStatszCollector() error {
 
 		s.logger.Warnf("Error registering statsz collector, will retry after 500ms: %v", err)
 		time.Sleep(500 * time.Millisecond)
-		err = prometheus.Register(s.statzC)
+		err = s.promRegistry.Register(s.statzC)
 	}
 	return err
 }
@@ -313,7 +321,9 @@ func (s *Surveyor) httpConcurrentPollBlockMiddleware(next http.Handler) http.Han
 // getScrapeHandler returns a chain of handlers that handles auth, concurency checks
 // and the prometheus handlers
 func (s *Surveyor) getScrapeHandler() http.Handler {
-	return s.httpAuthMiddleware(s.httpConcurrentPollBlockMiddleware(promhttp.Handler()))
+	return s.httpAuthMiddleware(s.httpConcurrentPollBlockMiddleware(promhttp.InstrumentMetricHandler(
+		s.promRegistry, promhttp.HandlerFor(s.promRegistry, promhttp.HandlerOpts{}),
+	)))
 }
 
 // startHTTP configures and starts the HTTP server for applications to poll data from
@@ -382,7 +392,7 @@ func (s *Surveyor) startHTTP() error {
 }
 
 func (s *Surveyor) startJetStreamAdvisories() error {
-	jsAdvisoriesGauge.Set(0)
+	s.jsAPIMetrics.jsAdvisoriesGauge.Set(0)
 
 	dir := s.opts.JetStreamConfigDir
 	if dir == "" {
@@ -408,7 +418,7 @@ func (s *Surveyor) startJetStreamAdvisories() error {
 			return nil
 		}
 
-		obs, err := NewJetStreamAdvisoryListener(path, s.opts)
+		obs, err := NewJetStreamAdvisoryListener(path, s.opts, s.jsAPIMetrics, s.reconnectCtr)
 		if err != nil {
 			return fmt.Errorf("could not create JetStream API Audit from %s: %s", path, err)
 		}
@@ -427,7 +437,7 @@ func (s *Surveyor) startJetStreamAdvisories() error {
 }
 
 func (s *Surveyor) startObservations() error {
-	observationsGauge.Set(0)
+	s.observationMetrics.observationsGauge.Set(0)
 
 	dir := s.opts.ObservationConfigDir
 	if dir == "" {
@@ -453,7 +463,7 @@ func (s *Surveyor) startObservations() error {
 			return nil
 		}
 
-		obs, err := NewServiceObservation(path, s.opts)
+		obs, err := NewServiceObservation(path, s.opts, s.observationMetrics, s.reconnectCtr)
 		if err != nil {
 			return fmt.Errorf("could not create observation from %s: %s", path, err)
 		}
@@ -508,7 +518,7 @@ func (s *Surveyor) Stop() {
 		o.nc.Close()
 	}
 
-	prometheus.Unregister(s.statzC)
+	s.promRegistry.Unregister(s.statzC)
 	s.http.Close()
 	s.nc.Drain()
 	s.Unlock()

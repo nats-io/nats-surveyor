@@ -20,10 +20,10 @@ import (
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
-	"github.com/nats-io/nuid"
-	ptu "github.com/prometheus/client_golang/prometheus/testutil"
-
 	st "github.com/nats-io/nats-surveyor/test"
+	"github.com/nats-io/nuid"
+	"github.com/prometheus/client_golang/prometheus"
+	ptu "github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func TestServiceObservation_Load(t *testing.T) {
@@ -31,23 +31,29 @@ func TestServiceObservation_Load(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
-	obs, err := NewServiceObservation("testdata/goodobs/good.json", *opt)
+	metrics := NewServiceObservationMetrics(prometheus.NewRegistry())
+	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
+		Help: "Number of times the surveyor reconnected to the NATS cluster",
+	}, []string{"name"})
+
+	obs, err := NewServiceObservation("testdata/goodobs/good.json", *opt, metrics, reconnectCtr)
 	if err != nil {
 		t.Fatalf("observation load error: %s", err)
 	}
 	obs.Stop()
 
-	_, err = NewServiceObservation("testdata/badobs/missing.json", *opt)
+	_, err = NewServiceObservation("testdata/badobs/missing.json", *opt, metrics, reconnectCtr)
 	if err.Error() != "open testdata/badobs/missing.json: no such file or directory" {
 		t.Fatalf("observation load error: %s", err)
 	}
 
-	_, err = NewServiceObservation("testdata/badobs/bad.json", *opt)
+	_, err = NewServiceObservation("testdata/badobs/bad.json", *opt, metrics, reconnectCtr)
 	if err.Error() != "invalid service observation configuration: testdata/badobs/bad.json: name is required, topic is required, jwt or nkey credentials is required" {
 		t.Fatalf("observation load error: %s", err)
 	}
 
-	_, err = NewServiceObservation("testdata/badobs/badauth.json", *opt)
+	_, err = NewServiceObservation("testdata/badobs/badauth.json", *opt, metrics, reconnectCtr)
 	if err.Error() != "nats connection failed: nats: Authorization Violation" {
 		t.Fatalf("observation load error: %s", err)
 	}
@@ -58,7 +64,13 @@ func TestServiceObservation_Handle(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
-	obs, err := NewServiceObservation("testdata/goodobs/good.json", *opt)
+	metrics := NewServiceObservationMetrics(prometheus.NewRegistry())
+	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
+		Help: "Number of times the surveyor reconnected to the NATS cluster",
+	}, []string{"name"})
+
+	obs, err := NewServiceObservation("testdata/goodobs/good.json", *opt, metrics, reconnectCtr)
 	if err != nil {
 		t.Fatalf("observation load error: %s", err)
 	}
@@ -74,7 +86,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 # TYPE nats_latency_observations_count gauge
 nats_latency_observations_count 1
 `
-	err = ptu.CollectAndCompare(observationsGauge, bytes.NewReader([]byte(expected)))
+	err = ptu.CollectAndCompare(metrics.observationsGauge, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("Invalid observations counter: %s", err)
 	}
@@ -142,7 +154,7 @@ nats_latency_observations_count 1
 # TYPE nats_latency_observations_received_count counter
 nats_latency_observations_received_count{app="testing_service",service="testing"} 10
 `
-	err = ptu.CollectAndCompare(observationsReceived, bytes.NewReader([]byte(expected)))
+	err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("Invalid observations counter: %s", err)
 	}
@@ -174,7 +186,7 @@ nats_latency_observations_received_count{app="testing_service",service="testing"
 # TYPE nats_latency_observation_error_count counter
 nats_latency_observation_error_count{service="testing"} 10
 `
-	err = ptu.CollectAndCompare(invalidObservationsReceived, bytes.NewReader([]byte(expected)))
+	err = ptu.CollectAndCompare(metrics.invalidObservationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("Invalid invalidObservationsReceived counter: %s", err)
 	}
@@ -184,7 +196,7 @@ nats_latency_observation_error_count{service="testing"} 10
 # TYPE nats_latency_observations_received_count counter
 nats_latency_observations_received_count{app="testing_service",service="testing"} 10
 `
-	err = ptu.CollectAndCompare(observationsReceived, bytes.NewReader([]byte(expected)))
+	err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("Invalid observationsReceived counter: %s", err)
 	}
@@ -196,7 +208,7 @@ nats_latency_observation_status_count{service="testing",status="200"} 3
 nats_latency_observation_status_count{service="testing",status="400"} 2
 nats_latency_observation_status_count{service="testing",status="500"} 5
 `
-	err = ptu.CollectAndCompare(serviceRequestStatus, bytes.NewReader([]byte(expected)))
+	err = ptu.CollectAndCompare(metrics.serviceRequestStatus, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("Status counter: %s", err)
 	}

@@ -407,7 +407,7 @@ func TestSurveyor_Observations(t *testing.T) {
 		t.Fatalf("start error: %v", err)
 	}
 
-	if ptu.ToFloat64(observationsGauge) != 1 {
+	if ptu.ToFloat64(s.observationMetrics.observationsGauge) != 1 {
 		t.Fatalf("process error: observations not started")
 	}
 }
