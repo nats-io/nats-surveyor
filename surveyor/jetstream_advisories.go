@@ -61,118 +61,139 @@ type JSAdvisoryMetrics struct {
 	jsConsumerDeliveryNAK   *prometheus.CounterVec
 }
 
-func NewJetStreamAdvisoryMetrics(registry *prometheus.Registry) *JSAdvisoryMetrics {
+func NewJetStreamAdvisoryMetrics(registry *prometheus.Registry, constLabels prometheus.Labels) *JSAdvisoryMetrics {
 	metrics := &JSAdvisoryMetrics{
 		// API Audit
 		jsAPIAuditCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "api_audit"),
-			Help: "JetStream API access audit events",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "api_audit"),
+			Help:        "JetStream API access audit events",
+			ConstLabels: constLabels,
 		}, []string{"subject", "account"}),
 
 		// Delivery Exceeded
 		jsDeliveryExceededCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "delivery_exceeded_count"),
-			Help: "Advisories about JetStream Consumer Delivery Exceeded events",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "delivery_exceeded_count"),
+			Help:        "Advisories about JetStream Consumer Delivery Exceeded events",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream", "consumer"}),
 
 		jsDeliveryTerminatedCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "delivery_terminated_count"),
-			Help: "Advisories about JetStream Consumer Delivery Terminated events",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "delivery_terminated_count"),
+			Help:        "Advisories about JetStream Consumer Delivery Terminated events",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream", "consumer"}),
 
 		// Ack Samples
 		jsAckMetricDelay: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "acknowledgement_duration"),
-			Help: "How long an Acknowledged message took to be Acknowledged",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "acknowledgement_duration"),
+			Help:        "How long an Acknowledged message took to be Acknowledged",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream", "consumer"}),
 
 		jsAckMetricDeliveries: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "acknowledgement_deliveries"),
-			Help: "How many times messages took to be delivered and Acknowledged",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "acknowledgement_deliveries"),
+			Help:        "How many times messages took to be delivered and Acknowledged",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream", "consumer"}),
 
 		// Misc
 		jsAdvisoriesGauge: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "advisory_count"),
-			Help: "Number of JetStream Advisory listeners that are running",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "advisory_count"),
+			Help:        "Number of JetStream Advisory listeners that are running",
+			ConstLabels: constLabels,
 		}),
 
 		jsUnknownAdvisoryCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "unknown_advisories"),
-			Help: "Unsupported JetStream Advisory types received",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "unknown_advisories"),
+			Help:        "Unsupported JetStream Advisory types received",
+			ConstLabels: constLabels,
 		}, []string{"schema", "account"}),
 
 		jsTotalAdvisoryCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "total_advisories"),
-			Help: "Total JetStream Advisories handled",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "total_advisories"),
+			Help:        "Total JetStream Advisories handled",
+			ConstLabels: constLabels,
 		}, []string{"account"}),
 
 		jsAdvisoryParseErrorCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "advisory_parse_errors"),
-			Help: "Number of advisories that could not be parsed",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "advisory_parse_errors"),
+			Help:        "Number of advisories that could not be parsed",
+			ConstLabels: constLabels,
 		}, []string{"account"}),
 
 		// Stream and Consumer actions
 		jsConsumerActionCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "consumer_actions"),
-			Help: "Actions performed on consumers",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "consumer_actions"),
+			Help:        "Actions performed on consumers",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream", "action"}),
 
 		jsStreamActionCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "stream_actions"),
-			Help: "Actions performed on streams",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "stream_actions"),
+			Help:        "Actions performed on streams",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream", "action"}),
 
 		// Snapshot create
 		jsSnapshotSizeCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "snapshot_size_bytes"),
-			Help: "The size of snapshots being created",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "snapshot_size_bytes"),
+			Help:        "The size of snapshots being created",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream"}),
 
 		jsSnapthotDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "snapshot_duration"),
-			Help: "How long a snapshot takes to be processed",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "snapshot_duration"),
+			Help:        "How long a snapshot takes to be processed",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream"}),
 
 		// Restore
 		jsRestoreCreatedCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "restore_created_count"),
-			Help: "How many restore operations were started",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "restore_created_count"),
+			Help:        "How many restore operations were started",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream"}),
 
 		jsRestoreSizeCtr: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "restore_size_bytes"),
-			Help: "The size of restores that was completed",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "restore_size_bytes"),
+			Help:        "The size of restores that was completed",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream"}),
 
 		jsRestoreDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "restore_duration"),
-			Help: "How long a restore took to be processed",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "restore_duration"),
+			Help:        "How long a restore took to be processed",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream"}),
 
 		jsConsumerLeaderElected: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "consumer_leader_elected"),
-			Help: "How many times leader elections were done for consumers",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "consumer_leader_elected"),
+			Help:        "How many times leader elections were done for consumers",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream"}),
 
 		jsConsumerQuorumLost: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "consumer_quorum_lost"),
-			Help: "How many times a consumer lost quorum leading to new leader elections",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "consumer_quorum_lost"),
+			Help:        "How many times a consumer lost quorum leading to new leader elections",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream"}),
 
 		jsStreamLeaderElected: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "stream_leader_elected"),
-			Help: "How many times leader elections were done for streams",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "stream_leader_elected"),
+			Help:        "How many times leader elections were done for streams",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream"}),
 
 		jsStreamQuorumLost: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "stream_quorum_lost"),
-			Help: "How many times a stream lost quorum leading to new leader elections",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "stream_quorum_lost"),
+			Help:        "How many times a stream lost quorum leading to new leader elections",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream"}),
 
 		jsConsumerDeliveryNAK: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: prometheus.BuildFQName("nats", "jetstream", "consumer_nak"),
-			Help: "How many times a consumer sent a NAK",
+			Name:        prometheus.BuildFQName("nats", "jetstream", "consumer_nak"),
+			Help:        "How many times a consumer sent a NAK",
+			ConstLabels: constLabels,
 		}, []string{"account", "stream", "consumer"}),
 	}
 

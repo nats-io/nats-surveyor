@@ -31,7 +31,7 @@ func TestServiceObservation_Load(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
-	metrics := NewServiceObservationMetrics(prometheus.NewRegistry())
+	metrics := NewServiceObservationMetrics(prometheus.NewRegistry(), nil)
 	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
 		Help: "Number of times the surveyor reconnected to the NATS cluster",
@@ -64,7 +64,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
-	metrics := NewServiceObservationMetrics(prometheus.NewRegistry())
+	metrics := NewServiceObservationMetrics(prometheus.NewRegistry(), nil)
 	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
 		Help: "Number of times the surveyor reconnected to the NATS cluster",

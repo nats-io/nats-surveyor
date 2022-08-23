@@ -73,6 +73,7 @@ type Options struct {
 	JetStreamConfigDir   string
 	Accounts             bool
 	Logger               *logrus.Logger
+	ConstLabels          prometheus.Labels
 }
 
 // GetDefaultOptions returns the default set of options
@@ -168,8 +169,9 @@ func connect(opts *Options, reconnectCtr *prometheus.CounterVec) (*nats.Conn, er
 func NewSurveyor(opts *Options) (*Surveyor, error) {
 	promRegistry := prometheus.NewRegistry()
 	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
-		Help: "Number of times the surveyor reconnected to the NATS cluster",
+		Name:        prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
+		Help:        "Number of times the surveyor reconnected to the NATS cluster",
+		ConstLabels: opts.ConstLabels,
 	}, []string{"name"})
 	promRegistry.MustRegister(reconnectCtr)
 	nc, err := connect(opts, reconnectCtr)
@@ -183,9 +185,9 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 		promRegistry:       promRegistry,
 		reconnectCtr:       reconnectCtr,
 		observations:       []*ServiceObsListener{},
-		observationMetrics: NewServiceObservationMetrics(promRegistry),
+		observationMetrics: NewServiceObservationMetrics(promRegistry, opts.ConstLabels),
 		jsAPIAudits:        []*JSAdvisoryListener{},
-		jsAPIMetrics:       NewJetStreamAdvisoryMetrics(promRegistry),
+		jsAPIMetrics:       NewJetStreamAdvisoryMetrics(promRegistry, opts.ConstLabels),
 	}, nil
 }
 
@@ -199,7 +201,7 @@ func (s *Surveyor) createStatszCollector() error {
 	}
 
 	s.Lock()
-	s.statzC = NewStatzCollector(s.nc, s.logger, s.opts.ExpectedServers, s.opts.PollTimeout, s.opts.Accounts)
+	s.statzC = NewStatzCollector(s.nc, s.logger, s.opts.ExpectedServers, s.opts.PollTimeout, s.opts.Accounts, s.opts.ConstLabels)
 	s.Unlock()
 
 	err := s.promRegistry.Register(s.statzC)

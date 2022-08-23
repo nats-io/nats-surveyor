@@ -133,6 +133,7 @@ type StatzCollector struct {
 	serverInfoLabels []string
 	routeLabels      []string
 	gatewayLabels    []string
+	constLabels      prometheus.Labels
 
 	surveyedCnt *prometheus.GaugeVec
 	expectedCnt *prometheus.GaugeVec
@@ -212,12 +213,12 @@ func (sc *StatzCollector) gatewayLabelValues(sm *server.ServerStatsMsg, gStat *s
 func (sc *StatzCollector) buildDescs() {
 	newPromDesc := func(name, help string, labels []string) *prometheus.Desc {
 		return prometheus.NewDesc(
-			prometheus.BuildFQName("nats", "core", name), help, labels, nil)
+			prometheus.BuildFQName("nats", "core", name), help, labels, sc.constLabels)
 	}
 
 	// A unlabelled description for the up/down
 	sc.natsUp = prometheus.NewDesc(prometheus.BuildFQName("nats", "core", "nats_up"),
-		"1 if connected to NATS, 0 otherwise.  A gauge.", nil, nil)
+		"1 if connected to NATS, 0 otherwise.  A gauge.", nil, sc.constLabels)
 
 	sc.descs.Info = newPromDesc("info", "General Server information Summary gauge", sc.serverInfoLabels)
 	sc.descs.Start = newPromDesc("start_time", "Server start time gauge", sc.serverLabels)
@@ -313,38 +314,44 @@ func (sc *StatzCollector) buildDescs() {
 
 	// Surveyor
 	sc.surveyedCnt = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "surveyed_count"),
-		Help: "Number of remote hosts successfully surveyed gauge",
+		Name:        prometheus.BuildFQName("nats", "survey", "surveyed_count"),
+		Help:        "Number of remote hosts successfully surveyed gauge",
+		ConstLabels: sc.constLabels,
 	}, []string{})
 
 	sc.expectedCnt = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "expected_count"),
-		Help: "Number of remote hosts expected to responded gauge",
+		Name:        prometheus.BuildFQName("nats", "survey", "expected_count"),
+		Help:        "Number of remote hosts expected to responded gauge",
+		ConstLabels: sc.constLabels,
 	}, []string{})
 
 	sc.pollTime = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "duration_seconds"),
-		Help: "Time it took to gather the surveyed data histogram",
+		Name:        prometheus.BuildFQName("nats", "survey", "duration_seconds"),
+		Help:        "Time it took to gather the surveyed data histogram",
+		ConstLabels: sc.constLabels,
 	}, []string{})
 
 	sc.pollErrCnt = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "poll_error_count"),
-		Help: "The number of times the poller encountered errors counter",
+		Name:        prometheus.BuildFQName("nats", "survey", "poll_error_count"),
+		Help:        "The number of times the poller encountered errors counter",
+		ConstLabels: sc.constLabels,
 	}, []string{})
 
 	sc.lateReplies = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "late_replies_count"),
-		Help: "Number of times a reply was received too late counter",
+		Name:        prometheus.BuildFQName("nats", "survey", "late_replies_count"),
+		Help:        "Number of times a reply was received too late counter",
+		ConstLabels: sc.constLabels,
 	}, []string{"timeout"})
 
 	sc.noReplies = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName("nats", "survey", "no_replies_count"),
-		Help: "Number of nodes that did not reply in poll cycle",
+		Name:        prometheus.BuildFQName("nats", "survey", "no_replies_count"),
+		Help:        "Number of nodes that did not reply in poll cycle",
+		ConstLabels: sc.constLabels,
 	}, []string{"expected"})
 }
 
 // NewStatzCollector creates a NATS Statz Collector
-func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, pollTimeout time.Duration, accounts bool) *StatzCollector {
+func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, pollTimeout time.Duration, accounts bool, constLabels prometheus.Labels) *StatzCollector {
 	sc := &StatzCollector{
 		nc:              nc,
 		logger:          logger,
@@ -360,6 +367,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, pol
 		serverInfoLabels: []string{"server_cluster", "server_name", "server_id", "server_version"},
 		routeLabels:      []string{"server_cluster", "server_name", "server_id", "server_route_id"},
 		gatewayLabels:    []string{"server_cluster", "server_name", "server_id", "server_gateway_name", "server_gateway_id"},
+		constLabels:      constLabels,
 	}
 
 	sc.buildDescs()
