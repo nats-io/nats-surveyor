@@ -162,6 +162,24 @@ func TestSurveyor_Basic(t *testing.T) {
 	}
 }
 
+func TestSurveyor_StartTwice(t *testing.T) {
+	sc := st.NewSuperCluster(t)
+	defer sc.Shutdown()
+
+	s, err := NewSurveyor(getTestOptions())
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	s.Stop()
+	if err = s.Start(); err != nil {
+		t.Fatalf("second start error: %v", err)
+	}
+	s.Stop()
+}
+
 func TestSurveyor_Account(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
@@ -262,7 +280,13 @@ func TestSurveyor_ClientTLSFail(t *testing.T) {
 	opts.CertFile = clientCert
 	opts.KeyFile = clientKey
 
-	_, err := NewSurveyor(opts)
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	err = s.Start()
+	defer s.Stop()
+
 	if err == nil {
 		t.Fatalf("Connected to a server that required TLS")
 	}
@@ -357,11 +381,11 @@ func TestSurveyor_UserPass(t *testing.T) {
 
 func TestSurveyor_NoServer(t *testing.T) {
 	s, err := NewSurveyor(getTestOptions())
-	defer func() {
-		if s != nil {
-			s.Stop()
-		}
-	}()
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	err = s.Start()
+	defer s.Stop()
 
 	if err == nil {
 		t.Fatalf("didn't get expected error")
@@ -394,18 +418,17 @@ func TestSurveyor_Observations(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
 
-	opt := getTestOptions()
-	opt.ObservationConfigDir = "testdata/goodobs"
+	opts := getTestOptions()
+	opts.ObservationConfigDir = "testdata/goodobs"
 
-	s, err := NewSurveyor(opt)
+	s, err := NewSurveyor(opts)
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
 	}
-	defer s.Stop()
-
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
+	defer s.Stop()
 
 	if ptu.ToFloat64(s.observationMetrics.observationsGauge) != 1 {
 		t.Fatalf("process error: observations not started")
@@ -420,7 +443,6 @@ func TestSurveyor_ConcurrentBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
 	}
-
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
@@ -446,17 +468,22 @@ func TestSurveyor_NATSUserPass(t *testing.T) {
 
 	opts.NATSUser = "invalid_user"
 	opts.NATSPassword = "password"
-	_, err := NewSurveyor(opts)
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	err = s.Start()
 	if err == nil {
 		t.Fatalf("didn't receive expected error")
 	}
 	if !strings.Contains(err.Error(), "Auth") {
 		t.Fatalf("didn't receive expected error: %v", err)
 	}
+	s.Stop()
 
 	opts.NATSUser = "sys"
 	opts.NATSPassword = "password"
-	s, err := NewSurveyor(opts)
+	s, err = NewSurveyor(opts)
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
 	}
