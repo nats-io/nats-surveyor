@@ -2,6 +2,7 @@ FROM golang:1.18-alpine3.16 AS build
 COPY . /go/src/nats-surveyor
 WORKDIR /go/src/nats-surveyor
 ENV GO111MODULE=on
+ENV CGO_ENABLED=0
 RUN go build
 
 FROM alpine:latest as osdeps
