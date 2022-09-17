@@ -541,8 +541,8 @@ func (sc *StatzCollector) pollAccountInfo() error {
 
 			sts.jetstreamMemoryUsed = float64(jsInfo.Memory)
 			sts.jetstreamStorageUsed = float64(jsInfo.Store)
-			sts.jetstreamMemoryReserved = float64(jsInfo.ReservedStore)
-			sts.jetstreamStorageReserved = float64(jsInfo.ReservedMemory)
+			sts.jetstreamMemoryReserved = float64(jsInfo.ReservedMemory)
+			sts.jetstreamStorageReserved = float64(jsInfo.ReservedStore)
 
 			sts.jetstreamStreamCount = float64(len(jsInfo.Streams))
 			for _, stream := range jsInfo.Streams {
