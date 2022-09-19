@@ -129,11 +129,13 @@ type StatzCollector struct {
 	collectAccounts bool
 	natsUp          *prometheus.Desc
 
-	serverLabels     []string
-	serverInfoLabels []string
-	routeLabels      []string
-	gatewayLabels    []string
-	constLabels      prometheus.Labels
+	serverLabels       []string
+	serverInfoLabels   []string
+	routeLabels        []string
+	gatewayLabels      []string
+	jsServerLabels     []string
+	jsServerInfoLabels []string
+	constLabels        prometheus.Labels
 
 	surveyedCnt *prometheus.GaugeVec
 	expectedCnt *prometheus.GaugeVec
@@ -182,7 +184,7 @@ func jsDomainLabelValue(sm *server.ServerStatsMsg) string {
 	if sm.Server.Domain == "" {
 		// Labels with empty values are ignored by Prometheus, but a JS Domain of "" is a valid configuration.
 		// Use a name with '*' as a placeholder. This is an invalid JS Domain.
-		return "*EMPTY*"
+		return "Default"
 	}
 	return sm.Server.Domain
 }
@@ -253,36 +255,33 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.GatewayNumInbound = newPromDesc("gateway_inbound_msg_count", "Number inbound messages through the gateway gauge", sc.gatewayLabels)
 
 	// Jetstream Info
-	sc.descs.JetstreamInfo = newPromDesc("jetstream_info", " Always 1. Contains metadata for cross-reference from other time-series",
-		[]string{"server_name", "server_host", "server_id", "server_cluster", "server_domain", "server_version", "server_jetstream"})
+	sc.descs.JetstreamInfo = newPromDesc("jetstream_info", " Always 1. Contains metadata for cross-reference from other time-series", sc.jsServerInfoLabels)
 
 	// Jetstream Server
-	// Maybe this should be server_id since we can lookup server_name from info?
-	jsServerLabelKeys := []string{"server_id"}
-	sc.descs.JetstreamEnabled = newPromDesc("jetstream_enabled", "1 if Jetstream is enabled, 0 otherwise.  A gauge.", jsServerLabelKeys)
-	sc.descs.JetstreamFilestoreSizeBytes = newPromDesc("jetstream_filestore_size_bytes", "Capacity of jetstream filesystem storage in bytes", jsServerLabelKeys)
-	sc.descs.JetstreamMemstoreSizeBytes = newPromDesc("jetstream_memstore_size_bytes", "Capacity of jetstream in-memory store in bytes", jsServerLabelKeys)
-	sc.descs.JetstreamFilestoreUsedBytes = newPromDesc("jetstream_filestore_used_bytes", "Consumption of jetstream filesystem storage in bytes", jsServerLabelKeys)
-	sc.descs.JetstreamFilestoreReservedBytes = newPromDesc("jetstream_filestore_reserved_bytes", "Account Reservations of jetstream filesystem storage in bytes", jsServerLabelKeys)
-	sc.descs.JetstreamFilestoreReservedUsedBytes = newPromDesc("jetstream_filestore_reserved_used_bytes", "Consumption of Account Reservation of jetstream filesystem storage in bytes", jsServerLabelKeys)
-	sc.descs.JetstreamMemstoreUsedBytes = newPromDesc("jetstream_memstore_used_bytes", "Consumption of jetstream in-memory store in bytes", jsServerLabelKeys)
-	sc.descs.JetstreamMemstoreReservedBytes = newPromDesc("jetstream_memstore_reserved_bytes", "Account Reservations of  jetstream in-memory store in bytes", jsServerLabelKeys)
-	sc.descs.JetstreamMemstoreReservedUsedBytes = newPromDesc("jetstream_memstore_reserved_used_bytes", "Consumption of Account Reservation of jetstream in-memory store in bytes. ", jsServerLabelKeys)
-	sc.descs.JetstreamAccounts = newPromDesc("jetstream_accounts", "Number of NATS Accounts present on a Jetstream server", jsServerLabelKeys)
-	sc.descs.JetstreamHAAssets = newPromDesc("jetstream_ha_assets", "Number of Raft nodes used by NATS", jsServerLabelKeys)
-	sc.descs.JetstreamAPIRequests = newPromDesc("jetstream_api_requests", "Number of Jetstream API Requests processed. Value is 0 when server starts", jsServerLabelKeys)
-	sc.descs.JetstreamAPIErrors = newPromDesc("jetstream_api_errors", "Number of Jetstream API Errors. Value is 0 when server starts", jsServerLabelKeys)
+	sc.descs.JetstreamEnabled = newPromDesc("jetstream_enabled", "1 if Jetstream is enabled, 0 otherwise.  A gauge.", sc.jsServerLabels)
+	sc.descs.JetstreamFilestoreSizeBytes = newPromDesc("jetstream_filestore_size_bytes", "Capacity of jetstream filesystem storage in bytes", sc.jsServerLabels)
+	sc.descs.JetstreamMemstoreSizeBytes = newPromDesc("jetstream_memstore_size_bytes", "Capacity of jetstream in-memory store in bytes", sc.jsServerLabels)
+	sc.descs.JetstreamFilestoreUsedBytes = newPromDesc("jetstream_filestore_used_bytes", "Consumption of jetstream filesystem storage in bytes", sc.jsServerLabels)
+	sc.descs.JetstreamFilestoreReservedBytes = newPromDesc("jetstream_filestore_reserved_bytes", "Account Reservations of jetstream filesystem storage in bytes", sc.jsServerLabels)
+	sc.descs.JetstreamFilestoreReservedUsedBytes = newPromDesc("jetstream_filestore_reserved_used_bytes", "Consumption of Account Reservation of jetstream filesystem storage in bytes", sc.jsServerLabels)
+	sc.descs.JetstreamMemstoreUsedBytes = newPromDesc("jetstream_memstore_used_bytes", "Consumption of jetstream in-memory store in bytes", sc.jsServerLabels)
+	sc.descs.JetstreamMemstoreReservedBytes = newPromDesc("jetstream_memstore_reserved_bytes", "Account Reservations of  jetstream in-memory store in bytes", sc.jsServerLabels)
+	sc.descs.JetstreamMemstoreReservedUsedBytes = newPromDesc("jetstream_memstore_reserved_used_bytes", "Consumption of Account Reservation of jetstream in-memory store in bytes. ", sc.jsServerLabels)
+	sc.descs.JetstreamAccounts = newPromDesc("jetstream_accounts", "Number of NATS Accounts present on a Jetstream server", sc.jsServerLabels)
+	sc.descs.JetstreamHAAssets = newPromDesc("jetstream_ha_assets", "Number of HA (R>1) assets used by NATS", sc.jsServerLabels)
+	sc.descs.JetstreamAPIRequests = newPromDesc("jetstream_api_requests", "Number of Jetstream API Requests processed. Value is 0 when server starts", sc.jsServerLabels)
+	sc.descs.JetstreamAPIErrors = newPromDesc("jetstream_api_errors", "Number of Jetstream API Errors. Value is 0 when server starts", sc.jsServerLabels)
 
 	// Jetstream Raft Groups
-	jsRaftGroupInfoLabelKeys := []string{"jetstream_domain", "raft_group", "server_id", "cluster_name", "leader"}
+	jsRaftGroupInfoLabelKeys := []string{"jetstream_domain", "raft_group", "server_id", "server_name", "cluster_name", "leader"}
 	sc.descs.JetstreamClusterRaftGroupInfo = newPromDesc("jetstream_cluster_raft_group_info", "Provides metadata about a RAFT Group", jsRaftGroupInfoLabelKeys)
-	jsRaftGroupLabelKeys := []string{"server_id"}
+	jsRaftGroupLabelKeys := []string{"server_id", "server_name", "cluster_name"}
 	sc.descs.JetstreamClusterRaftGroupSize = newPromDesc("jetstream_cluster_raft_group_size", "Number of peers in a RAFT group", jsRaftGroupLabelKeys)
 	sc.descs.JetstreamClusterRaftGroupLeader = newPromDesc("jetstream_cluster_raft_group_leader", "1 if this server is leader of raft group, 0 otherwise", jsRaftGroupLabelKeys)
 	sc.descs.JetstreamClusterRaftGroupReplicas = newPromDesc("jetstream_cluster_raft_group_replicas", "Info about replicas from leaders perspective", jsRaftGroupLabelKeys)
 
 	// Jetstream Cluster Replicas
-	jsClusterReplicaLabelKeys := []string{"server_id", "peer"}
+	jsClusterReplicaLabelKeys := []string{"server_id", "server_name", "peer", "cluster_name"}
 	// FIXME: help could use some work...
 	sc.descs.JetstreamClusterRaftGroupReplicaActive = newPromDesc("jetstream_cluster_raft_group_replica_peer_active", "Jetstream RAFT Group Peer last Active time. Very large values may imply raft is stalled", jsClusterReplicaLabelKeys)
 	sc.descs.JetstreamClusterRaftGroupReplicaCurrent = newPromDesc("jetstream_cluster_raft_group_replica_peer_current", "Jetstream RAFT Group Peer is current: 1 or not: 0", jsClusterReplicaLabelKeys)
@@ -363,11 +362,14 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, pol
 		moreCh:          make(chan struct{}, 1),
 		collectAccounts: accounts,
 
-		serverLabels:     []string{"server_cluster", "server_name", "server_id"},
-		serverInfoLabels: []string{"server_cluster", "server_name", "server_id", "server_version"},
-		routeLabels:      []string{"server_cluster", "server_name", "server_id", "server_route_id"},
-		gatewayLabels:    []string{"server_cluster", "server_name", "server_id", "server_gateway_name", "server_gateway_id"},
-		constLabels:      constLabels,
+		// TODO - normalize these if possible.  Jetstream varies from the other server labels
+		serverLabels:       []string{"server_cluster", "server_name", "server_id"},
+		serverInfoLabels:   []string{"server_cluster", "server_name", "server_id", "server_version"},
+		routeLabels:        []string{"server_cluster", "server_name", "server_id", "server_route_id"},
+		gatewayLabels:      []string{"server_cluster", "server_name", "server_id", "server_gateway_name", "server_gateway_id"},
+		jsServerLabels:     []string{"server_id", "server_name", "cluster_name"},
+		jsServerInfoLabels: []string{"server_name", "server_host", "server_id", "server_cluster", "server_domain", "server_version", "server_jetstream"},
+		constLabels:        constLabels,
 	}
 
 	sc.buildDescs()
@@ -541,8 +543,8 @@ func (sc *StatzCollector) pollAccountInfo() error {
 
 			sts.jetstreamMemoryUsed = float64(jsInfo.Memory)
 			sts.jetstreamStorageUsed = float64(jsInfo.Store)
-			sts.jetstreamMemoryReserved = float64(jsInfo.ReservedStore)
-			sts.jetstreamStorageReserved = float64(jsInfo.ReservedMemory)
+			sts.jetstreamMemoryReserved = float64(jsInfo.ReservedMemory)
+			sts.jetstreamStorageReserved = float64(jsInfo.ReservedStore)
 
 			sts.jetstreamStreamCount = float64(len(jsInfo.Streams))
 			for _, stream := range jsInfo.Streams {
@@ -826,7 +828,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- newGaugeMetric(sc.descs.JetstreamInfo, float64(1), jetstreamInfoLabelValues(sm))
 		// Any / All Meta-data in sc.descs.JetstreamInfo can be xrefed by the server_id.
 		// labels define the "uniqueness" of a time series, any associations beyond that should be left to prometheus
-		lblServerID := []string{sm.Server.ID}
+		lblServerID := []string{sm.Server.ID, sm.Server.Name, sm.Server.Cluster}
 		if sm.Stats.JetStream == nil {
 			ch <- newGaugeMetric(sc.descs.JetstreamEnabled, float64(0), lblServerID)
 		} else {
@@ -851,12 +853,12 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			}
 
 			if sm.Stats.JetStream.Meta == nil {
-				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(0), []string{"", "", sm.Server.ID, "", ""})
+				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(0), []string{"", "", sm.Server.ID, serverName(sm), "", ""})
 			} else {
-				jsRaftGroupInfoLabelValues := []string{jsDomainLabelValue(sm), "_meta_", sm.Server.ID, sm.Stats.JetStream.Meta.Name, sm.Stats.JetStream.Meta.Leader}
+				jsRaftGroupInfoLabelValues := []string{jsDomainLabelValue(sm), "_meta_", sm.Server.ID, serverName(sm), sm.Stats.JetStream.Meta.Name, sm.Stats.JetStream.Meta.Leader}
 				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(1), jsRaftGroupInfoLabelValues)
 
-				jsRaftGroupLabelValues := []string{sm.Server.ID}
+				jsRaftGroupLabelValues := []string{sm.Server.ID, serverName(sm), sm.Server.Cluster}
 				// FIXME: add labels needed or remove...
 
 				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupSize, float64(sm.Stats.JetStream.Meta.Size), jsRaftGroupLabelValues)
@@ -873,7 +875,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					if jsr == nil {
 						continue
 					}
-					jsClusterReplicaLabelValues := []string{sm.Server.ID, jsr.Name}
+					jsClusterReplicaLabelValues := []string{sm.Server.ID, serverName(sm), jsr.Name, sm.Server.Cluster}
 					ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaActive, float64(jsr.Active), jsClusterReplicaLabelValues)
 					if jsr.Current {
 						ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(1), jsClusterReplicaLabelValues)
