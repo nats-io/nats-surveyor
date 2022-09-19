@@ -37,7 +37,7 @@ var (
 		Use:     "nats-surveyor",
 		Short:   "Prometheus exporter for NATS",
 		RunE:    run,
-		Version: "v0.4.0",
+		Version: "v0.4.1",
 	}
 	logger = logrus.New()
 )
