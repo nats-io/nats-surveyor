@@ -15,9 +15,7 @@ package surveyor
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -519,28 +517,6 @@ func (sc *StatzCollector) poll() error {
 	return nil
 }
 
-var semVerRe = regexp.MustCompile(`\Av?([0-9]+)\.?([0-9]+)?\.?([0-9]+)?`)
-
-func versionComponents(version string) (major, minor, patch int, err error) {
-	m := semVerRe.FindStringSubmatch(version)
-	if m == nil {
-		return 0, 0, 0, errors.New("invalid semver")
-	}
-	major, err = strconv.Atoi(m[1])
-	if err != nil {
-		return -1, -1, -1, err
-	}
-	minor, err = strconv.Atoi(m[2])
-	if err != nil {
-		return -1, -1, -1, err
-	}
-	patch, err = strconv.Atoi(m[3])
-	if err != nil {
-		return -1, -1, -1, err
-	}
-	return major, minor, patch, err
-}
-
 func (sc *StatzCollector) pollAccountInfo() error {
 	nc := sc.nc
 	accs, err := getAccounts(nc)
@@ -584,23 +560,9 @@ func (sc *StatzCollector) pollAccountInfo() error {
 		sts.leafCount = float64(accInfo.LeafCnt)
 		sts.subCount = float64(accInfo.SubCnt)
 
-		maj, min, patch, err := versionComponents(nc.ConnectedServerVersion())
+		agg, err := getConnzAggregate(nc, sc.numServers, acc)
 		if err != nil {
 			return err
-		}
-
-		var agg connzAggregate
-
-		if maj < 2 || (maj >= 2 && min < 8) || (maj >= 2 && min >= 8 && patch < 5) {
-			agg, err = getAccountConns(nc, acc)
-			if err != nil {
-				return err
-			}
-		} else {
-			agg, err = getConnzAggregate(nc, sc.numServers, acc)
-			if err != nil {
-				return err
-			}
 		}
 
 		sts.bytesSent = agg.bytesSent
@@ -724,32 +686,6 @@ func getConnzAggregate(nc *nats.Conn, numServers int, account string) (connzAggr
 		}
 	}
 	s.Unsubscribe()
-
-	return agg, nil
-}
-
-func getAccountConns(nc *nats.Conn, account string) (connzAggregate, error) {
-	subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.CONNS", account)
-	var agg connzAggregate
-	for i := 0; i < 2; i++ {
-		msg, err := nc.Request(subj, nil, 100*time.Millisecond)
-		if err != nil && err == nats.ErrTimeout {
-			continue
-		}
-		if err != nil {
-			return connzAggregate{}, err
-		}
-
-		var d server.AccountStat
-		if err := json.Unmarshal(msg.Data, &d); err != nil {
-			return connzAggregate{}, err
-		}
-
-		agg.bytesRecv = float64(d.Received.Bytes)
-		agg.bytesSent = float64(d.Sent.Bytes)
-		agg.msgsRecv = float64(d.Received.Msgs)
-		agg.msgsSent = float64(d.Sent.Msgs)
-	}
 
 	return agg, nil
 }
