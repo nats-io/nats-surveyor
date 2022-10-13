@@ -560,10 +560,11 @@ func (sc *StatzCollector) pollAccountInfo() error {
 		sts.leafCount = float64(accInfo.LeafCnt)
 		sts.subCount = float64(accInfo.SubCnt)
 
-		agg, err := getConnzAggregate(nc, acc)
+		agg, err := getConnzAggregate(nc, sc.numServers, acc)
 		if err != nil {
 			return err
 		}
+
 		sts.bytesSent = agg.bytesSent
 		sts.bytesRecv = agg.bytesRecv
 		sts.msgsSent = agg.msgsSent
@@ -638,31 +639,53 @@ type connzAggregate struct {
 	msgsRecv  float64
 }
 
-func getConnzAggregate(nc *nats.Conn, account string) (connzAggregate, error) {
+func getConnzAggregate(nc *nats.Conn, numServers int, account string) (connzAggregate, error) {
 	// TODO: Replace with "$SYS.REQ.ACCOUNT.%s.CONNS" after NATS 2.8.4.
 	// CONNS returns bytes sent/recv at the account level without needing the
 	// following code.
 	subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.CONNZ", account)
-	msg, err := nc.Request(subj, nil, 3*time.Second)
+
+	rep := nc.NewRespInbox()
+
+	msg := nats.NewMsg(subj)
+	msg.Reply = rep
+	msg.Data = nil
+
+	s, err := nc.SubscribeSync(msg.Reply)
 	if err != nil {
 		return connzAggregate{}, err
 	}
 
-	var r server.ServerAPIResponse
-	var d server.Connz
-	r.Data = &d
-	if err := json.Unmarshal(msg.Data, &r); err != nil {
+	if err := nc.PublishMsg(msg); err != nil {
 		return connzAggregate{}, err
 	}
 
 	var agg connzAggregate
-	for _, c := range d.Conns {
-		agg.bytesSent += float64(c.InBytes)
-		agg.bytesRecv += float64(c.OutBytes)
+	var r server.ServerAPIResponse
+	var d server.Connz
+	r.Data = &d
 
-		agg.msgsSent += float64(c.InMsgs)
-		agg.msgsRecv += float64(c.OutMsgs)
+	for i := 0; i < numServers; i++ {
+		m, err := s.NextMsg(3 * time.Second)
+		if err != nil && err == nats.ErrTimeout {
+			break
+		}
+		if err != nil {
+			return connzAggregate{}, err
+		}
+
+		if err := json.Unmarshal(m.Data, &r); err != nil {
+			return connzAggregate{}, err
+		}
+
+		for _, c := range d.Conns {
+			agg.bytesSent += float64(c.InBytes)
+			agg.bytesRecv += float64(c.OutBytes)
+			agg.msgsSent += float64(c.InMsgs)
+			agg.msgsRecv += float64(c.OutMsgs)
+		}
 	}
+	s.Unsubscribe()
 
 	return agg, nil
 }
