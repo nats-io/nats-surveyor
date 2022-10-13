@@ -655,6 +655,7 @@ func getConnzAggregate(nc *nats.Conn, numServers int, account string) (connzAggr
 	if err != nil {
 		return connzAggregate{}, err
 	}
+	defer s.Unsubscribe()
 
 	if err := nc.PublishMsg(msg); err != nil {
 		return connzAggregate{}, err
@@ -685,7 +686,6 @@ func getConnzAggregate(nc *nats.Conn, numServers int, account string) (connzAggr
 			agg.msgsRecv += float64(c.OutMsgs)
 		}
 	}
-	s.Unsubscribe()
 
 	return agg, nil
 }
