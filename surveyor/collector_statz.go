@@ -560,7 +560,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 		sts.leafCount = float64(accInfo.LeafCnt)
 		sts.subCount = float64(accInfo.SubCnt)
 
-		agg, err := sc.getConnzAggregate(nc, sc.numServers, acc)
+		agg, err := sc.getConnzAggregate(nc, acc)
 		if err != nil {
 			return err
 		}
@@ -639,7 +639,7 @@ type connzAggregate struct {
 	msgsRecv  float64
 }
 
-func (sc *StatzCollector) getConnzAggregate(nc *nats.Conn, numServers int, account string) (connzAggregate, error) {
+func (sc *StatzCollector) getConnzAggregate(nc *nats.Conn, account string) (connzAggregate, error) {
 	// TODO: Replace with "$SYS.REQ.ACCOUNT.%s.CONNS" after NATS 2.8.4.
 	// CONNS returns bytes sent/recv at the account level without needing the
 	// following code.
@@ -666,7 +666,7 @@ func (sc *StatzCollector) getConnzAggregate(nc *nats.Conn, numServers int, accou
 	var d server.Connz
 	r.Data = &d
 
-	for i := 0; i < numServers; i++ {
+	for i := 0; i < sc.numServers; i++ {
 		m, err := s.NextMsg(sc.pollTimeout)
 		if err != nil && err == nats.ErrTimeout {
 			break
