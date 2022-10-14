@@ -519,7 +519,7 @@ func (sc *StatzCollector) poll() error {
 
 func (sc *StatzCollector) pollAccountInfo() error {
 	nc := sc.nc
-	accs, err := getAccounts(nc)
+	accs, err := sc.getAccounts(nc)
 	if err != nil {
 		return err
 	}
@@ -528,7 +528,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 	for _, acc := range accs {
 		sts := accountStats{accountID: acc}
 
-		accInfo, err := getAccountInfo(nc, acc)
+		accInfo, err := sc.getAccountInfo(nc, acc)
 		if err != nil {
 			return err
 		}
@@ -536,7 +536,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 		if accInfo.JetStream {
 			sts.jetstreamEnabled = 1.0
 
-			jsInfo, err := getJSInfo(nc, acc)
+			jsInfo, err := sc.getJSInfo(nc, acc)
 			if err != nil {
 				return err
 			}
@@ -560,7 +560,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 		sts.leafCount = float64(accInfo.LeafCnt)
 		sts.subCount = float64(accInfo.SubCnt)
 
-		agg, err := getConnzAggregate(nc, sc.numServers, acc)
+		agg, err := sc.getConnzAggregate(nc, acc)
 		if err != nil {
 			return err
 		}
@@ -580,9 +580,9 @@ func (sc *StatzCollector) pollAccountInfo() error {
 	return nil
 }
 
-func getAccounts(nc *nats.Conn) ([]string, error) {
+func (sc *StatzCollector) getAccounts(nc *nats.Conn) ([]string, error) {
 	const subj = "$SYS.REQ.SERVER.PING.ACCOUNTZ"
-	msg, err := nc.Request(subj, nil, 3*time.Second)
+	msg, err := nc.Request(subj, nil, sc.pollTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -597,9 +597,9 @@ func getAccounts(nc *nats.Conn) ([]string, error) {
 	sort.Strings(d.Accounts)
 	return d.Accounts, nil
 }
-func getAccountInfo(nc *nats.Conn, account string) (server.AccountInfo, error) {
+func (sc *StatzCollector) getAccountInfo(nc *nats.Conn, account string) (server.AccountInfo, error) {
 	subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.INFO", account)
-	msg, err := nc.Request(subj, nil, 3*time.Second)
+	msg, err := nc.Request(subj, nil, sc.pollTimeout)
 	if err != nil {
 		return server.AccountInfo{}, err
 	}
@@ -614,10 +614,10 @@ func getAccountInfo(nc *nats.Conn, account string) (server.AccountInfo, error) {
 	return d, nil
 }
 
-func getJSInfo(nc *nats.Conn, account string) (server.AccountDetail, error) {
+func (sc *StatzCollector) getJSInfo(nc *nats.Conn, account string) (server.AccountDetail, error) {
 	subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.JSZ", account)
 	opts := []byte(`{"streams": true, "consumer": true, "config": true}`)
-	msg, err := nc.Request(subj, opts, 3*time.Second)
+	msg, err := nc.Request(subj, opts, sc.pollTimeout)
 	if err != nil {
 		return server.AccountDetail{}, err
 	}
@@ -639,7 +639,7 @@ type connzAggregate struct {
 	msgsRecv  float64
 }
 
-func getConnzAggregate(nc *nats.Conn, numServers int, account string) (connzAggregate, error) {
+func (sc *StatzCollector) getConnzAggregate(nc *nats.Conn, account string) (connzAggregate, error) {
 	// TODO: Replace with "$SYS.REQ.ACCOUNT.%s.CONNS" after NATS 2.8.4.
 	// CONNS returns bytes sent/recv at the account level without needing the
 	// following code.
@@ -666,8 +666,8 @@ func getConnzAggregate(nc *nats.Conn, numServers int, account string) (connzAggr
 	var d server.Connz
 	r.Data = &d
 
-	for i := 0; i < numServers; i++ {
-		m, err := s.NextMsg(3 * time.Second)
+	for i := 0; i < sc.numServers; i++ {
+		m, err := s.NextMsg(sc.pollTimeout)
 		if err != nil && err == nats.ErrTimeout {
 			break
 		}
