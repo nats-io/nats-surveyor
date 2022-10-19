@@ -556,7 +556,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 			}
 		}
 
-		sts.connCount = float64(accInfo.ClientCnt)
+		//sts.connCount = float64(accInfo.ClientCnt)
 		sts.leafCount = float64(accInfo.LeafCnt)
 		sts.subCount = float64(accInfo.SubCnt)
 
@@ -565,6 +565,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 			return err
 		}
 
+		sts.connCount = agg.numConns
 		sts.bytesSent = agg.bytesSent
 		sts.bytesRecv = agg.bytesRecv
 		sts.msgsSent = agg.msgsSent
@@ -637,6 +638,7 @@ type connzAggregate struct {
 	bytesRecv float64
 	msgsSent  float64
 	msgsRecv  float64
+	numConns  float64
 }
 
 func (sc *StatzCollector) getConnzAggregate(nc *nats.Conn, account string) (connzAggregate, error) {
@@ -678,6 +680,8 @@ func (sc *StatzCollector) getConnzAggregate(nc *nats.Conn, account string) (conn
 		if err := json.Unmarshal(m.Data, &r); err != nil {
 			return connzAggregate{}, err
 		}
+
+		agg.numConns += float64(d.NumConns)
 
 		for _, c := range d.Conns {
 			agg.bytesSent += float64(c.InBytes)
