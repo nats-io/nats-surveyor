@@ -556,7 +556,6 @@ func (sc *StatzCollector) pollAccountInfo() error {
 			}
 		}
 
-		//sts.connCount = float64(accInfo.ClientCnt)
 		sts.leafCount = float64(accInfo.LeafCnt)
 		sts.subCount = float64(accInfo.SubCnt)
 
