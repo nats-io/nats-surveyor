@@ -134,14 +134,16 @@ func connect(opts *Options, reconnectCtr *prometheus.CounterVec) (*nats.Conn, er
 	}
 
 	nopts = append(nopts, nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
-		opts.Logger.Infof("%q disconnected, will possibly miss replies: %v", c.Opts.Name, err)
+		if err != nil {
+			opts.Logger.Warnf("%q disconnected, will possibly miss replies: %v", c.Opts.Name, err)
+		}
 	}))
 	nopts = append(nopts, nats.ReconnectHandler(func(c *nats.Conn) {
 		reconnectCtr.WithLabelValues(c.Opts.Name).Inc()
 		opts.Logger.Infof("%q reconnected to %v", c.Opts.Name, c.ConnectedAddr())
 	}))
 	nopts = append(nopts, nats.ClosedHandler(func(c *nats.Conn) {
-		opts.Logger.Warnf("%q connection permanently lost!", c.Opts.Name)
+		opts.Logger.Infof("%q connection closing", c.Opts.Name)
 	}))
 	nopts = append(nopts, nats.ErrorHandler(func(c *nats.Conn, s *nats.Subscription, err error) {
 		if s != nil {
