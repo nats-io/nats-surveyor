@@ -102,17 +102,19 @@ func GetDefaultOptions() *Options {
 // A Surveyor instance
 type Surveyor struct {
 	sync.Mutex
-	opts               Options
-	logger             *logrus.Logger
-	listener           net.Listener
-	httpServer         *http.Server
-	promRegistry       *prometheus.Registry
-	reconnectCtr       *prometheus.CounterVec
-	statzC             *StatzCollector
-	observationMetrics *ServiceObsMetrics
-	observations       []*ServiceObsListener
-	jsAPIMetrics       *JSAdvisoryMetrics
-	jsAPIAudits        []*JSAdvisoryListener
+	opts                Options
+	logger              *logrus.Logger
+	listener            net.Listener
+	httpServer          *http.Server
+	promRegistry        *prometheus.Registry
+	reconnectCtr        *prometheus.CounterVec
+	statzC              *StatzCollector
+	observationMetrics  *ServiceObsMetrics
+	observations        []*ServiceObsListener
+	jsAPIMetrics        *JSAdvisoryMetrics
+	jsAPIAudits         []*JSAdvisoryListener
+	observationWatchers map[string]struct{}
+	stop                chan struct{}
 }
 
 func connect(opts *Options, reconnectCtr *prometheus.CounterVec) (*nats.Conn, error) {
@@ -400,6 +402,7 @@ func (s *Surveyor) startJetStreamAdvisories() error {
 		return fmt.Errorf("JetStream API Audit dir %s is not a directory", dir)
 	}
 
+	// TODO: new watcher should be created in each directory
 	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -429,6 +432,7 @@ func (s *Surveyor) startJetStreamAdvisories() error {
 
 func (s *Surveyor) startObservations() error {
 	s.observations = []*ServiceObsListener{}
+	s.observationWatchers = make(map[string]struct{})
 	s.observationMetrics.observationsGauge.Set(0)
 
 	dir := s.opts.ObservationConfigDir
@@ -446,45 +450,27 @@ func (s *Surveyor) startObservations() error {
 		return fmt.Errorf("observations dir %s is not a directory", dir)
 	}
 
-	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+	err = filepath.WalkDir(dir, s.startObservationsInDir(5))
+	if err != nil {
+		return err
+	}
+	if err := s.watchObservations(dir, 5); err != nil {
+		return err
+	}
 
-		if filepath.Ext(info.Name()) != ".json" {
-			return nil
-		}
+	return nil
+}
 
-		obs, err := NewServiceObservation(path, s.opts, s.observationMetrics, s.reconnectCtr)
-		if err != nil {
-			return fmt.Errorf("could not create observation from %s: %s", path, err)
-		}
-
-		// Prevent an equal observation to be loaded twice
-		// This is a problem that occurs with k8s mounts
-		for _, existingObservation := range s.observations {
-			if obs.opts.ServiceName == existingObservation.opts.ServiceName {
-				return nil
-			}
-		}
-
-		err = obs.Start()
-		if err != nil {
-			return fmt.Errorf("could not start observation from %s: %s", path, err)
-		}
-
-		s.observations = append(s.observations, obs)
-
-		return nil
-	})
-
-	return err
+func (s *Surveyor) Observations() []*ServiceObsListener {
+	return s.observations
 }
 
 // Start starts the surveyor
 func (s *Surveyor) Start() error {
 	s.Lock()
 	defer s.Unlock()
+
+	s.stop = make(chan struct{})
 
 	if s.statzC == nil {
 		if err := s.createStatszCollector(); err != nil {
@@ -547,6 +533,7 @@ func (s *Surveyor) Stop() {
 		}
 		s.jsAPIAudits = nil
 	}
+	close(s.stop)
 }
 
 // Gather implements the prometheus.Gatherer interface

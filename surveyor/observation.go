@@ -17,10 +17,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/api/server/metric"
 	"github.com/nats-io/nats.go"
@@ -112,21 +115,23 @@ func NewServiceObservationMetrics(registry *prometheus.Registry, constLabels pro
 
 // ServiceObsListener listens for observations from nats service latency checks
 type ServiceObsListener struct {
-	nc      *nats.Conn
-	logger  *logrus.Logger
-	opts    *serviceObsOptions
-	metrics *ServiceObsMetrics
-	sopts   *Options
+	nc       *nats.Conn
+	logger   *logrus.Logger
+	opts     *ObservationConfig
+	metrics  *ServiceObsMetrics
+	sopts    *Options
+	fromFile string
 }
 
-type serviceObsOptions struct {
+// ObservationConfig is used to set up new service observations.
+type ObservationConfig struct {
 	ServiceName string `json:"name"`
 	Topic       string `json:"topic"`
 	Credentials string `json:"credential"`
 	Nkey        string `json:"nkey"`
 }
 
-func (o *serviceObsOptions) Validate() error {
+func (o *ObservationConfig) Validate() error {
 	errs := []string{}
 
 	if o.ServiceName == "" {
@@ -161,27 +166,42 @@ func (o *serviceObsOptions) Validate() error {
 	return errors.New(strings.Join(errs, ", "))
 }
 
-// NewServiceObservation creates a new performance observation listener
-func NewServiceObservation(f string, sopts Options, metrics *ServiceObsMetrics, reconnectCtr *prometheus.CounterVec) (*ServiceObsListener, error) {
+// NewServiceObservationFromFile creates a new performance observation listener
+func NewServiceObservationFromFile(f string, sopts Options, metrics *ServiceObsMetrics, reconnectCtr *prometheus.CounterVec) (*ServiceObsListener, error) {
 	js, err := os.ReadFile(f)
 	if err != nil {
 		return nil, err
 	}
 
-	opts := &serviceObsOptions{}
+	opts := &ObservationConfig{}
 	err = json.Unmarshal(js, opts)
 	if err != nil {
 		return nil, fmt.Errorf("invalid service observation configuration: %s: %s", f, err)
 	}
-
 	err = opts.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("invalid service observation configuration: %s: %s", f, err)
 	}
 
-	sopts.Name = fmt.Sprintf("%s (observing %s)", sopts.Name, opts.ServiceName)
-	sopts.Credentials = opts.Credentials
-	sopts.Nkey = opts.Nkey
+	obs, err := newServiceObservation(*opts, sopts, metrics, reconnectCtr)
+	if err != nil {
+		return nil, err
+	}
+
+	obs.fromFile = f
+
+	return obs, nil
+}
+
+func newServiceObservation(observationConfig ObservationConfig, sopts Options, metrics *ServiceObsMetrics, reconnectCtr *prometheus.CounterVec) (*ServiceObsListener, error) {
+	err := observationConfig.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("invalid service observation configuration: %s: %s", observationConfig.ServiceName, err)
+	}
+
+	sopts.Name = fmt.Sprintf("%s (observing %s)", sopts.Name, observationConfig.ServiceName)
+	sopts.Credentials = observationConfig.Credentials
+	sopts.Nkey = observationConfig.Nkey
 	nc, err := connect(&sopts, reconnectCtr)
 	if err != nil {
 		return nil, fmt.Errorf("nats connection failed: %s", err)
@@ -190,10 +210,44 @@ func NewServiceObservation(f string, sopts Options, metrics *ServiceObsMetrics, 
 	return &ServiceObsListener{
 		nc:      nc,
 		logger:  sopts.Logger,
-		opts:    opts,
+		opts:    &observationConfig,
 		metrics: metrics,
 		sopts:   &sopts,
 	}, nil
+}
+
+func (s *Surveyor) startObservationsInDir(depth int) fs.WalkDirFunc {
+	return func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if filepath.Ext(info.Name()) != ".json" {
+			return nil
+		}
+
+		obs, err := NewServiceObservationFromFile(path, s.opts, s.observationMetrics, s.reconnectCtr)
+		if err != nil {
+			return fmt.Errorf("could not create observation from %s: %s", path, err)
+		}
+
+		// Prevent an equal observation to be loaded twice
+		// This is a problem that occurs with k8s mounts
+		for _, existingObservation := range s.observations {
+			if obs.opts.ServiceName == existingObservation.opts.ServiceName {
+				return nil
+			}
+		}
+
+		err = obs.Start()
+		if err != nil {
+			return fmt.Errorf("could not start observation from %s: %s", path, err)
+		}
+
+		s.observations = append(s.observations, obs)
+
+		return nil
+	}
 }
 
 // Start starts listening for observations
@@ -246,5 +300,282 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 
 // Stop closes the connection to the network
 func (o *ServiceObsListener) Stop() {
+	o.metrics.observationsGauge.Dec()
 	o.nc.Close()
+}
+
+func (s *Surveyor) watchObservations(dir string, depth int) error {
+	if depth == 0 {
+		return fmt.Errorf("exceeded observation dir max depth")
+	}
+	if dir == "" {
+		return nil
+	}
+
+	go func() {
+		s.Mutex.Lock()
+		if _, ok := s.observationWatchers[dir]; ok {
+			return
+		}
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			s.logger.Errorf("error creating watcher: %s", err)
+			s.Mutex.Unlock()
+			return
+		}
+
+		if err := watcher.Add(dir); err != nil {
+			s.logger.Errorf("error adding dir to watcher: %s", err)
+			s.Mutex.Unlock()
+			return
+		}
+		defer watcher.Close()
+		s.observationWatchers[dir] = struct{}{}
+		s.Mutex.Unlock()
+		s.logger.Debugf("starting listener goroutine for %s", dir)
+	Outer:
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				path := event.Name
+				if !ok {
+					return
+				}
+				switch {
+				case event.Has(fsnotify.Create):
+					fs, err := os.Stat(path)
+					if err != nil {
+						s.logger.Warnf("could not read observation file %s: %s", path, err)
+					}
+					if filepath.Ext(fs.Name()) == ".json" {
+						obs, err := NewServiceObservationFromFile(path, s.opts, s.observationMetrics, s.reconnectCtr)
+						if err != nil {
+							s.logger.Warnf("could not create observation from %s: %s", path, err)
+							continue
+						}
+						for _, existingObservation := range s.observations {
+							if obs.opts.ServiceName == existingObservation.opts.ServiceName {
+								continue Outer
+							}
+						}
+
+						err = obs.Start()
+						if err != nil {
+							s.logger.Warnf("could not start observation from %s: %s", path, err)
+							continue
+						}
+
+						s.Mutex.Lock()
+						s.observations = append(s.observations, obs)
+						s.Mutex.Unlock()
+					}
+					if fs.IsDir() {
+						depth--
+						err = filepath.WalkDir(path, s.startObservationsInDir(depth))
+						if err != nil {
+							s.logger.Warnf("could not start observation from %s: %s", path, err)
+							continue
+						}
+						if err := s.watchObservations(path, depth); err != nil {
+							s.logger.Errorf("could not start watcher in directory %s: %s", path, err)
+							continue
+						}
+					}
+				case event.Has(fsnotify.Write) && !event.Has(fsnotify.Remove):
+					fs, err := os.Stat(path)
+					if err != nil {
+						s.logger.Warnf("could not read observation file %s: %s", path, err)
+						continue
+					}
+					if filepath.Ext(fs.Name()) != ".json" {
+						continue
+					}
+					s.Mutex.Lock()
+					obs, err := NewServiceObservationFromFile(path, s.opts, s.observationMetrics, s.reconnectCtr)
+					for i, existingObservation := range s.observations {
+						// overwrite service observation in a file
+						if path == existingObservation.fromFile {
+							existingObservation.Stop()
+							if i < len(s.observations)-1 {
+								s.observations = append(s.observations[:i], s.observations[i+1:]...)
+							} else {
+								s.observations = s.observations[:i]
+							}
+						}
+
+						// ignore service if it already exists
+						if obs.opts.ServiceName == existingObservation.opts.ServiceName {
+							s.Mutex.Unlock()
+							continue Outer
+						}
+					}
+					if err != nil {
+						s.logger.Warnf("could not create observation from %s: %s", path, err)
+						s.Mutex.Unlock()
+						continue
+					}
+
+					err = obs.Start()
+					if err != nil {
+						s.logger.Warnf("could not start observation from %s: %s", path, err)
+						s.Mutex.Unlock()
+						continue
+					}
+
+					s.observations = append(s.observations, obs)
+					s.Mutex.Unlock()
+
+				case event.Has(fsnotify.Remove):
+					if _, ok := s.observationWatchers[path]; ok {
+						s.Mutex.Lock()
+						for i := 0; ; i++ {
+							if i > len(s.observations)-1 {
+								break
+							}
+							if strings.HasPrefix(s.observations[i].fromFile, path) {
+								s.observations[i].Stop()
+								if i < len(s.observations)-1 {
+									s.observations = append(s.observations[:i], s.observations[i+1:]...)
+								} else {
+									s.observations = s.observations[:i]
+								}
+								i--
+							}
+						}
+						delete(s.observationWatchers, path)
+						s.Mutex.Unlock()
+						watcher.Remove(path)
+						continue Outer
+					}
+					if filepath.Ext(path) != ".json" {
+						continue
+					}
+					s.Mutex.Lock()
+					for i := 0; ; i++ {
+						if i > len(s.observations)-1 {
+							break
+						}
+						if s.observations[i].fromFile == path {
+							s.observations[i].Stop()
+							if i < len(s.observations)-1 {
+								s.observations = append(s.observations[:i], s.observations[i+1:]...)
+							} else {
+								s.observations = s.observations[:i]
+							}
+							i--
+						}
+					}
+					s.Mutex.Unlock()
+				}
+			case <-s.stop:
+				return
+			}
+		}
+	}()
+	return nil
+}
+
+type ManageObservationOpts func(*ObservationsManager) error
+
+type ObservationErrHandler func(string, error)
+
+type ObservationsManager struct {
+	surveyor           *Surveyor
+	addObservation     chan ObservationConfig
+	deleteObseravation chan string
+	errHandler         ObservationErrHandler
+}
+
+// ObservationsError is a configuration option for [ManageObservations].
+// It sets error handler invoked when adding/deleting observations fails.
+func ObservationsError(handler ObservationErrHandler) ManageObservationOpts {
+	return func(om *ObservationsManager) error {
+		om.errHandler = handler
+		return nil
+	}
+}
+
+// ManageObservations creates an ObservationManager, allowing for adding/deleting service observations to the surveyor.
+//
+// ManageObservationOpts can be supplied to configure ObservationsManager.
+func (s *Surveyor) ManageObservastions(opts ...ManageObservationOpts) (*ObservationsManager, error) {
+	obsManager := &ObservationsManager{
+		surveyor:           s,
+		addObservation:     make(chan ObservationConfig, 100),
+		deleteObseravation: make(chan string, 100),
+	}
+	for _, opt := range opts {
+		if err := opt(obsManager); err != nil {
+			return nil, err
+		}
+	}
+	go func() {
+	Outer:
+		for {
+			select {
+			case obsConfig := <-obsManager.addObservation:
+				s.Mutex.Lock()
+				obs, err := newServiceObservation(obsConfig, s.opts, s.observationMetrics, s.reconnectCtr)
+				if err != nil {
+					s.logger.Warnf("could not create observation from config: %s: %s", obsConfig.ServiceName, err)
+					if obsManager.errHandler != nil {
+						obsManager.errHandler(obsConfig.ServiceName, err)
+					}
+					s.Mutex.Unlock()
+					continue
+				}
+				for _, existingObservation := range s.observations {
+					if obs.opts.ServiceName == existingObservation.opts.ServiceName {
+						s.logger.Warnf("adding service observation: observation with given service name already exists: %s", obsConfig.ServiceName)
+						s.Mutex.Unlock()
+						continue Outer
+					}
+				}
+				err = obs.Start()
+				if err != nil {
+					s.logger.Warnf("could not start observation for service: %s: %s", obsConfig.ServiceName, err)
+					s.Mutex.Unlock()
+					continue
+				}
+
+				s.observations = append(s.observations, obs)
+				s.Mutex.Unlock()
+			case serviceName := <-obsManager.deleteObseravation:
+				s.Mutex.Lock()
+				var found bool
+				for i, existingObservation := range s.observations {
+					if serviceName == existingObservation.opts.ServiceName {
+						found = true
+						existingObservation.Stop()
+						if i < len(s.observations)-1 {
+							s.observations = append(s.observations[:i], s.observations[i+1:]...)
+						} else {
+							s.observations = s.observations[:i]
+						}
+					}
+				}
+				if !found {
+					s.logger.Warnf("deleting service observation: observation with given service name does not exist: %s", serviceName)
+				}
+				s.Mutex.Unlock()
+			case <-s.stop:
+				return
+			}
+		}
+	}()
+	return obsManager, nil
+}
+
+// AddObservations creates and starts new service observations.
+func (om *ObservationsManager) AddObservations(observations ...ObservationConfig) {
+	for _, obsConfig := range observations {
+		om.addObservation <- obsConfig
+	}
+}
+
+// DeleteObservations deletes exisiting observations with oprovided service names.
+func (om *ObservationsManager) DeleteObservations(serviceNames ...string) {
+	for _, serviceName := range serviceNames {
+		om.deleteObseravation <- serviceName
+	}
 }
