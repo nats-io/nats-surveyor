@@ -450,7 +450,7 @@ func (s *Surveyor) startObservations() error {
 		return fmt.Errorf("observations dir %s is not a directory", dir)
 	}
 
-	err = filepath.WalkDir(dir, s.startObservationsInDir(5))
+	err = filepath.WalkDir(dir, s.startObservationsInDir())
 	if err != nil {
 		return err
 	}

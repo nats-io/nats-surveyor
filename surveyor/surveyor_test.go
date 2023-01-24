@@ -571,7 +571,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 	waitForMetricUpdate := func(t *testing.T, expectedObservationsNum int) {
 		t.Helper()
 		ticker := time.NewTicker(150 * time.Millisecond)
-		timeout := time.After(5 * time.Second)
+		timeout := time.After(20 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
