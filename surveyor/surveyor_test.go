@@ -573,7 +573,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 	waitForMetricUpdate := func(t *testing.T, expectedObservationsNum int) {
 		t.Helper()
 		ticker := time.NewTicker(150 * time.Millisecond)
-		timeout := time.After(2 * time.Minute)
+		timeout := time.After(5 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
@@ -628,22 +628,6 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("Error writing to file: %s", err)
 		}
 		time.Sleep(500 * time.Millisecond)
-		waitForMetricUpdate(t, 2)
-	})
-
-	t.Run("modify existing observation", func(t *testing.T) {
-		obsConfig := ObservationConfig{
-			ServiceName: "testing_modified",
-			Topic:       "testing.updated.topic",
-			Credentials: "../test/myuser.creds",
-		}
-		obsConfigJSON, err := json.Marshal(obsConfig)
-		if err != nil {
-			t.Fatalf("marshalling error: %s", err)
-		}
-		if err := os.WriteFile(fmt.Sprintf("%s/write.json", dirName), obsConfigJSON, 0600); err != nil {
-			t.Fatalf("Error writing to file: %s", err)
-		}
 		waitForMetricUpdate(t, 2)
 	})
 

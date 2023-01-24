@@ -357,7 +357,6 @@ func (s *Surveyor) handleWatcherEvent(event fsnotify.Event, depth int) error {
 
 	switch {
 	case event.Has(fsnotify.Create):
-		s.logger.Warnf("Creating observation: %s", path)
 		fs, err := os.Stat(path)
 		if err != nil {
 			return fmt.Errorf("could not read observation file %s: %s", path, err)
@@ -397,7 +396,6 @@ func (s *Surveyor) handleWatcherEvent(event fsnotify.Event, depth int) error {
 
 		s.observations = append(s.observations, obs)
 	case event.Has(fsnotify.Write) && !event.Has(fsnotify.Remove):
-		s.logger.Warnf("Writing observation: %s", path)
 		fs, err := os.Stat(path)
 		if err != nil {
 			return fmt.Errorf("could not read observation file %s: %s", path, err)
@@ -407,17 +405,7 @@ func (s *Surveyor) handleWatcherEvent(event fsnotify.Event, depth int) error {
 			return nil
 		}
 		obs, err := NewServiceObservationFromFile(path, s.opts, s.observationMetrics, s.reconnectCtr)
-		for i, existingObservation := range s.observations {
-			// overwrite service observation in a file
-			if path == existingObservation.fromFile {
-				existingObservation.Stop()
-				if i < len(s.observations)-1 {
-					s.observations = append(s.observations[:i], s.observations[i+1:]...)
-				} else {
-					s.observations = s.observations[:i]
-				}
-			}
-
+		for _, existingObservation := range s.observations {
 			// ignore service if it already exists
 			if obs.opts.ServiceName == existingObservation.opts.ServiceName {
 				return fmt.Errorf("service observation with provided service name already exists: %s", obs.opts.ServiceName)
@@ -435,7 +423,6 @@ func (s *Surveyor) handleWatcherEvent(event fsnotify.Event, depth int) error {
 		s.observations = append(s.observations, obs)
 
 	case event.Has(fsnotify.Remove):
-		s.logger.Warnf("Removing observation: %s", path)
 		// directory removed, delete all observations inside and cancel watching this dir
 		if _, ok := s.observationWatchers[path]; ok {
 			for i := 0; ; i++ {
