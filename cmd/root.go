@@ -37,9 +37,10 @@ var (
 		Use:     "nats-surveyor",
 		Short:   "Prometheus exporter for NATS",
 		RunE:    run,
-		Version: "v0.4.1",
+		Version: Version,
 	}
 	logger = logrus.New()
+    Version = "v0.0.0"
 )
 
 // long flags that were introduced <=v0.2.2 originally used 'flag' package must be parsed as legacy flags
