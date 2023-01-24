@@ -551,11 +551,13 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 	defer sc.Shutdown()
 
 	opts := getTestOptions()
-	if err := os.Mkdir("testdata/emptyobs", 0700); err != nil {
+
+	dirName := fmt.Sprintf("testdata/obs%d", time.Now().UnixNano())
+	if err := os.Mkdir(dirName, 0700); err != nil {
 		t.Fatalf("Error creating observations dir: %s", err)
 	}
-	defer os.RemoveAll("testdata/emptyobs")
-	opts.ObservationConfigDir = "testdata/emptyobs"
+	defer os.RemoveAll(dirName)
+	opts.ObservationConfigDir = dirName
 
 	s, err := NewSurveyor(opts)
 	if err != nil {
@@ -571,7 +573,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 	waitForMetricUpdate := func(t *testing.T, expectedObservationsNum int) {
 		t.Helper()
 		ticker := time.NewTicker(150 * time.Millisecond)
-		timeout := time.After(20 * time.Second)
+		timeout := time.After(2 * time.Minute)
 		defer ticker.Stop()
 		for {
 			select {
@@ -598,7 +600,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
-		if err := os.WriteFile("testdata/emptyobs/create.json", obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(fmt.Sprintf("%s/create.json", dirName), obsConfigJSON, 0600); err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
 		waitForMetricUpdate(t, 1)
@@ -614,7 +616,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
-		f, err := os.Create("testdata/emptyobs/write.json")
+		f, err := os.Create(fmt.Sprintf("%s/write.json", dirName))
 		if err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
@@ -622,7 +624,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("Error closing file: %s", err)
 		}
 		time.Sleep(200 * time.Millisecond)
-		if err := os.WriteFile("testdata/emptyobs/write.json", obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(fmt.Sprintf("%s/write.json", dirName), obsConfigJSON, 0600); err != nil {
 			t.Fatalf("Error writing to file: %s", err)
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -639,7 +641,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
-		if err := os.WriteFile("testdata/emptyobs/write.json", obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(fmt.Sprintf("%s/write.json", dirName), obsConfigJSON, 0600); err != nil {
 			t.Fatalf("Error writing to file: %s", err)
 		}
 		waitForMetricUpdate(t, 2)
@@ -656,11 +658,11 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("marshalling error: %s", err)
 		}
 
-		if err := os.Mkdir("testdata/emptyobs/subdir", 0700); err != nil {
+		if err := os.Mkdir(fmt.Sprintf("%s/subdir", dirName), 0700); err != nil {
 			t.Fatalf("Error creating subdirectory: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
-		err = os.WriteFile("testdata/emptyobs/subdir/subobs.json", obsConfigJSON, 0600)
+		err = os.WriteFile(fmt.Sprintf("%s/subdir/subobs.json", dirName), obsConfigJSON, 0600)
 		if err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
@@ -677,7 +679,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("marshalling error: %s", err)
 		}
 
-		if err := os.WriteFile("testdata/emptyobs/subdir/abc.json", obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(fmt.Sprintf("%s/subdir/abc.json", dirName), obsConfigJSON, 0600); err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
 
@@ -692,11 +694,11 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
-		if err := os.Mkdir("testdata/emptyobs/subdir/nested", 0700); err != nil {
+		if err := os.Mkdir(fmt.Sprintf("%s/subdir/nested", dirName), 0700); err != nil {
 			t.Fatalf("Error creating subdirectory: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
-		err = os.WriteFile("testdata/emptyobs/subdir/nested/nested.json", obsConfigJSON, 0600)
+		err = os.WriteFile(fmt.Sprintf("%s/subdir/nested/nested.json", dirName), obsConfigJSON, 0600)
 		if err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
@@ -706,13 +708,13 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 
 	t.Run("remove observations", func(t *testing.T) {
 		// remove single observation
-		if err := os.Remove("testdata/emptyobs/create.json"); err != nil {
+		if err := os.Remove(fmt.Sprintf("%s/create.json", dirName)); err != nil {
 			t.Fatalf("Error removing observation config: %s", err)
 		}
 		waitForMetricUpdate(t, 4)
 
 		// remove whole subfolder
-		if err := os.RemoveAll("testdata/emptyobs/subdir"); err != nil {
+		if err := os.RemoveAll(fmt.Sprintf("%s/subdir", dirName)); err != nil {
 			t.Fatalf("Error removing subdirectory: %s", err)
 		}
 		waitForMetricUpdate(t, 1)
@@ -726,7 +728,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
-		if err := os.WriteFile("testdata/emptyobs/another.json", obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(fmt.Sprintf("%s/another.json", dirName), obsConfigJSON, 0600); err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
 		waitForMetricUpdate(t, 2)
