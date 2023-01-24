@@ -41,5 +41,5 @@ jobs:
         REGISTRY: "natsio"
       with:
         push: true
-      set:
-        goreleaser.args.GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+        set:
+          goreleaser.args.GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
