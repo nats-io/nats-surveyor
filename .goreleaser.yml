@@ -10,24 +10,23 @@ release:
   name_template: 'Release {{.Tag}}'
 
 builds:
-- goos:
-  - linux
-  - darwin
-  - windows
-  goarch:
-  - 386
-  - amd64
-  - arm
-  - arm64
-  goarm:
-  - 6
-  - 7
-  ignore:
-    - goos: darwin
-      goarch: 386
-
-  main: .
-  binary: nats-surveyor
+  - main: .
+    binary: nats-surveyor
+    goos:
+    - linux
+    - darwin
+    - windows
+    goarch:
+    - 386
+    - amd64
+    - arm
+    - arm64
+    goarm:
+    - 6
+    - 7
+    ignore:
+      - goos: darwin
+        goarch: 386
 
 archives:
   - id: zipfiles
@@ -41,8 +40,7 @@ archives:
     - nats-surveyor*
 
 nfpms:
-  -
-    formats:
+  - formats:
       - deb
     file_name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
       }}v{{ .Arm }}{{ end }}'
@@ -58,8 +56,3 @@ snapshot:
 
 checksum:
   name_template: '{{ .ProjectName }}-v{{ .Version }}-checksums.txt'
-
-dist: dist
-
-github_urls:
-  download: https://github.com
