@@ -12,6 +12,8 @@ release:
 builds:
   - main: .
     binary: nats-surveyor
+    ldflags:
+      - "-s -w -X github.com/nats-io/nats-surveyor/cmd.Version={{ .Tag }}"
     goos:
     - linux
     - darwin
