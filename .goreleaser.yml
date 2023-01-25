@@ -14,6 +14,9 @@ builds:
     binary: nats-surveyor
     ldflags:
       - "-s -w -X github.com/nats-io/nats-surveyor/cmd.Version={{ .Tag }}"
+    env:
+      - GO111MODULE=on
+      - CGO_ENABLED=0
     goos:
     - linux
     - darwin
