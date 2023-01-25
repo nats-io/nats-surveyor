@@ -363,7 +363,7 @@ func (s *Surveyor) handleWatcherEvent(event fsnotify.Event, depth int) error {
 		}
 		// if a new directory was created, first start all observation already in it
 		// and then start watchong for changes in this directory (fsnotify.Watcher is not recursive)
-		if fs.IsDir() {
+		if fs.IsDir() && fs.Name() != "." {
 			depth--
 			err = filepath.WalkDir(path, s.startObservationsInDir())
 			if err != nil {
@@ -467,34 +467,41 @@ func removeObservation(observations []*ServiceObsListener, i int) []*ServiceObsL
 	return observations
 }
 
-type ManageObservationOpts func(*ObservationsManager) error
+type ManageObservationsOpt func(*ObservationsManager) error
 
 type ObservationErrHandler func(string, error)
 
 type ObservationsManager struct {
-	surveyor           *Surveyor
-	addObservation     chan ObservationConfig
-	deleteObseravation chan string
-	errHandler         ObservationErrHandler
+	surveyor            *Surveyor
+	addObservations     chan ObservationConfig
+	deleteObseravations chan string
+	updateObservations  chan UpdateObservation
+	errHandler          ObservationErrHandler
+}
+
+type UpdateObservation struct {
+	Name   string
+	Config ObservationConfig
 }
 
 // ObservationsError is a configuration option for [ManageObservations].
 // It sets error handler invoked when adding/deleting observations fails.
-func ObservationsError(handler ObservationErrHandler) ManageObservationOpts {
+func ObservationsError(handler ObservationErrHandler) ManageObservationsOpt {
 	return func(om *ObservationsManager) error {
 		om.errHandler = handler
 		return nil
 	}
 }
 
-// ManageObservastions creates an ObservationManager, allowing for adding/deleting service observations to the surveyor.
+// ManageObservations creates an ObservationManager, allowing for adding/deleting service observations to the surveyor.
 //
 // ManageObservationOpts can be supplied to configure ObservationsManager.
-func (s *Surveyor) ManageObservastions(opts ...ManageObservationOpts) (*ObservationsManager, error) {
+func (s *Surveyor) ManageObservations(opts ...ManageObservationsOpt) (*ObservationsManager, error) {
 	obsManager := &ObservationsManager{
-		surveyor:           s,
-		addObservation:     make(chan ObservationConfig, 100),
-		deleteObseravation: make(chan string, 100),
+		surveyor:            s,
+		addObservations:     make(chan ObservationConfig, 100),
+		updateObservations:  make(chan UpdateObservation, 100),
+		deleteObseravations: make(chan string, 100),
 	}
 	for _, opt := range opts {
 		if err := opt(obsManager); err != nil {
@@ -502,54 +509,20 @@ func (s *Surveyor) ManageObservastions(opts ...ManageObservationOpts) (*Observat
 		}
 	}
 	go func() {
-	Outer:
 		for {
 			select {
-			case obsConfig := <-obsManager.addObservation:
-				s.Mutex.Lock()
-				obs, err := newServiceObservation(obsConfig, s.opts, s.observationMetrics, s.reconnectCtr)
-				if err != nil {
-					s.logger.Warnf("could not create observation from config: %s: %s", obsConfig.ServiceName, err)
-					if obsManager.errHandler != nil {
-						obsManager.errHandler(obsConfig.ServiceName, err)
-					}
-					s.Mutex.Unlock()
-					continue
+			case obsConfig := <-obsManager.addObservations:
+				if err := obsManager.addObservation(obsConfig); err != nil {
+					s.logger.Warnf("adding service observation: %s", err)
 				}
-				for _, existingObservation := range s.observations {
-					if obs.opts.ServiceName == existingObservation.opts.ServiceName {
-						s.logger.Warnf("adding service observation: observation with given service name already exists: %s", obsConfig.ServiceName)
-						s.Mutex.Unlock()
-						continue Outer
-					}
+			case updateObservation := <-obsManager.updateObservations:
+				if err := obsManager.updateObservation(updateObservation); err != nil {
+					s.logger.Warnf("updating service observation: %s", err)
 				}
-				err = obs.Start()
-				if err != nil {
-					s.logger.Warnf("could not start observation for service: %s: %s", obsConfig.ServiceName, err)
-					s.Mutex.Unlock()
-					continue
+			case serviceName := <-obsManager.deleteObseravations:
+				if err := obsManager.deleteObservation(serviceName); err != nil {
+					s.logger.Warnf("deleting service observation: %s", err)
 				}
-
-				s.observations = append(s.observations, obs)
-				s.Mutex.Unlock()
-			case serviceName := <-obsManager.deleteObseravation:
-				s.Mutex.Lock()
-				var found bool
-				for i, existingObservation := range s.observations {
-					if serviceName == existingObservation.opts.ServiceName {
-						found = true
-						existingObservation.Stop()
-						if i < len(s.observations)-1 {
-							s.observations = append(s.observations[:i], s.observations[i+1:]...)
-						} else {
-							s.observations = s.observations[:i]
-						}
-					}
-				}
-				if !found {
-					s.logger.Warnf("deleting service observation: observation with given service name does not exist: %s", serviceName)
-				}
-				s.Mutex.Unlock()
 			case <-s.stop:
 				return
 			}
@@ -558,16 +531,118 @@ func (s *Surveyor) ManageObservastions(opts ...ManageObservationOpts) (*Observat
 	return obsManager, nil
 }
 
+func (om *ObservationsManager) addObservation(obsConfig ObservationConfig) error {
+	om.surveyor.Lock()
+	defer om.surveyor.Unlock()
+	for _, existingObservation := range om.surveyor.observations {
+		if obsConfig.ServiceName == existingObservation.opts.ServiceName {
+			return fmt.Errorf("observation with given service name already exists: %s", obsConfig.ServiceName)
+		}
+	}
+	obs, err := newServiceObservation(obsConfig, om.surveyor.opts, om.surveyor.observationMetrics, om.surveyor.reconnectCtr)
+	if err != nil {
+		if om.errHandler != nil {
+			om.errHandler(obsConfig.ServiceName, err)
+		}
+		return fmt.Errorf("could not create observation from config: %s: %s", obsConfig.ServiceName, err)
+	}
+
+	if err := obs.Start(); err != nil {
+		if om.errHandler != nil {
+			om.errHandler(obsConfig.ServiceName, err)
+		}
+		return fmt.Errorf("could not start observation for service: %s: %s", obsConfig.ServiceName, err)
+	}
+
+	om.surveyor.observations = append(om.surveyor.observations, obs)
+	return nil
+}
+
+func (om *ObservationsManager) updateObservation(updateObservation UpdateObservation) error {
+	om.surveyor.Lock()
+	defer om.surveyor.Unlock()
+	var found bool
+	var obsIndex int
+	for i, existingObservation := range om.surveyor.observations {
+		if updateObservation.Name == existingObservation.opts.ServiceName {
+			found = true
+			obsIndex = i
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("observation with provided name does not exist: %s", updateObservation.Name)
+	}
+	obs, err := newServiceObservation(updateObservation.Config, om.surveyor.opts, om.surveyor.observationMetrics, om.surveyor.reconnectCtr)
+	if err != nil {
+		if om.errHandler != nil {
+			om.errHandler(updateObservation.Config.ServiceName, err)
+		}
+		return fmt.Errorf("could not create observation from config: %s: %s", updateObservation.Config.ServiceName, err)
+	}
+	if err := obs.Start(); err != nil {
+		if om.errHandler != nil {
+			om.errHandler(updateObservation.Config.ServiceName, err)
+		}
+		return fmt.Errorf("could not start observation for service: %s: %s", updateObservation.Config.ServiceName, err)
+	}
+
+	om.surveyor.observations[obsIndex].Stop()
+	om.surveyor.observations[obsIndex] = obs
+	return nil
+}
+
+func (om *ObservationsManager) deleteObservation(serviceName string) error {
+	om.surveyor.Lock()
+	defer om.surveyor.Unlock()
+	var found bool
+	for i, existingObservation := range om.surveyor.observations {
+		if serviceName == existingObservation.opts.ServiceName {
+			found = true
+			existingObservation.Stop()
+			if i < len(om.surveyor.observations)-1 {
+				om.surveyor.observations = append(om.surveyor.observations[:i], om.surveyor.observations[i+1:]...)
+			} else {
+				om.surveyor.observations = om.surveyor.observations[:i]
+			}
+		}
+	}
+	if !found {
+		return fmt.Errorf("observation with given service name does not exist: %s", serviceName)
+	}
+	return nil
+}
+
 // AddObservations creates and starts new service observations.
+// If service observation with given name already exists, it will not be updated.
 func (om *ObservationsManager) AddObservations(observations ...ObservationConfig) {
 	for _, obsConfig := range observations {
-		om.addObservation <- obsConfig
+		om.addObservations <- obsConfig
 	}
 }
 
-// DeleteObservations deletes exisiting observations with oprovided service names.
+// DeleteObservations deletes exisiting observations with provided service names.
 func (om *ObservationsManager) DeleteObservations(serviceNames ...string) {
 	for _, serviceName := range serviceNames {
-		om.deleteObseravation <- serviceName
+		om.deleteObseravations <- serviceName
 	}
+}
+
+// UpdateObservations updates exisiting observations.
+// Service observation with provided name has to exist for the update to succeed.
+func (om *ObservationsManager) UpdateObservations(observations ...UpdateObservation) {
+	for _, obsUpdate := range observations {
+		om.updateObservations <- obsUpdate
+	}
+}
+
+// GetObservations returns configs of all running service observations.
+func (om *ObservationsManager) GetObservations() []ObservationConfig {
+	om.surveyor.Lock()
+	defer om.surveyor.Unlock()
+	observations := make([]ObservationConfig, 0, len(om.surveyor.observations))
+	for _, obs := range om.surveyor.observations {
+		observations = append(observations, *obs.opts)
+	}
+	return observations
 }

@@ -446,11 +446,34 @@ func TestSurveyor_Observations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
 	}
+
+	waitForMetricUpdate := func(t *testing.T, expectedObservationsNum int) {
+		t.Helper()
+		ticker := time.NewTicker(150 * time.Millisecond)
+		timeout := time.After(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				observationsNum := ptu.ToFloat64(s.observationMetrics.observationsGauge)
+				if observationsNum == float64(expectedObservationsNum) {
+					return
+				}
+			case <-timeout:
+				observationsNum := ptu.ToFloat64(s.observationMetrics.observationsGauge)
+				t.Fatalf("process error: invalid number of observations; want: %d; got: %f\n", expectedObservationsNum, observationsNum)
+				return
+			}
+		}
+	}
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
 	defer s.Stop()
-	obsManager, err := s.ManageObservastions()
+	errs := make(chan error, 10)
+	obsManager, err := s.ManageObservations(ObservationsError(func(s string, err error) {
+		errs <- err
+	}))
 	if err != nil {
 		t.Fatalf("Error creating observations manager: %s", err)
 	}
@@ -473,23 +496,42 @@ func TestSurveyor_Observations(t *testing.T) {
 			Credentials: "../test/myuser.creds",
 		},
 	)
-	time.Sleep(50 * time.Millisecond)
-
-	if ptu.ToFloat64(s.observationMetrics.observationsGauge) != 2 {
-		t.Fatalf("process error: observations not started")
+	waitForMetricUpdate(t, 2)
+	expectedServices := []string{"srv1", "srv2"}
+	for i, obs := range obsManager.GetObservations() {
+		if obs.ServiceName != expectedServices[i] {
+			t.Errorf("Unexpected service name: %s", obs.ServiceName)
+		}
 	}
 
-	obsManager.DeleteObservations("srv1")
-	time.Sleep(50 * time.Millisecond)
-	if ptu.ToFloat64(s.observationMetrics.observationsGauge) != 1 {
-		t.Fatalf("process error: observations not started")
+	obsManager.UpdateObservations(
+		UpdateObservation{
+			Name: "srv1",
+			Config: ObservationConfig{
+				ServiceName: "srv3",
+				Topic:       "testing_updated.topic",
+				Credentials: "../test/myuser.creds",
+			},
+		},
+	)
+
+	waitForMetricUpdate(t, 2)
+	expectedServices = []string{"srv3", "srv2"}
+	for i, obs := range obsManager.GetObservations() {
+		if obs.ServiceName != expectedServices[i] {
+			t.Errorf("Unexpected service name: %s", obs.ServiceName)
+		}
 	}
+
+	obsManager.DeleteObservations("srv3")
+	waitForMetricUpdate(t, 1)
 
 	// observation no longer exists
-	obsManager.DeleteObservations("srv1")
-	time.Sleep(50 * time.Millisecond)
-	if ptu.ToFloat64(s.observationMetrics.observationsGauge) != 1 {
-		t.Fatalf("process error: observations not started")
+	obsManager.DeleteObservations("srv3")
+	waitForMetricUpdate(t, 1)
+
+	if len(errs) > 0 {
+		t.Errorf("Unexpected error when operating on observations: %s", err)
 	}
 }
 
@@ -508,7 +550,7 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 	}
 	errs := make(chan error)
 	defer s.Stop()
-	obsManager, err := s.ManageObservastions(ObservationsError(func(s string, err error) {
+	obsManager, err := s.ManageObservations(ObservationsError(func(s string, err error) {
 		errs <- err
 	}))
 	if err != nil {
@@ -544,6 +586,24 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 		t.Errorf("Expected no error; got: %s", err)
 	case <-time.After(100 * time.Millisecond):
 	}
+
+	// update error, invalid config
+	obsManager.UpdateObservations(
+		UpdateObservation{
+			Name: "srv",
+			Config: ObservationConfig{
+				ServiceName: "srv",
+				Topic:       "",
+				Credentials: "../test/myuser.creds",
+			},
+		},
+	)
+
+	select {
+	case <-errs:
+	case <-time.After(500 * time.Millisecond):
+		t.Errorf("Expected error; got timeout")
+	}
 }
 
 func TestSurveyor_ObservationsWatcher(t *testing.T) {
@@ -572,7 +632,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 
 	waitForMetricUpdate := func(t *testing.T, expectedObservationsNum int) {
 		t.Helper()
-		ticker := time.NewTicker(150 * time.Millisecond)
+		ticker := time.NewTicker(50 * time.Millisecond)
 		timeout := time.After(5 * time.Second)
 		defer ticker.Stop()
 		for {
