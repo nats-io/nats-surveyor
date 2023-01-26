@@ -114,7 +114,7 @@ func NewServiceObservationMetrics(registry *prometheus.Registry, constLabels pro
 	return metrics
 }
 
-// ServiceObsListener listens for observations from nats service latency checks
+// ServiceObsListener listens for observations from nats service latency checks.
 type ServiceObsListener struct {
 	nc          *nats.Conn
 	logger      *logrus.Logger
@@ -136,6 +136,7 @@ type ObservationConfig struct {
 	Nkey        string `json:"nkey"`
 }
 
+// ObservationsManager exposes methods to operate on service observations.
 type ObservationsManager struct {
 	surveyor            *Surveyor
 	addObservations     chan addObservationsRequest
@@ -178,7 +179,7 @@ func (o *ObservationConfig) Validate() error {
 	return errors.New(strings.Join(errs, ", "))
 }
 
-// NewServiceObservationFromFile creates a new performance observation listener
+// NewServiceObservationFromFile creates a new performance observation listener.
 func NewServiceObservationFromFile(f string, sopts Options, metrics *ServiceObsMetrics, reconnectCtr *prometheus.CounterVec) (*ServiceObsListener, error) {
 	js, err := os.ReadFile(f)
 	if err != nil {
@@ -264,7 +265,7 @@ func (s *Surveyor) startObservationsInDir() fs.WalkDirFunc {
 	}
 }
 
-// Start starts listening for observations
+// Start starts listening for observations.
 func (o *ServiceObsListener) Start() error {
 	_, err := o.nc.Subscribe(o.observation.Topic, o.observationHandler)
 	if err != nil {
@@ -312,7 +313,7 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 	}
 }
 
-// Stop closes the connection to the network
+// Stop closes the connection to the network.
 func (o *ServiceObsListener) Stop() {
 	o.metrics.observationsGauge.Dec()
 	o.nc.Close()
@@ -504,11 +505,13 @@ func removeObservation(observations []*ServiceObsListener, i int) []*ServiceObsL
 	return observations
 }
 
+// ServiceObservationResult contains the result of adding/removing service observations.
 type ServiceObservationResult struct {
 	ServiceObservation *ServiceObservation
 	Err                error
 }
 
+// DeleteObservationResult contains the result of adding/removing service observations.
 type DeleteObservationResult struct {
 	ObservationID string
 	Err           error
@@ -530,8 +533,6 @@ type deleteObservationsRequest struct {
 }
 
 // ManageObservations creates an ObservationManager, allowing for adding/deleting service observations to the surveyor.
-//
-// ManageObservationOpts can be supplied to configure ObservationsManager.
 func (s *Surveyor) ManageObservations() (*ObservationsManager, error) {
 	obsManager := &ObservationsManager{
 		surveyor:            s,
@@ -587,7 +588,15 @@ func (s *Surveyor) ManageObservations() (*ObservationsManager, error) {
 }
 
 // AddObservations creates and starts new service observations.
-// If service observation with given name already exists, it will not be updated.
+// The returned channel is always closed and is safe to iterate over with "range".
+//
+//	results := obsManager.AddObservations(observations...)
+//	for resp := range results {
+//		if resp.Err != nil {
+//			return err
+//		}
+//		fmt.Println("Created observation with ID: ", resp.ServiceObservation.ObservationID)
+//	}
 func (om *ObservationsManager) AddObservations(observations ...ObservationConfig) <-chan ServiceObservationResult {
 	resp := make(chan ServiceObservationResult, len(observations))
 
@@ -600,6 +609,15 @@ func (om *ObservationsManager) AddObservations(observations ...ObservationConfig
 }
 
 // DeleteObservations deletes exisiting observations with provided service names.
+// The returned channel is always closed and is safe to iterate over with "range".
+//
+//	results := obsManager.DeleteObservations(ids...)
+//	for resp := range results {
+//		if resp.Err != nil {
+//			return err
+//		}
+//		fmt.Println("Deleted observation with ID: ", resp.ObservationID)
+//	}
 func (om *ObservationsManager) DeleteObservations(ids ...string) <-chan DeleteObservationResult {
 	resp := make(chan DeleteObservationResult, len(ids))
 	om.deleteObseravations <- deleteObservationsRequest{
@@ -610,7 +628,16 @@ func (om *ObservationsManager) DeleteObservations(ids ...string) <-chan DeleteOb
 }
 
 // UpdateObservations updates exisiting observations.
-// Service observation with provided name has to exist for the update to succeed.
+// Service observation with provided ID has to exist for the update to succeed.
+// The returned channel is always closed and is safe to iterate over with "range".
+//
+//	results := obsManager.UpdateObservations(observations...)
+//	for resp := range results {
+//		if resp.Err != nil {
+//			return err
+//		}
+//		fmt.Println("Updated observation with ID: ", resp.ObservationID)
+//	}
 func (om *ObservationsManager) UpdateObservations(observations ...ServiceObservation) <-chan ServiceObservationResult {
 	resp := make(chan ServiceObservationResult)
 	req := updateObservationsRequest{
