@@ -447,25 +447,7 @@ func TestSurveyor_Observations(t *testing.T) {
 		t.Fatalf("couldn't create surveyor: %v", err)
 	}
 
-	waitForMetricUpdate := func(t *testing.T, expectedObservationsNum int) {
-		t.Helper()
-		ticker := time.NewTicker(150 * time.Millisecond)
-		timeout := time.After(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				observationsNum := ptu.ToFloat64(s.observationMetrics.observationsGauge)
-				if observationsNum == float64(expectedObservationsNum) {
-					return
-				}
-			case <-timeout:
-				observationsNum := ptu.ToFloat64(s.observationMetrics.observationsGauge)
-				t.Fatalf("process error: invalid number of observations; want: %d; got: %f\n", expectedObservationsNum, observationsNum)
-				return
-			}
-		}
-	}
+	expectedObservations := make(map[string]ObservationConfig)
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
@@ -500,35 +482,26 @@ func TestSurveyor_Observations(t *testing.T) {
 			t.Errorf("Unexpected error on observation add request: %s", resp.Err)
 		}
 		obsIDs = append(obsIDs, resp.ServiceObservation.ID)
+		expectedObservations[resp.ServiceObservation.ID] = resp.ServiceObservation.ObservationConfig
 	}
-	waitForMetricUpdate(t, 3)
-	expectedServices := map[string]struct{}{
-		"srv1": {},
-		"srv2": {},
-		"srv3": {},
-	}
-	for _, obs := range obsManager.GetObservations() {
-		if _, ok := expectedServices[obs.ServiceName]; !ok {
-			t.Errorf("Unexpected service name: %s", obs.ServiceName)
-		}
-	}
+	waitForMetricUpdate(t, obsManager, expectedObservations)
 
-	results = obsManager.UpdateObservations(
-		ServiceObservation{
-			ID: obsIDs[0],
-			ObservationConfig: ObservationConfig{
-				ServiceName: "srv4",
-				Topic:       "testing_updated.topic",
-				Credentials: "../test/myuser.creds",
-			},
+	updateObservationReq := ServiceObservation{
+		ID: obsIDs[0],
+		ObservationConfig: ObservationConfig{
+			ServiceName: "srv4",
+			Topic:       "testing_updated.topic",
+			Credentials: "../test/myuser.creds",
 		},
-	)
+	}
+	expectedObservations[obsIDs[0]] = updateObservationReq.ObservationConfig
+	results = obsManager.UpdateObservations(updateObservationReq)
 	for resp := range results {
 		if resp.Err != nil {
 			t.Fatalf("Unexpected error during observation update: %s", resp.Err)
 		}
 	}
-	waitForMetricUpdate(t, 3)
+	waitForMetricUpdate(t, obsManager, expectedObservations)
 	var found bool
 	for _, obs := range obsManager.GetObservations() {
 		if obs.ServiceName == "srv4" {
@@ -542,11 +515,12 @@ func TestSurveyor_Observations(t *testing.T) {
 	}
 	deleteID := obsIDs[0]
 	deleteResult := obsManager.DeleteObservations(deleteID)
+	delete(expectedObservations, deleteID)
 	resp := <-deleteResult
 	if resp.Err != nil {
 		t.Errorf("Unexpected error on observation delete request: %s", resp.Err)
 	}
-	waitForMetricUpdate(t, 2)
+	waitForMetricUpdate(t, obsManager, expectedObservations)
 
 	// observation no longer exists
 	deleteResult = obsManager.DeleteObservations(deleteID)
@@ -554,7 +528,7 @@ func TestSurveyor_Observations(t *testing.T) {
 	if resp.Err == nil {
 		t.Error("Expected error; got nil")
 	}
-	waitForMetricUpdate(t, 2)
+	waitForMetricUpdate(t, obsManager, expectedObservations)
 }
 
 func TestSurveyor_ObservationsError(t *testing.T) {
@@ -637,6 +611,41 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 	}
 }
 
+func waitForMetricUpdate(t *testing.T, om *ObservationsManager, expectedObservations map[string]ObservationConfig) {
+	t.Helper()
+	ticker := time.NewTicker(50 * time.Millisecond)
+	timeout := time.After(5 * time.Second)
+	defer ticker.Stop()
+Outer:
+	for {
+		select {
+		case <-ticker.C:
+			observationsNum := ptu.ToFloat64(om.surveyor.observationMetrics.observationsGauge)
+			if observationsNum == float64(len(expectedObservations)) {
+				break Outer
+			}
+		case <-timeout:
+			observationsNum := ptu.ToFloat64(om.surveyor.observationMetrics.observationsGauge)
+			t.Fatalf("process error: invalid number of observations; want: %d; got: %f\n", len(expectedObservations), observationsNum)
+			return
+		}
+	}
+
+	existingObservations := om.GetObservations()
+	if len(existingObservations) != len(expectedObservations) {
+		t.Fatalf("Unexpected number of observations; want: %d; got: %d", len(expectedObservations), len(existingObservations))
+	}
+	for _, existingObservation := range existingObservations {
+		obs, ok := expectedObservations[existingObservation.ID]
+		if !ok {
+			t.Fatalf("Missing observation with ID: %s", existingObservation.ID)
+		}
+		if obs != existingObservation.ObservationConfig {
+			t.Fatalf("Invalid observation config; want: %+v; got: %+v", obs, existingObservation.ObservationConfig)
+		}
+	}
+}
+
 func TestSurveyor_ObservationsWatcher(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
@@ -665,41 +674,6 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-
-	waitForMetricUpdate := func(t *testing.T, expectedObservations map[string]ObservationConfig) {
-		t.Helper()
-		ticker := time.NewTicker(50 * time.Millisecond)
-		timeout := time.After(5 * time.Second)
-		defer ticker.Stop()
-	Outer:
-		for {
-			select {
-			case <-ticker.C:
-				observationsNum := ptu.ToFloat64(s.observationMetrics.observationsGauge)
-				if observationsNum == float64(len(expectedObservations)) {
-					break Outer
-				}
-			case <-timeout:
-				observationsNum := ptu.ToFloat64(s.observationMetrics.observationsGauge)
-				t.Fatalf("process error: invalid number of observations; want: %d; got: %f\n", len(expectedObservations), observationsNum)
-				return
-			}
-		}
-		existingObservations := om.GetObservations()
-		if len(existingObservations) != len(expectedObservations) {
-			t.Fatalf("Unexpected number of observations; want: %d; got: %d", len(expectedObservations), len(existingObservations))
-		}
-		for _, existingObservation := range existingObservations {
-			obs, ok := expectedObservations[existingObservation.ID]
-			if !ok {
-				t.Fatalf("Missing observation with ID: %s", existingObservation.ID)
-			}
-			if obs != existingObservation.ObservationConfig {
-				t.Fatalf("Invalid observation config; want: %+v; got: %+v", obs, existingObservation.ObservationConfig)
-			}
-		}
-	}
-
 	expectedObservations := make(map[string]ObservationConfig)
 
 	t.Run("write observation file - create operation", func(t *testing.T) {
@@ -718,7 +692,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 
 		expectedObservations[obsPath] = obsConfig
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 
 		// duplicate service name
 		obsPath = fmt.Sprintf("%s/duplicate.json", dirName)
@@ -727,7 +701,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 	})
 
 	t.Run("first create then write to file - write operation", func(t *testing.T) {
@@ -754,7 +728,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 
 		expectedObservations[obsPath] = obsConfig
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 	})
 
 	t.Run("create observations in subfolder", func(t *testing.T) {
@@ -781,7 +755,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 
 		expectedObservations[obsPath] = obsConfig
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 
 		obsConfig = ObservationConfig{
 			ServiceName: "testing4",
@@ -799,7 +773,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 
 		expectedObservations[obsPath] = obsConfig
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 
 		obsConfig = ObservationConfig{
 			ServiceName: "testing5",
@@ -822,7 +796,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 
 		expectedObservations[obsPath] = obsConfig
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 	})
 
 	t.Run("update observations", func(t *testing.T) {
@@ -842,7 +816,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 
 		expectedObservations[obsPath] = obsConfig
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 
 		// same service name exists in different file
 		obsConfig = ObservationConfig{
@@ -860,14 +834,14 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 
 		time.Sleep(100 * time.Millisecond)
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 
 		// update file with invalid JSON - existing observation should not be impacted
 		if err := os.WriteFile(obsPath, []byte("abc"), 0600); err != nil {
 			t.Fatalf("Error writing to file: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 	})
 
 	t.Run("remove observations", func(t *testing.T) {
@@ -877,7 +851,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("Error removing observation config: %s", err)
 		}
 		delete(expectedObservations, obsPath)
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 
 		// remove whole subfolder
 		if err := os.RemoveAll(fmt.Sprintf("%s/subdir", dirName)); err != nil {
@@ -887,7 +861,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		delete(expectedObservations, fmt.Sprintf("%s/subdir/subobs.json", dirName))
 		delete(expectedObservations, fmt.Sprintf("%s/subdir/abc.json", dirName))
 		delete(expectedObservations, fmt.Sprintf("%s/subdir/nested/nested.json", dirName))
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 
 		obsConfig := ObservationConfig{
 			ServiceName: "testing10",
@@ -904,7 +878,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
 		expectedObservations[obsPath] = obsConfig
-		waitForMetricUpdate(t, expectedObservations)
+		waitForMetricUpdate(t, om, expectedObservations)
 	})
 }
 
