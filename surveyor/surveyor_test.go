@@ -470,69 +470,91 @@ func TestSurveyor_Observations(t *testing.T) {
 		t.Fatalf("start error: %v", err)
 	}
 	defer s.Stop()
-	errs := make(chan error, 10)
-	obsManager, err := s.ManageObservations(ObservationsError(func(s string, err error) {
-		errs <- err
-	}))
+	obsManager, err := s.ManageObservations()
 	if err != nil {
 		t.Fatalf("Error creating observations manager: %s", err)
 	}
 
-	// add 3 observation, one of them is duplicate
-	obsManager.AddObservations(
-		ObservationConfig{
+	observations := []ObservationConfig{
+		{
 			ServiceName: "srv1",
 			Topic:       "testing.topic",
 			Credentials: "../test/myuser.creds",
 		},
-		ObservationConfig{
+		{
 			ServiceName: "srv2",
 			Topic:       "testing.topic",
 			Credentials: "../test/myuser.creds",
 		},
-		ObservationConfig{
-			ServiceName: "srv2",
+		{
+			ServiceName: "srv3",
 			Topic:       "testing.topic",
 			Credentials: "../test/myuser.creds",
 		},
-	)
-	waitForMetricUpdate(t, 2)
-	expectedServices := []string{"srv1", "srv2"}
-	for i, obs := range obsManager.GetObservations() {
-		if obs.ServiceName != expectedServices[i] {
+	}
+	results := obsManager.AddObservations(observations...)
+
+	obsIDs := make([]string, 0)
+	for resp := range results {
+		if resp.Err != nil {
+			t.Errorf("Unexpected error on observation add request: %s", resp.Err)
+		}
+		obsIDs = append(obsIDs, resp.ServiceObservation.ID)
+	}
+	waitForMetricUpdate(t, 3)
+	expectedServices := map[string]struct{}{
+		"srv1": {},
+		"srv2": {},
+		"srv3": {},
+	}
+	for _, obs := range obsManager.GetObservations() {
+		if _, ok := expectedServices[obs.ServiceName]; !ok {
 			t.Errorf("Unexpected service name: %s", obs.ServiceName)
 		}
 	}
 
-	obsManager.UpdateObservations(
-		UpdateObservation{
-			Name: "srv1",
-			Config: ObservationConfig{
-				ServiceName: "srv3",
+	results = obsManager.UpdateObservations(
+		ServiceObservation{
+			ID: obsIDs[0],
+			ObservationConfig: ObservationConfig{
+				ServiceName: "srv4",
 				Topic:       "testing_updated.topic",
 				Credentials: "../test/myuser.creds",
 			},
 		},
 	)
-
-	waitForMetricUpdate(t, 2)
-	expectedServices = []string{"srv3", "srv2"}
-	for i, obs := range obsManager.GetObservations() {
-		if obs.ServiceName != expectedServices[i] {
-			t.Errorf("Unexpected service name: %s", obs.ServiceName)
+	for resp := range results {
+		if resp.Err != nil {
+			t.Fatalf("Unexpected error during observation update: %s", resp.Err)
+		}
+	}
+	waitForMetricUpdate(t, 3)
+	var found bool
+	for _, obs := range obsManager.GetObservations() {
+		if obs.ServiceName == "srv4" {
+			found = true
+			break
 		}
 	}
 
-	obsManager.DeleteObservations("srv3")
-	waitForMetricUpdate(t, 1)
+	if !found {
+		t.Errorf("Expected updated service name in observations: %s", "srv4")
+	}
+	deleteID := obsIDs[0]
+	deleteResult := obsManager.DeleteObservations(deleteID)
+	resp := <-deleteResult
+	if resp.Err != nil {
+		t.Errorf("Unexpected error on observation delete request: %s", resp.Err)
+	}
+	waitForMetricUpdate(t, 2)
 
 	// observation no longer exists
-	obsManager.DeleteObservations("srv3")
-	waitForMetricUpdate(t, 1)
-
-	if len(errs) > 0 {
-		t.Errorf("Unexpected error when operating on observations: %s", err)
+	deleteResult = obsManager.DeleteObservations(deleteID)
+	resp = <-deleteResult
+	if resp.Err == nil {
+		t.Error("Expected error; got nil")
 	}
+	waitForMetricUpdate(t, 2)
 }
 
 func TestSurveyor_ObservationsError(t *testing.T) {
@@ -548,17 +570,14 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
-	errs := make(chan error)
 	defer s.Stop()
-	obsManager, err := s.ManageObservations(ObservationsError(func(s string, err error) {
-		errs <- err
-	}))
+	obsManager, err := s.ManageObservations()
 	if err != nil {
 		t.Fatalf("Error creating observations manager: %s", err)
 	}
 
 	// add invalid observation (missing service name)
-	obsManager.AddObservations(
+	result := obsManager.AddObservations(
 		ObservationConfig{
 			ServiceName: "",
 			Topic:       "testing.topic",
@@ -566,14 +585,18 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 		},
 	)
 
-	select {
-	case <-errs:
-	case <-time.After(500 * time.Millisecond):
-		t.Errorf("Expected error; got timeout")
+	var addErr error
+	for resp := range result {
+		if resp.Err != nil {
+			addErr = resp.Err
+		}
+	}
+	if addErr == nil {
+		t.Errorf("Expected error; got nil")
 	}
 
 	// valid observation, no error
-	obsManager.AddObservations(
+	result = obsManager.AddObservations(
 		ObservationConfig{
 			ServiceName: "srv",
 			Topic:       "testing.topic",
@@ -581,17 +604,21 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 		},
 	)
 
-	select {
-	case err := <-errs:
-		t.Errorf("Expected no error; got: %s", err)
-	case <-time.After(100 * time.Millisecond):
+	addErr = nil
+	for resp := range result {
+		if resp.Err != nil {
+			addErr = resp.Err
+		}
+	}
+	if addErr != nil {
+		t.Errorf("Expected no error; got: %s", addErr)
 	}
 
 	// update error, invalid config
-	obsManager.UpdateObservations(
-		UpdateObservation{
-			Name: "srv",
-			Config: ObservationConfig{
+	result = obsManager.UpdateObservations(
+		ServiceObservation{
+			ID: "srv",
+			ObservationConfig: ObservationConfig{
 				ServiceName: "srv",
 				Topic:       "",
 				Credentials: "../test/myuser.creds",
@@ -599,10 +626,14 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 		},
 	)
 
-	select {
-	case <-errs:
-	case <-time.After(500 * time.Millisecond):
-		t.Errorf("Expected error; got timeout")
+	var updateErr error
+	for resp := range result {
+		if resp.Err != nil {
+			updateErr = resp.Err
+		}
+	}
+	if updateErr == nil {
+		t.Errorf("Expected error; got nil")
 	}
 }
 
@@ -630,25 +661,46 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 
 	defer s.Stop()
 
-	waitForMetricUpdate := func(t *testing.T, expectedObservationsNum int) {
+	om, err := s.ManageObservations()
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	waitForMetricUpdate := func(t *testing.T, expectedObservations map[string]ObservationConfig) {
 		t.Helper()
 		ticker := time.NewTicker(50 * time.Millisecond)
 		timeout := time.After(5 * time.Second)
 		defer ticker.Stop()
+	Outer:
 		for {
 			select {
 			case <-ticker.C:
 				observationsNum := ptu.ToFloat64(s.observationMetrics.observationsGauge)
-				if observationsNum == float64(expectedObservationsNum) {
-					return
+				if observationsNum == float64(len(expectedObservations)) {
+					break Outer
 				}
 			case <-timeout:
 				observationsNum := ptu.ToFloat64(s.observationMetrics.observationsGauge)
-				t.Fatalf("process error: invalid number of observations; want: %d; got: %f\n", expectedObservationsNum, observationsNum)
+				t.Fatalf("process error: invalid number of observations; want: %d; got: %f\n", len(expectedObservations), observationsNum)
 				return
 			}
 		}
+		existingObservations := om.GetObservations()
+		if len(existingObservations) != len(expectedObservations) {
+			t.Fatalf("Unexpected number of observations; want: %d; got: %d", len(expectedObservations), len(existingObservations))
+		}
+		for _, existingObservation := range existingObservations {
+			obs, ok := expectedObservations[existingObservation.ID]
+			if !ok {
+				t.Fatalf("Missing observation with ID: %s", existingObservation.ID)
+			}
+			if obs != existingObservation.ObservationConfig {
+				t.Fatalf("Invalid observation config; want: %+v; got: %+v", obs, existingObservation.ObservationConfig)
+			}
+		}
 	}
+
+	expectedObservations := make(map[string]ObservationConfig)
 
 	t.Run("write observation file - create operation", func(t *testing.T) {
 		obsConfig := ObservationConfig{
@@ -660,10 +712,22 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
-		if err := os.WriteFile(fmt.Sprintf("%s/create.json", dirName), obsConfigJSON, 0600); err != nil {
+		obsPath := fmt.Sprintf("%s/create.json", dirName)
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
-		waitForMetricUpdate(t, 1)
+
+		expectedObservations[obsPath] = obsConfig
+		waitForMetricUpdate(t, expectedObservations)
+
+		// duplicate service name
+		obsPath = fmt.Sprintf("%s/duplicate.json", dirName)
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
+			t.Fatalf("Error writing observation config file: %s", err)
+		}
+		time.Sleep(100 * time.Millisecond)
+
+		waitForMetricUpdate(t, expectedObservations)
 	})
 
 	t.Run("first create then write to file - write operation", func(t *testing.T) {
@@ -676,7 +740,8 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
-		f, err := os.Create(fmt.Sprintf("%s/write.json", dirName))
+		obsPath := fmt.Sprintf("%s/write.json", dirName)
+		f, err := os.Create(obsPath)
 		if err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
@@ -684,11 +749,12 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("Error closing file: %s", err)
 		}
 		time.Sleep(200 * time.Millisecond)
-		if err := os.WriteFile(fmt.Sprintf("%s/write.json", dirName), obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
 			t.Fatalf("Error writing to file: %s", err)
 		}
-		time.Sleep(500 * time.Millisecond)
-		waitForMetricUpdate(t, 2)
+
+		expectedObservations[obsPath] = obsConfig
+		waitForMetricUpdate(t, expectedObservations)
 	})
 
 	t.Run("create observations in subfolder", func(t *testing.T) {
@@ -706,12 +772,16 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("Error creating subdirectory: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
-		err = os.WriteFile(fmt.Sprintf("%s/subdir/subobs.json", dirName), obsConfigJSON, 0600)
+
+		obsPath := fmt.Sprintf("%s/subdir/subobs.json", dirName)
+
+		err = os.WriteFile(obsPath, obsConfigJSON, 0600)
 		if err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
 
-		waitForMetricUpdate(t, 3)
+		expectedObservations[obsPath] = obsConfig
+		waitForMetricUpdate(t, expectedObservations)
 
 		obsConfig = ObservationConfig{
 			ServiceName: "testing4",
@@ -722,12 +792,14 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
+		obsPath = fmt.Sprintf("%s/subdir/abc.json", dirName)
 
-		if err := os.WriteFile(fmt.Sprintf("%s/subdir/abc.json", dirName), obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
 
-		waitForMetricUpdate(t, 4)
+		expectedObservations[obsPath] = obsConfig
+		waitForMetricUpdate(t, expectedObservations)
 
 		obsConfig = ObservationConfig{
 			ServiceName: "testing5",
@@ -742,26 +814,80 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("Error creating subdirectory: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
-		err = os.WriteFile(fmt.Sprintf("%s/subdir/nested/nested.json", dirName), obsConfigJSON, 0600)
+
+		obsPath = fmt.Sprintf("%s/subdir/nested/nested.json", dirName)
+		err = os.WriteFile(obsPath, obsConfigJSON, 0600)
 		if err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
 
-		waitForMetricUpdate(t, 5)
+		expectedObservations[obsPath] = obsConfig
+		waitForMetricUpdate(t, expectedObservations)
+	})
+
+	t.Run("update observations", func(t *testing.T) {
+		obsConfig := ObservationConfig{
+			ServiceName: "testing_updated",
+			Topic:       "testing_updated.topic",
+			Credentials: "../test/myuser.creds",
+		}
+		obsConfigJSON, err := json.Marshal(obsConfig)
+		if err != nil {
+			t.Fatalf("marshalling error: %s", err)
+		}
+
+		obsPath := fmt.Sprintf("%s/write.json", dirName)
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
+			t.Fatalf("Error writing to file: %s", err)
+		}
+
+		expectedObservations[obsPath] = obsConfig
+		waitForMetricUpdate(t, expectedObservations)
+
+		// same service name exists in different file
+		obsConfig = ObservationConfig{
+			ServiceName: "testing1",
+			Topic:       "testing_updated.topic",
+			Credentials: "../test/myuser.creds",
+		}
+		obsConfigJSON, err = json.Marshal(obsConfig)
+		if err != nil {
+			t.Fatalf("marshalling error: %s", err)
+		}
+
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
+			t.Fatalf("Error writing to file: %s", err)
+		}
+
+		time.Sleep(100 * time.Millisecond)
+		waitForMetricUpdate(t, expectedObservations)
+
+		// update file with invalid JSON - existing observation should not be impacted
+		if err := os.WriteFile(obsPath, []byte("abc"), 0600); err != nil {
+			t.Fatalf("Error writing to file: %s", err)
+		}
+		time.Sleep(100 * time.Millisecond)
+		waitForMetricUpdate(t, expectedObservations)
 	})
 
 	t.Run("remove observations", func(t *testing.T) {
 		// remove single observation
-		if err := os.Remove(fmt.Sprintf("%s/create.json", dirName)); err != nil {
+		obsPath := fmt.Sprintf("%s/create.json", dirName)
+		if err := os.Remove(obsPath); err != nil {
 			t.Fatalf("Error removing observation config: %s", err)
 		}
-		waitForMetricUpdate(t, 4)
+		delete(expectedObservations, obsPath)
+		waitForMetricUpdate(t, expectedObservations)
 
 		// remove whole subfolder
 		if err := os.RemoveAll(fmt.Sprintf("%s/subdir", dirName)); err != nil {
 			t.Fatalf("Error removing subdirectory: %s", err)
 		}
-		waitForMetricUpdate(t, 1)
+
+		delete(expectedObservations, fmt.Sprintf("%s/subdir/subobs.json", dirName))
+		delete(expectedObservations, fmt.Sprintf("%s/subdir/abc.json", dirName))
+		delete(expectedObservations, fmt.Sprintf("%s/subdir/nested/nested.json", dirName))
+		waitForMetricUpdate(t, expectedObservations)
 
 		obsConfig := ObservationConfig{
 			ServiceName: "testing10",
@@ -772,10 +898,13 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
-		if err := os.WriteFile(fmt.Sprintf("%s/another.json", dirName), obsConfigJSON, 0600); err != nil {
+
+		obsPath = fmt.Sprintf("%s/another.json", dirName)
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
-		waitForMetricUpdate(t, 2)
+		expectedObservations[obsPath] = obsConfig
+		waitForMetricUpdate(t, expectedObservations)
 	})
 }
 
