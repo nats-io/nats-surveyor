@@ -237,6 +237,12 @@ func (s *Surveyor) startObservationsInDir() fs.WalkDirFunc {
 			return err
 		}
 
+		// skip directories starting with '..'
+		// this prevents double observation loading when using kubernetes mounts
+		if info.IsDir() && strings.HasPrefix(info.Name(), "..") {
+			return filepath.SkipDir
+		}
+
 		if filepath.Ext(info.Name()) != ".json" {
 			return nil
 		}
@@ -244,14 +250,6 @@ func (s *Surveyor) startObservationsInDir() fs.WalkDirFunc {
 		obs, err := NewServiceObservationFromFile(path, s.opts, s.observationMetrics, s.reconnectCtr)
 		if err != nil {
 			return fmt.Errorf("could not create observation from %s: %s", path, err)
-		}
-
-		// Prevent an equal observation to be loaded twice
-		// This is a problem that occurs with k8s mounts
-		for _, existingObservation := range s.observations {
-			if obs.observation.ServiceName == existingObservation.observation.ServiceName {
-				return nil
-			}
 		}
 
 		err = obs.Start()
@@ -382,13 +380,13 @@ func (s *Surveyor) handleWatcherEvent(event fsnotify.Event, depth int) error {
 }
 
 func (s *Surveyor) handleCreateEvent(path string, depth int) error {
-	fs, err := os.Stat(path)
+	stat, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("could not read observation file %s: %s", path, err)
 	}
 	// if a new directory was created, first start all observations already in it
 	// and then start watching for changes in this directory (fsnotify.Watcher is not recursive)
-	if fs.IsDir() && fs.Name() != "." {
+	if stat.IsDir() && !strings.HasPrefix(stat.Name(), "..") {
 		depth--
 		err = filepath.WalkDir(path, s.startObservationsInDir())
 		if err != nil {
@@ -399,7 +397,7 @@ func (s *Surveyor) handleCreateEvent(path string, depth int) error {
 		}
 	}
 	// if not a directory and not a JSON, ignore
-	if filepath.Ext(fs.Name()) != ".json" {
+	if filepath.Ext(stat.Name()) != ".json" {
 		return nil
 	}
 
@@ -408,12 +406,15 @@ func (s *Surveyor) handleCreateEvent(path string, depth int) error {
 	if err != nil {
 		return fmt.Errorf("could not create observation from %s: %s", path, err)
 	}
+
+	// multiple create events for 1 file when using symlinks
+	// in such case, subsequent events should be ignored
+	// https://github.com/fsnotify/fsnotify/issues/277
 	for _, existingObservation := range s.observations {
-		if obs.observation.ServiceName == existingObservation.observation.ServiceName {
+		if *existingObservation.observation == *obs.observation {
 			return nil
 		}
 	}
-
 	err = obs.Start()
 	if err != nil {
 		return fmt.Errorf("could not start observation from %s: %s", path, err)
@@ -435,13 +436,6 @@ func (s *Surveyor) handleWriteEvent(path string) error {
 	obs, err := NewServiceObservationFromFile(path, s.opts, s.observationMetrics, s.reconnectCtr)
 	if err != nil {
 		return fmt.Errorf("could not create observation from %s: %s", path, err)
-	}
-
-	for _, existingObservation := range s.observations {
-		// ignore service if it already exists
-		if obs.observation.ServiceName == existingObservation.observation.ServiceName && obs.observation.ID != existingObservation.observation.ID {
-			return fmt.Errorf("service observation with provided service name already exists in different file: %s", obs.observation.ServiceName)
-		}
 	}
 
 	err = obs.Start()

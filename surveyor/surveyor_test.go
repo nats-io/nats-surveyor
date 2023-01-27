@@ -693,15 +693,6 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 
 		expectedObservations[obsPath] = obsConfig
 		waitForMetricUpdate(t, om, expectedObservations)
-
-		// duplicate service name
-		obsPath = fmt.Sprintf("%s/duplicate.json", dirName)
-		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
-			t.Fatalf("Error writing observation config file: %s", err)
-		}
-		time.Sleep(100 * time.Millisecond)
-
-		waitForMetricUpdate(t, om, expectedObservations)
 	})
 
 	t.Run("first create then write to file - write operation", func(t *testing.T) {
@@ -816,24 +807,6 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 
 		expectedObservations[obsPath] = obsConfig
-		waitForMetricUpdate(t, om, expectedObservations)
-
-		// same service name exists in different file
-		obsConfig = ObservationConfig{
-			ServiceName: "testing1",
-			Topic:       "testing_updated.topic",
-			Credentials: "../test/myuser.creds",
-		}
-		obsConfigJSON, err = json.Marshal(obsConfig)
-		if err != nil {
-			t.Fatalf("marshalling error: %s", err)
-		}
-
-		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
-			t.Fatalf("Error writing to file: %s", err)
-		}
-
-		time.Sleep(100 * time.Millisecond)
 		waitForMetricUpdate(t, om, expectedObservations)
 
 		// update file with invalid JSON - existing observation should not be impacted
