@@ -51,6 +51,7 @@ jobs:
                --enable nakedret \
                --enable prealloc \
                --enable gocritic \
+               --enable misspell \
                ./...
 
       - name: Run tests
