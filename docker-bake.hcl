@@ -70,8 +70,9 @@ target "goreleaser" {
 
 target "nats-surveyor" {
   contexts = {
-    base  = image_base
-    build = "target:goreleaser"
+    base    = image_base
+    build   = "target:goreleaser"
+    assets  = "cicd/assets"
   }
   args = {
     GO_APP = "nats-surveyor"
