@@ -13,7 +13,7 @@ services:
       - $NATS_SURVEYOR_CREDS:/etc/surveyor/SYS.creds
       - ./observations:/observations
       - ./jetstream:/jetstream
-#    entrypoint: /entrypoint - TODO update for the next release
+    entrypoint: /entrypoint.sh
     command: --count ${NATS_SURVEYOR_SERVER_COUNT} -creds /etc/surveyor/SYS.creds -s "${NATS_SURVEYOR_SERVERS}" --accounts -observe /observations -jetstream /jetstream
     networks:
       - monitor-net
