@@ -1,0 +1,2099 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": null,
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": 11,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 280,
+      "panels": [],
+      "title": "JetStream Overview",
+      "type": "row"
+    },
+    {
+      "datasource": null,
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "light-blue",
+            "mode": "fixed"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "N/A"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 2,
+        "x": 0,
+        "y": 1
+      },
+      "hideTimeOverride": true,
+      "id": 177,
+      "interval": "$ScrapeInterval",
+      "links": [],
+      "maxPerRow": 12,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.1.3",
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "code",
+          "expr": "count(group by(server_cluster) (nats_core_jetstream_info{server_jetstream=\"true\"}))",
+          "hide": false,
+          "legendFormat": "Cluster Count",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "expr": "nats_survey_expected_count",
+          "hide": false,
+          "legendFormat": "Expected Server Count",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": null,
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "count(nats_core_jetstream_info{server_jetstream=\"true\"})",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "JetStream Enabled Servers",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": null,
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "count(nats_core_jetstream_enabled == 1)",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "JetStream Active Servers",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "timeFrom": "$QuickStatsInterval",
+      "title": "Topology",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": null,
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "rgb(31, 120, 193)",
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "N/A"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 2,
+        "y": 1
+      },
+      "hideTimeOverride": true,
+      "id": 295,
+      "interval": "$ScrapeInterval",
+      "links": [],
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true
+      },
+      "pluginVersion": "9.1.3",
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(nats_core_jetstream_filestore_size_bytes{})",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Capacity",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": null,
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(nats_core_jetstream_filestore_used_bytes{})",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Used",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": null,
+          "exemplar": true,
+          "expr": "sum(nats_core_jetstream_filestore_reserved_bytes{})",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Reserved",
+          "refId": "C"
+        }
+      ],
+      "timeFrom": "$QuickStatsInterval",
+      "title": "Filestore",
+      "transparent": true,
+      "type": "bargauge"
+    },
+    {
+      "datasource": null,
+      "description": "Highly Available Asset Distribution for replicated streams, objects, KV stores, and replicated consumers.  Not applicable to single server mode.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 5,
+        "x": 7,
+        "y": 1
+      },
+      "id": 293,
+      "options": {
+        "displayLabels": [
+          "percent",
+          "value"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true,
+          "values": []
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.1.3",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_jetstream_ha_assets",
+          "format": "time_series",
+          "instant": true,
+          "interval": "1",
+          "legendFormat": "{{server_name}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "HA Asset Distribution by Server",
+      "transformations": [],
+      "type": "piechart"
+    },
+    {
+      "datasource": null,
+      "description": "Highly Available Asset Count including replicated streams, objects, KV stores, and replicated consumers.  Not applicable to single server mode.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 50,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "stepBefore",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 282,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "sum by(server_name) (nats_core_jetstream_ha_assets)",
+          "format": "time_series",
+          "instant": false,
+          "interval": "1",
+          "legendFormat": "{{server_id}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "HA Asset Count by Server",
+      "transformations": [],
+      "type": "timeseries"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 2,
+        "x": 18,
+        "y": 1
+      },
+      "id": 305,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.1.3",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_jetstream_api_requests",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_jetstream_api_errors",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "B"
+        }
+      ],
+      "title": "API Statistics",
+      "transformations": [
+        {
+          "id": "concatenate",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "Value #A": "Requests",
+              "Value #B": "Errors",
+              "cluster_name 2": "",
+              "server_name 2": ""
+            }
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": null,
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "rgb(31, 120, 193)",
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "N/A"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 2,
+        "y": 6
+      },
+      "hideTimeOverride": true,
+      "id": 268,
+      "interval": "$ScrapeInterval",
+      "links": [],
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true
+      },
+      "pluginVersion": "9.1.3",
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(nats_core_jetstream_memstore_size_bytes{})",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Capacity",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource":null,
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(nats_core_jetstream_memstore_used_bytes{})",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Used",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": null,
+          "exemplar": true,
+          "expr": "sum(nats_core_jetstream_memstore_reserved_bytes{})",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Reserved",
+          "refId": "C"
+        }
+      ],
+      "timeFrom": "$QuickStatsInterval",
+      "title": "Memstore",
+      "transparent": true,
+      "type": "bargauge"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "id": 302,
+      "panels": [],
+      "title": "JetStream Cluster State (Only Applicable to Clustered Mode)",
+      "type": "row"
+    },
+    {
+      "datasource": null,
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "rgb(31, 120, 193)",
+            "mode": "fixed"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "N/A"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/.+_bytes.+/"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Bps"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 0,
+        "y": 12
+      },
+      "hideTimeOverride": true,
+      "id": 298,
+      "interval": "$ScrapeInterval",
+      "links": [],
+      "maxPerRow": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "name"
+      },
+      "pluginVersion": "9.1.3",
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "nats_core_jetstream_cluster_raft_group_leader > 0",
+          "format": "time_series",
+          "hide": false,
+          "instant": true,
+          "interval": "",
+          "legendFormat": "{{server_name}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "$QuickStatsInterval",
+      "title": "Current Meta Leader",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": null,
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-BlPu"
+          },
+          "custom": {
+            "fillOpacity": 70,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 6,
+        "x": 3,
+        "y": 12
+      },
+      "hideTimeOverride": true,
+      "id": 303,
+      "interval": "$ScrapeInterval",
+      "links": [],
+      "options": {
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "never",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.1.3",
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "nats_core_jetstream_cluster_raft_group_leader",
+          "format": "time_series",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{server_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "$QuickStatsInterval",
+      "title": "Meta-Leader",
+      "transparent": true,
+      "type": "state-timeline"
+    },
+    {
+      "datasource": null,
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "color": "green",
+                        "index": 0,
+                        "text": "Yes"
+                      },
+                      "1": {
+                        "color": "red",
+                        "index": 1,
+                        "text": "No"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "color": "red",
+                        "index": 0,
+                        "text": "No"
+                      },
+                      "1": {
+                        "color": "green",
+                        "index": 1,
+                        "text": "Yes"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #C"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ns"
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 1000000000
+                    },
+                    {
+                      "color": "red",
+                      "value": 10000000000
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 11,
+        "x": 9,
+        "y": 12
+      },
+      "id": 300,
+      "maxPerRow": 3,
+      "options": {
+        "footer": {
+          "fields": "",
+          "reducer": [
+            "min"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Peer"
+          }
+        ]
+      },
+      "pluginVersion": "9.1.3",
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "nats_core_jetstream_cluster_raft_group_replica_peer_offline",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "{{label_name}}",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_jetstream_cluster_raft_group_replica_peer_current",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "B"
+        },
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_jetstream_cluster_raft_group_replica_peer_active",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "C"
+        }
+      ],
+      "title": "Peer Status",
+      "transformations": [
+        {
+          "id": "concatenate",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "__name__ 3": true,
+              "cluster_name 1": true,
+              "cluster_name 2": true,
+              "cluster_name 3": true,
+              "instance 1": true,
+              "instance 2": true,
+              "instance 3": true,
+              "job 1": true,
+              "job 2": true,
+              "job 3": true,
+              "peer 2": true,
+              "peer 3": true,
+              "server_id 1": true,
+              "server_id 2": true,
+              "server_id 3": true,
+              "server_name 1": true,
+              "server_name 2": true,
+              "server_name 3": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Value #A": "Online",
+              "Value #B": "Current",
+              "Value #C": "Last Seen",
+              "peer 1": "Peer",
+              "server_name 1": ""
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "id": 316,
+      "panels": [],
+      "title": "JetStream Account Details  (Requires Surveyor Accounts Enabled)",
+      "type": "row"
+    },
+    {
+      "datasource": null,
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Storage Used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Storage Reserved"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Used"
+            },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "auto"
+              },
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Storage % Used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.9
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "gradient-gauge"
+              },
+              {
+                "id": "max",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory % Used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.9
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "gradient-gauge"
+              },
+              {
+                "id": "max",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Reserved"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 13,
+        "x": 0,
+        "y": 23
+      },
+      "id": 314,
+      "options": {
+        "footer": {
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "HA Streams (R>1)"
+          }
+        ]
+      },
+      "pluginVersion": "9.1.3",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_stream_count",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "{{account}}",
+          "range": false,
+          "refId": "I"
+        },
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_storage_used",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "{{account}}",
+          "range": false,
+          "refId": "J"
+        },
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_storage_reserved",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "{{account}}",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_memory_used",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "{{account}}",
+          "range": false,
+          "refId": "B"
+        },
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_memory_reserved",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "{{account}}",
+          "range": false,
+          "refId": "C"
+        },
+        {
+          "datasource":null,
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_enabled",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "{{account}}",
+          "range": false,
+          "refId": "D"
+        },
+        {
+          "datasource": null,
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_storage_used / nats_core_account_jetstream_storage_reserved",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "{{account}}",
+          "range": false,
+          "refId": "E"
+        },
+        {
+          "datasource":null,
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_memory_used / nats_core_account_jetstream_memory_reserved",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "{{account}}",
+          "range": false,
+          "refId": "F"
+        }
+      ],
+      "title": "Storage By Account",
+      "transformations": [
+        {
+          "id": "concatenate",
+          "options": {}
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": {
+                  "id": "greater",
+                  "options": {
+                    "value": 0
+                  }
+                },
+                "fieldName": "Value #D"
+              }
+            ],
+            "match": "any",
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value #D": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "__name__ 3": true,
+              "__name__ 4": true,
+              "__name__ 5": true,
+              "__name__ 6": true,
+              "account 2": true,
+              "account 3": true,
+              "account 4": true,
+              "account 5": true,
+              "account 6": true,
+              "account 7": true,
+              "account 8": true,
+              "instance 1": true,
+              "instance 2": true,
+              "instance 3": true,
+              "instance 4": true,
+              "instance 5": true,
+              "instance 6": true,
+              "instance 7": true,
+              "instance 8": true,
+              "job 1": true,
+              "job 2": true,
+              "job 3": true,
+              "job 4": true,
+              "job 5": true,
+              "job 6": true,
+              "job 7": true,
+              "job 8": true
+            },
+            "indexByName": {
+              "Time": 0,
+              "Value #A": 15,
+              "Value #B": 21,
+              "Value #C": 26,
+              "Value #D": 31,
+              "Value #E": 9,
+              "Value #F": 20,
+              "Value #I": 38,
+              "Value #J": 10,
+              "__name__ 1": 1,
+              "__name__ 2": 5,
+              "__name__ 3": 11,
+              "__name__ 4": 16,
+              "__name__ 5": 22,
+              "__name__ 6": 27,
+              "account 1": 2,
+              "account 2": 6,
+              "account 3": 12,
+              "account 4": 17,
+              "account 5": 23,
+              "account 6": 28,
+              "account 7": 32,
+              "account 8": 35,
+              "instance 1": 3,
+              "instance 2": 7,
+              "instance 3": 13,
+              "instance 4": 18,
+              "instance 5": 24,
+              "instance 6": 29,
+              "instance 7": 33,
+              "instance 8": 36,
+              "job 1": 4,
+              "job 2": 8,
+              "job 3": 14,
+              "job 4": 19,
+              "job 5": 25,
+              "job 6": 30,
+              "job 7": 34,
+              "job 8": 37
+            },
+            "renameByName": {
+              "Value #A": "Storage Reserved",
+              "Value #B": "Memory Used",
+              "Value #C": "Memory Reserved",
+              "Value #E": "Storage % Used",
+              "Value #F": "Memory % Used",
+              "Value #I": "HA Streams (R>1)",
+              "Value #J": "Storage Used",
+              "account 1": "Account",
+              "account 5": "",
+              "job 8": ""
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 5,
+        "x": 13,
+        "y": 23
+      },
+      "id": 320,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true
+      },
+      "pluginVersion": "9.1.3",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_storage_used",
+          "format": "time_series",
+          "instant": true,
+          "interval": "1",
+          "legendFormat": "{{account}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "File Storage By Account",
+      "transformations": [
+        {
+          "id": "concatenate",
+          "options": {}
+        }
+      ],
+      "type": "bargauge"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 5,
+        "x": 18,
+        "y": 23
+      },
+      "id": 321,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true
+      },
+      "pluginVersion": "9.1.3",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_memory_used",
+          "format": "time_series",
+          "instant": true,
+          "interval": "1",
+          "legendFormat": "{{account}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Storage By Account",
+      "transformations": [],
+      "type": "bargauge"
+    },
+    {
+      "datasource": null,
+      "description": "Number of Highly Available Assets by Stream.  A high number of HA Assets will place pressure on the system.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 13,
+        "x": 0,
+        "y": 31
+      },
+      "id": 319,
+      "interval": "1s",
+      "options": {
+        "footer": {
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "frameIndex": 0,
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Total HA Assets"
+          }
+        ]
+      },
+      "pluginVersion": "9.1.3",
+      "targets": [
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_consumer_count",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": null,
+          "hide": false,
+          "refId": "B"
+        },
+        {
+          "datasource": null,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_replica_count",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "C"
+        },
+        {
+          "datasource": null,
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "nats_core_account_jetstream_replica_count + (nats_core_account_jetstream_replica_count * nats_core_account_jetstream_consumer_count)",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "D"
+        }
+      ],
+      "title": "HA Assets By Stream",
+      "transformations": [
+        {
+          "id": "concatenate",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value #A": false,
+              "__name__": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "account": false,
+              "account 2": true,
+              "account 3": true,
+              "instance": true,
+              "instance 1": true,
+              "instance 2": true,
+              "instance 3": true,
+              "job": true,
+              "job 1": true,
+              "job 2": true,
+              "job 3": true,
+              "stream 2": true,
+              "stream 3": true
+            },
+            "indexByName": {
+              "Time": 0,
+              "Value #A": 8,
+              "Value #C": 7,
+              "Value #D": 6,
+              "__name__ 1": 1,
+              "__name__ 2": 9,
+              "account 1": 2,
+              "account 2": 10,
+              "account 3": 14,
+              "instance 1": 3,
+              "instance 2": 11,
+              "instance 3": 15,
+              "job 1": 4,
+              "job 2": 12,
+              "job 3": 16,
+              "stream 1": 5,
+              "stream 2": 13,
+              "stream 3": 17
+            },
+            "renameByName": {
+              "Value": "Consumer Count",
+              "Value #A": "Stream Consumer Count",
+              "Value #B": "Replica Count",
+              "Value #C": "Stream Replica Count",
+              "Value #D": "Total HA Assets",
+              "account": "Account",
+              "account 1": "Account",
+              "stream": "Stream ",
+              "stream 1": "HA Stream (R>1)",
+              "stream 2": ""
+            }
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 37,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "auto": false,
+        "auto_count": 30,
+        "auto_min": "10s",
+        "current": {
+          "selected": false,
+          "text": "5m",
+          "value": "5m"
+        },
+        "description": "Duration of top row metrics",
+        "hide": 0,
+        "label": "Summary Duration",
+        "name": "QuickStatsInterval",
+        "options": [
+          {
+            "selected": true,
+            "text": "5m",
+            "value": "5m"
+          },
+          {
+            "selected": false,
+            "text": "30s",
+            "value": "30s"
+          },
+          {
+            "selected": false,
+            "text": "1m",
+            "value": "1m"
+          },
+          {
+            "selected": false,
+            "text": "15m",
+            "value": "15m"
+          },
+          {
+            "selected": false,
+            "text": "30m",
+            "value": "30m"
+          },
+          {
+            "selected": false,
+            "text": "1h",
+            "value": "1h"
+          },
+          {
+            "selected": false,
+            "text": "2h",
+            "value": "2h"
+          },
+          {
+            "selected": false,
+            "text": "4h",
+            "value": "4h"
+          },
+          {
+            "selected": false,
+            "text": "8h",
+            "value": "8h"
+          },
+          {
+            "selected": false,
+            "text": "12h",
+            "value": "12h"
+          },
+          {
+            "selected": false,
+            "text": "1d",
+            "value": "1d"
+          }
+        ],
+        "query": "5m,30s,1m,15m,30m,1h,2h,4h,8h,12h,1d",
+        "queryValue": "",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "interval"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "description": "Add/Remove Summary Metrics from the Top Row",
+        "hide": 0,
+        "includeAll": true,
+        "label": "SummaryMetrics",
+        "multi": true,
+        "name": "QuickStatsMap",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "Received Messages",
+            "value": "sum(irate(nats_core_recv_msgs_count{}[$__rate_interval]))"
+          },
+          {
+            "selected": false,
+            "text": "Sent Messages",
+            "value": "sum(irate(nats_core_sent_msgs_count{}[$__rate_interval]))"
+          },
+          {
+            "selected": false,
+            "text": "Received Bytes",
+            "value": "sum(irate(nats_core_recv_bytes{}[$__rate_interval]))"
+          },
+          {
+            "selected": false,
+            "text": "Sent Bytes",
+            "value": "sum(irate(nats_core_sent_bytes{}[$__rate_interval]))"
+          },
+          {
+            "selected": false,
+            "text": "Connections",
+            "value": "sum(nats_core_connection_count{})"
+          },
+          {
+            "selected": false,
+            "text": "Slow Consumers",
+            "value": "sum(irate(nats_core_slow_consumer_count{}[$__rate_interval]))"
+          },
+          {
+            "selected": false,
+            "text": "Clusters",
+            "value": "count(sum(nats_core_info{}) by (server_cluster))"
+          },
+          {
+            "selected": false,
+            "text": "Servers",
+            "value": "count(nats_core_info{})"
+          },
+          {
+            "selected": false,
+            "text": "Route Count",
+            "value": "sum(nats_core_route_count{})"
+          },
+          {
+            "selected": false,
+            "text": "Gateway Count",
+            "value": "sum(nats_core_gateway_count{})"
+          }
+        ],
+        "query": "Received Messages : sum(irate(nats_core_recv_msgs_count{}[$__rate_interval])), Sent Messages : sum(irate(nats_core_sent_msgs_count{}[$__rate_interval])), Received Bytes : sum(irate(nats_core_recv_bytes{}[$__rate_interval])), Sent Bytes : sum(irate(nats_core_sent_bytes{}[$__rate_interval])), Connections : sum(nats_core_connection_count{}), Slow Consumers : sum(irate(nats_core_slow_consumer_count{}[$__rate_interval])), Clusters : count(sum(nats_core_info{}) by (server_cluster)), Servers : count(nats_core_info{}), Route Count : sum(nats_core_route_count{}), Gateway Count : sum(nats_core_gateway_count{})",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "surveyor",
+          "value": "surveyor"
+        },
+        "datasource": null,
+        "definition": "label_values(nats_core_info, job)",
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "surveyor_job",
+        "options": [],
+        "query": {
+          "query": "label_values(nats_core_info, job)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "localhost:7777",
+          "value": "localhost:7777"
+        },
+        "datasource": null,
+        "definition": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "surveyor_instance",
+        "options": [],
+        "query": {
+          "query": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": null,
+        "definition": "label_values(nats_core_info{job=~\"$surveyor_job\", instance=~\"$surveyor_instance\"}, server_cluster)",
+        "description": "Pick a Cluster. NOTE: top row \"Summary Metrics\" ignore the cluster selection currently.",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Cluster",
+        "multi": true,
+        "name": "cluster",
+        "options": [],
+        "query": {
+          "query": "label_values(nats_core_info{job=~\"$surveyor_job\", instance=~\"$surveyor_instance\"}, server_cluster)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "tagValuesQuery": "",
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "auto": false,
+        "auto_count": 30,
+        "auto_min": "10s",
+        "current": {
+          "selected": false,
+          "text": "5s",
+          "value": "5s"
+        },
+        "hide": 2,
+        "name": "ScrapeInterval",
+        "options": [
+          {
+            "selected": true,
+            "text": "5s",
+            "value": "5s"
+          }
+        ],
+        "query": "5s",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "interval"
+      },
+      {
+        "datasource": null,
+        "filters": [],
+        "hide": 0,
+        "name": "Filters",
+        "skipUrlSync": false,
+        "type": "adhoc"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-5m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
+  },
+  "timezone": "",
+  "title": "JetStream State and Metrics",
+  "uid": "fLxkFSIVk",
+  "version": 11,
+  "weekStart": ""
+}
