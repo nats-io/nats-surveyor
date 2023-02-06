@@ -121,10 +121,8 @@ type StatzCollector struct {
 	polling         bool
 	pollkey         string
 	numServers      int
-	more            int
 	servers         map[string]bool
 	doneCh          chan struct{}
-	moreCh          chan struct{}
 	descs           statzDescs
 	collectAccounts bool
 	natsUp          *prometheus.Desc
@@ -359,7 +357,6 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, pol
 		pollTimeout:     pollTimeout,
 		servers:         make(map[string]bool, numServers),
 		doneCh:          make(chan struct{}, 1),
-		moreCh:          make(chan struct{}, 1),
 		collectAccounts: accounts,
 
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
@@ -395,6 +392,7 @@ func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 	}
 
 	sc.Lock()
+	defer sc.Unlock()
 	isCurrent := strings.HasSuffix(msg.Subject, sc.pollkey)
 	rtt := time.Since(sc.start)
 	if sc.polling && isCurrent { //nolint
@@ -409,12 +407,7 @@ func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 		sc.lateReplies.WithLabelValues(fmt.Sprintf("%.1f", sc.pollTimeout.Seconds())).Inc()
 	} else {
 		sc.logger.Infof("Extra reply from server [%15s : %15s : %s]: %v", m.Server.Cluster, serverName(m), m.Server.ID, rtt)
-		sc.more++
-		if sc.more == 1 {
-			sc.moreCh <- struct{}{}
-		}
 	}
-	sc.Unlock()
 }
 
 // poll will only fail if there is a NATS publishing error
@@ -425,13 +418,6 @@ func (sc *StatzCollector) poll() error {
 	sc.pollkey = strconv.Itoa(int(sc.start.UnixNano()))
 	sc.stats = nil
 	sc.rtts = make(map[string]time.Duration, sc.numServers)
-	sc.more = 0
-
-	// drain possible notification from previous poll
-	select {
-	case <-sc.moreCh:
-	default:
-	}
 	sc.Unlock()
 
 	// not all error paths clean this up, so this way might be easier
@@ -530,45 +516,45 @@ func (sc *StatzCollector) pollAccountInfo() error {
 
 		accInfo, err := sc.getAccountInfo(nc, acc)
 		if err != nil {
-			return err
+			sc.logger.Warnf("could not get info for account %q: %s", acc, err)
+			continue
 		}
+		sts.leafCount = float64(accInfo.LeafCnt)
+		sts.subCount = float64(accInfo.SubCnt)
 
 		if accInfo.JetStream {
 			sts.jetstreamEnabled = 1.0
 
 			jsInfo, err := sc.getJSInfo(nc, acc)
 			if err != nil {
-				return err
-			}
+				sc.logger.Warnf("could not get JetStream info for account %q: %s", acc, err)
+			} else {
+				sts.jetstreamMemoryUsed = float64(jsInfo.Memory)
+				sts.jetstreamStorageUsed = float64(jsInfo.Store)
+				sts.jetstreamMemoryReserved = float64(jsInfo.ReservedMemory)
+				sts.jetstreamStorageReserved = float64(jsInfo.ReservedStore)
 
-			sts.jetstreamMemoryUsed = float64(jsInfo.Memory)
-			sts.jetstreamStorageUsed = float64(jsInfo.Store)
-			sts.jetstreamMemoryReserved = float64(jsInfo.ReservedMemory)
-			sts.jetstreamStorageReserved = float64(jsInfo.ReservedStore)
-
-			sts.jetstreamStreamCount = float64(len(jsInfo.Streams))
-			for _, stream := range jsInfo.Streams {
-				sts.jetstreamStreams = append(sts.jetstreamStreams, streamAccountStats{
-					streamName:    stream.Name,
-					consumerCount: float64(len(stream.Consumer)),
-					replicaCount:  float64(stream.Config.Replicas),
-				})
+				sts.jetstreamStreamCount = float64(len(jsInfo.Streams))
+				for _, stream := range jsInfo.Streams {
+					sts.jetstreamStreams = append(sts.jetstreamStreams, streamAccountStats{
+						streamName:    stream.Name,
+						consumerCount: float64(len(stream.Consumer)),
+						replicaCount:  float64(stream.Config.Replicas),
+					})
+				}
 			}
 		}
-
-		sts.leafCount = float64(accInfo.LeafCnt)
-		sts.subCount = float64(accInfo.SubCnt)
 
 		agg, err := sc.getConnzAggregate(nc, acc)
 		if err != nil {
-			return err
+			sc.logger.Warnf("could not get connection statistics for account %q: %s", acc, err)
+		} else {
+			sts.connCount = agg.numConns
+			sts.bytesSent = agg.bytesSent
+			sts.bytesRecv = agg.bytesRecv
+			sts.msgsSent = agg.msgsSent
+			sts.msgsRecv = agg.msgsRecv
 		}
-
-		sts.connCount = agg.numConns
-		sts.bytesSent = agg.bytesSent
-		sts.bytesRecv = agg.bytesRecv
-		sts.msgsSent = agg.msgsSent
-		sts.msgsRecv = agg.msgsRecv
 
 		accStats = append(accStats, sts)
 	}
