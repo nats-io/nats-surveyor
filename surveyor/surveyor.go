@@ -430,7 +430,7 @@ func (s *Surveyor) startJetStreamAdvisories() error {
 	return err
 }
 
-func (s *Surveyor) startObservations() error {
+func (s *Surveyor) startObservations() {
 	s.observations = []*ServiceObsListener{}
 	s.observationWatchers = make(map[string]struct{})
 	s.observationMetrics.observationsGauge.Set(0)
@@ -438,27 +438,30 @@ func (s *Surveyor) startObservations() error {
 	dir := s.opts.ObservationConfigDir
 	if dir == "" {
 		s.logger.Debugln("Skipping observation startup, no directory configured")
-		return nil
+		return
 	}
 
 	fs, err := os.Stat(dir)
 	if err != nil {
-		return fmt.Errorf("could not start observations, %s does not exist", dir)
+		s.logger.Warnf("could not start observations, %s does not exist", dir)
+		return
 	}
 
 	if !fs.IsDir() {
-		return fmt.Errorf("observations dir %s is not a directory", dir)
+		s.logger.Warnf("observations dir %s is not a directory", dir)
+		return
 	}
 
 	err = filepath.WalkDir(dir, s.startObservationsInDir())
 	if err != nil {
-		return err
+		s.logger.Warnf("error traversing observations dir: %s: %s", dir, err)
+		return
 	}
 	if err := s.watchObservations(dir, 5); err != nil {
-		return err
+		s.logger.Warnf("error starting observations watcher: %s", err)
 	}
 
-	return nil
+	return
 }
 
 func (s *Surveyor) Observations() []*ServiceObsListener {
@@ -479,9 +482,7 @@ func (s *Surveyor) Start() error {
 	}
 
 	if s.observations == nil {
-		if err := s.startObservations(); err != nil {
-			return err
-		}
+		s.startObservations()
 	}
 
 	if s.jsAPIAudits == nil {

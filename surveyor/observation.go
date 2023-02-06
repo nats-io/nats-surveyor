@@ -326,25 +326,25 @@ func (s *Surveyor) watchObservations(dir string, depth int) error {
 	}
 
 	go func() {
-		s.Mutex.Lock()
+		s.Lock()
 		if _, ok := s.observationWatchers[dir]; ok {
 			return
 		}
 		watcher, err := fsnotify.NewWatcher()
 		if err != nil {
 			s.logger.Errorf("error creating watcher: %s", err)
-			s.Mutex.Unlock()
+			s.Unlock()
 			return
 		}
 
 		if err := watcher.Add(dir); err != nil {
 			s.logger.Errorf("error adding dir to watcher: %s", err)
-			s.Mutex.Unlock()
+			s.Unlock()
 			return
 		}
 		defer watcher.Close()
 		s.observationWatchers[dir] = struct{}{}
-		s.Mutex.Unlock()
+		s.Unlock()
 		s.logger.Debugf("starting listener goroutine for %s", dir)
 		for {
 			select {
