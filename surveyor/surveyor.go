@@ -460,8 +460,6 @@ func (s *Surveyor) startObservations() {
 	if err := s.watchObservations(dir, 5); err != nil {
 		s.logger.Warnf("error starting observations watcher: %s", err)
 	}
-
-	return
 }
 
 func (s *Surveyor) Observations() []*ServiceObsListener {
