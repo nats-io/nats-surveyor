@@ -505,178 +505,124 @@ func (sc *StatzCollector) poll() error {
 
 func (sc *StatzCollector) pollAccountInfo() error {
 	nc := sc.nc
-	accs, err := sc.getAccounts(nc)
+	accs, err := sc.getAccStatz(nc)
 	if err != nil {
 		return err
 	}
 
-	accStats := make([]accountStats, 0, len(accs))
+	accStats := make(map[string]accountStats, len(accs))
 	for _, acc := range accs {
-		sts := accountStats{accountID: acc}
+		sts := accountStats{accountID: acc.Account}
 
-		accInfo, err := sc.getAccountInfo(nc, acc)
-		if err != nil {
-			sc.logger.Warnf("could not get info for account %q: %s", acc, err)
+		sts.leafCount = float64(acc.LeafNodes)
+		sts.subCount = float64(acc.NumSubs)
+		sts.connCount = float64(acc.Conns)
+		sts.bytesSent = float64(acc.Sent.Bytes)
+		sts.bytesRecv = float64(acc.Received.Bytes)
+		sts.msgsSent = float64(acc.Sent.Msgs)
+		sts.msgsRecv = float64(acc.Received.Msgs)
+
+		accStats[acc.Account] = sts
+	}
+	jsInfos := sc.getJSInfos(nc, accs)
+	for _, jsInfo := range jsInfos {
+		sts, ok := accStats[jsInfo.Id]
+		if !ok {
 			continue
 		}
-		sts.leafCount = float64(accInfo.LeafCnt)
-		sts.subCount = float64(accInfo.SubCnt)
+		sts.jetstreamEnabled = 1.0
+		sts.jetstreamMemoryUsed = float64(jsInfo.Memory)
+		sts.jetstreamStorageUsed = float64(jsInfo.Store)
+		sts.jetstreamMemoryReserved = float64(jsInfo.ReservedMemory)
+		sts.jetstreamStorageReserved = float64(jsInfo.ReservedStore)
 
-		if accInfo.JetStream {
-			sts.jetstreamEnabled = 1.0
-
-			jsInfo, err := sc.getJSInfo(nc, acc)
-			if err != nil {
-				sc.logger.Warnf("could not get JetStream info for account %q: %s", acc, err)
-			} else {
-				sts.jetstreamMemoryUsed = float64(jsInfo.Memory)
-				sts.jetstreamStorageUsed = float64(jsInfo.Store)
-				sts.jetstreamMemoryReserved = float64(jsInfo.ReservedMemory)
-				sts.jetstreamStorageReserved = float64(jsInfo.ReservedStore)
-
-				sts.jetstreamStreamCount = float64(len(jsInfo.Streams))
-				for _, stream := range jsInfo.Streams {
-					sts.jetstreamStreams = append(sts.jetstreamStreams, streamAccountStats{
-						streamName:    stream.Name,
-						consumerCount: float64(len(stream.Consumer)),
-						replicaCount:  float64(stream.Config.Replicas),
-					})
-				}
-			}
+		sts.jetstreamStreamCount = float64(len(jsInfo.Streams))
+		for _, stream := range jsInfo.Streams {
+			sts.jetstreamStreams = append(sts.jetstreamStreams, streamAccountStats{
+				streamName:    stream.Name,
+				consumerCount: float64(len(stream.Consumer)),
+				replicaCount:  float64(stream.Config.Replicas),
+			})
 		}
-
-		agg, err := sc.getConnzAggregate(nc, acc)
-		if err != nil {
-			sc.logger.Warnf("could not get connection statistics for account %q: %s", acc, err)
-		} else {
-			sts.connCount = agg.numConns
-			sts.bytesSent = agg.bytesSent
-			sts.bytesRecv = agg.bytesRecv
-			sts.msgsSent = agg.msgsSent
-			sts.msgsRecv = agg.msgsRecv
-		}
-
-		accStats = append(accStats, sts)
+		accStats[jsInfo.Id] = sts
 	}
 
 	sc.Lock()
-	sc.accStats = accStats
+	sc.accStats = make([]accountStats, 0, len(accStats))
+	for _, acc := range accStats {
+		sc.accStats = append(sc.accStats, acc)
+	}
 	sc.Unlock()
 
 	return nil
 }
 
-func (sc *StatzCollector) getAccounts(nc *nats.Conn) ([]string, error) {
-	const subj = "$SYS.REQ.SERVER.PING.ACCOUNTZ"
-	msg, err := nc.Request(subj, nil, sc.pollTimeout)
+func (sc *StatzCollector) getJSInfos(nc *nats.Conn, accounts []*server.AccountStat) []*server.AccountDetail {
+	inbox := nc.NewRespInbox()
+	sub, err := nc.SubscribeSync(inbox)
 	if err != nil {
-		return nil, err
+		sc.logger.Warnf("Error creating nats subscription: %s", err)
+		return nil
 	}
-
-	var r server.ServerAPIResponse
-	var d server.Accountz
-	r.Data = &d
-	if err := json.Unmarshal(msg.Data, &r); err != nil {
-		return nil, err
-	}
-
-	sort.Strings(d.Accounts)
-	return d.Accounts, nil
-}
-func (sc *StatzCollector) getAccountInfo(nc *nats.Conn, account string) (server.AccountInfo, error) {
-	subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.INFO", account)
-	msg, err := nc.Request(subj, nil, sc.pollTimeout)
-	if err != nil {
-		return server.AccountInfo{}, err
-	}
-
-	var r server.ServerAPIResponse
-	var d server.AccountInfo
-	r.Data = &d
-	if err := json.Unmarshal(msg.Data, &r); err != nil {
-		return server.AccountInfo{}, err
-	}
-
-	return d, nil
-}
-
-func (sc *StatzCollector) getJSInfo(nc *nats.Conn, account string) (server.AccountDetail, error) {
-	subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.JSZ", account)
+	defer sub.Unsubscribe()
 	opts := []byte(`{"streams": true, "consumer": true, "config": true}`)
-	msg, err := nc.Request(subj, opts, sc.pollTimeout)
-	if err != nil {
-		return server.AccountDetail{}, err
+	reqDispatched := len(accounts)
+	for _, acc := range accounts {
+		subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.JSZ", acc.Account)
+		if err := nc.PublishRequest(subj, inbox, opts); err != nil {
+			reqDispatched--
+			sc.logger.Warnf("Unable to request JetStream info for account %s: %s", acc.Account, err.Error())
+			continue
+		}
 	}
 
+	res := make([]*server.AccountDetail, 0, len(accounts))
+	for i := 0; i < reqDispatched; i++ {
+		msg, err := sub.NextMsg(sc.pollTimeout)
+		if err != nil {
+			sc.logger.Warnf("Error fetching JetStream info: %s", err)
+			continue
+		}
+		var r server.ServerAPIResponse
+		var d server.AccountDetail
+		r.Data = &d
+		if err := json.Unmarshal(msg.Data, &r); err != nil {
+			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
+			continue
+		}
+		if r.Error != nil {
+			if strings.Contains(r.Error.Description, "jetstream not enabled") {
+				// jetstream is not enabled on server
+				return nil
+			}
+			continue
+		}
+		res = append(res, &d)
+	}
+	return res
+}
+
+func (sc *StatzCollector) getAccStatz(nc *nats.Conn) ([]*server.AccountStat, error) {
+	req := &server.AccountStatzOptions{
+		IncludeUnused: true,
+	}
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	const subj = "$SYS.REQ.ACCOUNT.PING.STATZ"
+	msg, err := nc.Request(subj, reqJSON, sc.pollTimeout)
+	if err != nil {
+		return nil, err
+	}
 	var r server.ServerAPIResponse
-	var d server.AccountDetail
+	var d server.AccountStatz
 	r.Data = &d
 	if err := json.Unmarshal(msg.Data, &r); err != nil {
-		return server.AccountDetail{}, err
+		return nil, err
 	}
 
-	return d, nil
-}
-
-type connzAggregate struct {
-	bytesSent float64
-	bytesRecv float64
-	msgsSent  float64
-	msgsRecv  float64
-	numConns  float64
-}
-
-func (sc *StatzCollector) getConnzAggregate(nc *nats.Conn, account string) (connzAggregate, error) {
-	// TODO: Replace with "$SYS.REQ.ACCOUNT.%s.CONNS" after NATS 2.8.4.
-	// CONNS returns bytes sent/recv at the account level without needing the
-	// following code.
-	subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.CONNZ", account)
-
-	rep := nc.NewRespInbox()
-
-	msg := nats.NewMsg(subj)
-	msg.Reply = rep
-	msg.Data = nil
-
-	s, err := nc.SubscribeSync(msg.Reply)
-	if err != nil {
-		return connzAggregate{}, err
-	}
-	defer s.Unsubscribe()
-
-	if err := nc.PublishMsg(msg); err != nil {
-		return connzAggregate{}, err
-	}
-
-	var agg connzAggregate
-	var r server.ServerAPIResponse
-	var d server.Connz
-	r.Data = &d
-
-	for i := 0; i < sc.numServers; i++ {
-		m, err := s.NextMsg(sc.pollTimeout)
-		if err != nil && err == nats.ErrTimeout {
-			break
-		}
-		if err != nil {
-			return connzAggregate{}, err
-		}
-
-		if err := json.Unmarshal(m.Data, &r); err != nil {
-			return connzAggregate{}, err
-		}
-
-		agg.numConns += float64(d.NumConns)
-
-		for _, c := range d.Conns {
-			agg.bytesSent += float64(c.InBytes)
-			agg.bytesRecv += float64(c.OutBytes)
-			agg.msgsSent += float64(c.InMsgs)
-			agg.msgsRecv += float64(c.OutMsgs)
-		}
-	}
-
-	return agg, nil
+	return d.Accounts, nil
 }
 
 // Describe is the Prometheus interface to describe metrics for
