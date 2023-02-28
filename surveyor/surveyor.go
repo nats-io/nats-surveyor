@@ -102,19 +102,17 @@ func GetDefaultOptions() *Options {
 // A Surveyor instance
 type Surveyor struct {
 	sync.Mutex
-	opts                Options
-	logger              *logrus.Logger
-	listener            net.Listener
-	httpServer          *http.Server
-	promRegistry        *prometheus.Registry
-	reconnectCtr        *prometheus.CounterVec
-	statzC              *StatzCollector
-	observationMetrics  *ServiceObsMetrics
-	observations        []*ServiceObsListener
-	jsAPIMetrics        *JSAdvisoryMetrics
-	jsAPIAudits         []*JSAdvisoryListener
-	observationWatchers map[string]struct{}
-	stop                chan struct{}
+	opts              Options
+	logger            *logrus.Logger
+	listener          net.Listener
+	httpServer        *http.Server
+	promRegistry      *prometheus.Registry
+	reconnectCtr      *prometheus.CounterVec
+	statzC            *StatzCollector
+	serviceObsManager *ServiceObsManager
+	jsAPIMetrics      *JSAdvisoryMetrics
+	jsAPIAudits       []*JSAdvisoryListener
+	stop              chan struct{}
 }
 
 func connect(opts *Options, reconnectCtr *prometheus.CounterVec) (*nats.Conn, error) {
@@ -187,12 +185,12 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 	}, []string{"name"})
 	promRegistry.MustRegister(reconnectCtr)
 	return &Surveyor{
-		opts:               *opts,
-		logger:             opts.Logger,
-		promRegistry:       promRegistry,
-		reconnectCtr:       reconnectCtr,
-		observationMetrics: NewServiceObservationMetrics(promRegistry, opts.ConstLabels),
-		jsAPIMetrics:       NewJetStreamAdvisoryMetrics(promRegistry, opts.ConstLabels),
+		opts:              *opts,
+		logger:            opts.Logger,
+		promRegistry:      promRegistry,
+		reconnectCtr:      reconnectCtr,
+		serviceObsManager: newServiceObservationManager(opts.Logger, *opts, NewServiceObservationMetrics(promRegistry, opts.ConstLabels), reconnectCtr),
+		jsAPIMetrics:      NewJetStreamAdvisoryMetrics(promRegistry, opts.ConstLabels),
 	}, nil
 }
 
@@ -431,10 +429,11 @@ func (s *Surveyor) startJetStreamAdvisories() error {
 }
 
 func (s *Surveyor) startObservations() {
-	s.observations = []*ServiceObsListener{}
-	s.observationWatchers = make(map[string]struct{})
-	s.observationMetrics.observationsGauge.Set(0)
+	if s.serviceObsManager.IsRunning() {
+		return
+	}
 
+	s.serviceObsManager.start()
 	dir := s.opts.ObservationConfigDir
 	if dir == "" {
 		s.logger.Debugln("Skipping observation startup, no directory configured")
@@ -452,18 +451,18 @@ func (s *Surveyor) startObservations() {
 		return
 	}
 
-	err = filepath.WalkDir(dir, s.startObservationsInDir())
+	err = filepath.WalkDir(dir, s.serviceObsManager.startObservationsInDir())
 	if err != nil {
 		s.logger.Warnf("error traversing observations dir: %s: %s", dir, err)
 		return
 	}
-	if err := s.watchObservations(dir, 5); err != nil {
+	if err := s.serviceObsManager.watchObservations(dir, 5); err != nil {
 		s.logger.Warnf("error starting observations watcher: %s", err)
 	}
 }
 
-func (s *Surveyor) Observations() []*ServiceObsListener {
-	return s.observations
+func (s *Surveyor) ServiceObservationManager() *ServiceObsManager {
+	return s.serviceObsManager
 }
 
 // Start starts the surveyor
@@ -479,9 +478,7 @@ func (s *Surveyor) Start() error {
 		}
 	}
 
-	if s.observations == nil {
-		s.startObservations()
-	}
+	s.startObservations()
 
 	if s.jsAPIAudits == nil {
 		if err := s.startJetStreamAdvisories(); err != nil {
@@ -519,12 +516,7 @@ func (s *Surveyor) Stop() {
 		s.statzC = nil
 	}
 
-	if s.observations != nil {
-		for _, o := range s.observations {
-			o.nc.Close()
-		}
-		s.observations = nil
-	}
+	s.serviceObsManager.stop()
 
 	if s.jsAPIAudits != nil {
 		for _, j := range s.jsAPIAudits {
