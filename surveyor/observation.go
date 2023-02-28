@@ -321,182 +321,6 @@ func newServiceObservationManager(logger *logrus.Logger, sopts Options, metrics 
 	}
 }
 
-func (om *ServiceObsManager) startObservationsInDir() fs.WalkDirFunc {
-	return func(path string, info fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// skip directories starting with '..'
-		// this prevents double observation loading when using kubernetes mounts
-		if info.IsDir() && strings.HasPrefix(info.Name(), "..") {
-			return filepath.SkipDir
-		}
-
-		if filepath.Ext(info.Name()) != ".json" {
-			return nil
-		}
-
-		obs, err := NewServiceObservationConfigFromFile(path)
-		if err != nil {
-			return fmt.Errorf("could not create observation from %s: %s", path, err)
-		}
-
-		return om.Set(obs)
-	}
-}
-
-func (om *ServiceObsManager) watchObservations(dir string, depth int) error {
-	if depth == 0 {
-		return fmt.Errorf("exceeded observation dir max depth")
-	}
-	if dir == "" {
-		return nil
-	}
-
-	go func() {
-		om.Lock()
-		if !om.running {
-			return
-		}
-
-		if _, ok := om.watcherStopChMap[dir]; ok {
-			om.Unlock()
-			return
-		}
-
-		watcher, err := fsnotify.NewWatcher()
-		if err != nil {
-			om.Unlock()
-			om.logger.Errorf("error creating watcher: %s", err)
-			return
-		}
-
-		if err := watcher.Add(dir); err != nil {
-			om.Unlock()
-			om.logger.Errorf("error adding dir to watcher: %s", err)
-			return
-		}
-
-		stopCh := make(chan struct{}, 1)
-		om.watcherStopChMap[dir] = stopCh
-		om.Unlock()
-
-		defer func() {
-			om.Lock()
-			delete(om.watcherStopChMap, dir)
-			om.Unlock()
-			watcher.Close()
-		}()
-
-		om.logger.Debugf("starting listener goroutine for %s", dir)
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if err := om.handleWatcherEvent(event, depth); err != nil {
-					om.logger.Warn(err)
-				}
-			case <-stopCh:
-				return
-			}
-		}
-	}()
-	return nil
-}
-
-func (om *ServiceObsManager) handleWatcherEvent(event fsnotify.Event, depth int) error {
-	path := event.Name
-
-	switch {
-	case event.Has(fsnotify.Create):
-		return om.handleCreateEvent(path, depth)
-	case event.Has(fsnotify.Write) && !event.Has(fsnotify.Remove):
-		return om.handleWriteEvent(path)
-	case event.Has(fsnotify.Remove):
-		return om.handleRemoveEvent(path)
-	}
-	return nil
-}
-
-func (om *ServiceObsManager) handleCreateEvent(path string, depth int) error {
-	stat, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("could not read observation file %s: %s", path, err)
-	}
-	// if a new directory was created, first start all observations already in it
-	// and then start watching for changes in this directory (fsnotify.Watcher is not recursive)
-	if stat.IsDir() && !strings.HasPrefix(stat.Name(), "..") {
-		depth--
-		err = filepath.WalkDir(path, om.startObservationsInDir())
-		if err != nil {
-			return fmt.Errorf("could not start observation from %s: %s", path, err)
-		}
-		if err := om.watchObservations(path, depth); err != nil {
-			return fmt.Errorf("could not start watcher in directory %s: %s", path, err)
-		}
-	}
-	// if not a directory and not a JSON, ignore
-	if filepath.Ext(stat.Name()) != ".json" {
-		return nil
-	}
-
-	// handle as a write event
-	return om.handleWriteEvent(path)
-}
-
-func (om *ServiceObsManager) handleWriteEvent(path string) error {
-	stat, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("could not read observation file %s: %s", path, err)
-	}
-
-	// if not a JSON, ignore
-	if filepath.Ext(stat.Name()) != ".json" {
-		return nil
-	}
-
-	obs, err := NewServiceObservationConfigFromFile(path)
-	if err != nil {
-		return fmt.Errorf("could not create observation from %s: %s", path, err)
-	}
-
-	return om.Set(obs)
-}
-
-func (om *ServiceObsManager) handleRemoveEvent(path string) error {
-	var removeIDs []string
-
-	om.Lock()
-	if stopCh, ok := om.watcherStopChMap[path]; ok {
-		// directory removed, delete all observations inside and cancel watching this dir
-		prefix := strings.TrimSuffix(path, string(filepath.Separator)) + string(filepath.Separator)
-		for id := range om.listenerMap {
-			if strings.HasPrefix(id, prefix) {
-				removeIDs = append(removeIDs, id)
-			}
-		}
-		stopCh <- struct{}{}
-	} else if _, ok := om.listenerMap[path]; ok {
-		// JSON file exists
-		removeIDs = append(removeIDs, path)
-	}
-	om.Unlock()
-
-	var err error
-	if len(removeIDs) > 0 {
-		for _, removeID := range removeIDs {
-			if removeErr := om.Delete(removeID); removeErr != nil {
-				err = removeErr
-			}
-		}
-	}
-
-	return err
-}
-
 func (om *ServiceObsManager) start() {
 	om.Lock()
 	defer om.Unlock()
@@ -623,4 +447,178 @@ func (om *ServiceObsManager) Delete(id string) error {
 
 	existingObs.Stop()
 	return nil
+}
+
+type serviceObsFsWatcher struct {
+	sync.Mutex
+	logger  *logrus.Logger
+	om      *ServiceObsManager
+	watcher *fsnotify.Watcher
+	stopCh  chan struct{}
+}
+
+func newServiceObsFsWatcher(logger *logrus.Logger, om *ServiceObsManager) *serviceObsFsWatcher {
+	return &serviceObsFsWatcher{
+		logger: logger,
+		om:     om,
+	}
+}
+
+func (w *serviceObsFsWatcher) start() error {
+	w.Lock()
+	defer w.Unlock()
+	if w.watcher != nil {
+		return nil
+	}
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	stopCh := make(chan struct{}, 1)
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if err := w.handleWatcherEvent(event); err != nil {
+					w.logger.Warn(err)
+				}
+			case <-stopCh:
+				return
+			}
+		}
+	}()
+
+	w.watcher = watcher
+	w.stopCh = stopCh
+	return nil
+}
+
+func (w *serviceObsFsWatcher) stop() {
+	w.Lock()
+	defer w.Unlock()
+
+	if w.watcher == nil {
+		return
+	}
+
+	w.stopCh <- struct{}{}
+	_ = w.watcher.Close()
+	w.watcher = nil
+}
+
+func (w *serviceObsFsWatcher) startObservationsInDir() fs.WalkDirFunc {
+	return func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// skip directories starting with '..'
+		// this prevents double observation loading when using kubernetes mounts
+		if info.IsDir() && strings.HasPrefix(info.Name(), "..") {
+			return filepath.SkipDir
+		}
+
+		if info.IsDir() {
+			w.Lock()
+			if w.watcher != nil {
+				_ = w.watcher.Add(path)
+			}
+			w.Unlock()
+		}
+
+		if filepath.Ext(info.Name()) != ".json" {
+			return nil
+		}
+
+		obs, err := NewServiceObservationConfigFromFile(path)
+		if err != nil {
+			return fmt.Errorf("could not create observation from %s: %s", path, err)
+		}
+
+		return w.om.Set(obs)
+	}
+}
+
+func (w *serviceObsFsWatcher) handleWatcherEvent(event fsnotify.Event) error {
+	path := event.Name
+
+	switch {
+	case event.Has(fsnotify.Create):
+		return w.handleCreateEvent(path)
+	case event.Has(fsnotify.Write) && !event.Has(fsnotify.Remove):
+		return w.handleWriteEvent(path)
+	case event.Has(fsnotify.Remove):
+		return w.handleRemoveEvent(path)
+	}
+	return nil
+}
+
+func (w *serviceObsFsWatcher) handleCreateEvent(path string) error {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("could not read observation file %s: %s", path, err)
+	}
+
+	// if a new directory was created, start observations in dir
+	if stat.IsDir() {
+		return filepath.WalkDir(path, w.startObservationsInDir())
+	}
+
+	// if not a directory and not a JSON, ignore
+	if filepath.Ext(stat.Name()) != ".json" {
+		return nil
+	}
+
+	// handle as a write event
+	return w.handleWriteEvent(path)
+}
+
+func (w *serviceObsFsWatcher) handleWriteEvent(path string) error {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("could not read observation file %s: %s", path, err)
+	}
+
+	// if not a JSON file, ignore
+	if stat.IsDir() || filepath.Ext(stat.Name()) != ".json" {
+		return nil
+	}
+
+	obs, err := NewServiceObservationConfigFromFile(path)
+	if err != nil {
+		return fmt.Errorf("could not create observation from %s: %s", path, err)
+	}
+
+	return w.om.Set(obs)
+}
+
+func (w *serviceObsFsWatcher) handleRemoveEvent(path string) error {
+	var removeIDs []string
+	configMap := w.om.ConfigMap()
+	dir := strings.TrimSuffix(path, string(filepath.Separator)) + string(filepath.Separator)
+	for id := range configMap {
+		if id == path {
+			// file
+			removeIDs = append(removeIDs, id)
+		} else if strings.HasPrefix(id, dir) {
+			// directory
+			removeIDs = append(removeIDs, id)
+		}
+	}
+
+	var err error
+	if len(removeIDs) > 0 {
+		for _, removeID := range removeIDs {
+			if removeErr := w.om.Delete(removeID); removeErr != nil {
+				err = removeErr
+			}
+		}
+	}
+
+	return err
 }
