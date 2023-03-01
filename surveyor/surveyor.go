@@ -109,11 +109,10 @@ type Surveyor struct {
 	promRegistry        *prometheus.Registry
 	reconnectCtr        *prometheus.CounterVec
 	statzC              *StatzCollector
-	observationMetrics  *ServiceObsMetrics
-	observations        []*ServiceObsListener
+	serviceObsManager   *ServiceObsManager
+	serviceObsFsWatcher *serviceObsFSWatcher
 	jsAPIMetrics        *JSAdvisoryMetrics
 	jsAPIAudits         []*JSAdvisoryListener
-	observationWatchers map[string]struct{}
 	stop                chan struct{}
 }
 
@@ -186,13 +185,19 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 		ConstLabels: opts.ConstLabels,
 	}, []string{"name"})
 	promRegistry.MustRegister(reconnectCtr)
+	serviceObsMetrics := NewServiceObservationMetrics(promRegistry, opts.ConstLabels)
+	serviceObsManager := newServiceObservationManager(opts.Logger, *opts, serviceObsMetrics, reconnectCtr)
+	serviceObsFsWatcher := newServiceObservationFSWatcher(opts.Logger, serviceObsManager)
+	jsAPIMetrics := NewJetStreamAdvisoryMetrics(promRegistry, opts.ConstLabels)
+
 	return &Surveyor{
-		opts:               *opts,
-		logger:             opts.Logger,
-		promRegistry:       promRegistry,
-		reconnectCtr:       reconnectCtr,
-		observationMetrics: NewServiceObservationMetrics(promRegistry, opts.ConstLabels),
-		jsAPIMetrics:       NewJetStreamAdvisoryMetrics(promRegistry, opts.ConstLabels),
+		opts:                *opts,
+		logger:              opts.Logger,
+		promRegistry:        promRegistry,
+		reconnectCtr:        reconnectCtr,
+		serviceObsManager:   serviceObsManager,
+		serviceObsFsWatcher: serviceObsFsWatcher,
+		jsAPIMetrics:        jsAPIMetrics,
 	}, nil
 }
 
@@ -431,10 +436,11 @@ func (s *Surveyor) startJetStreamAdvisories() error {
 }
 
 func (s *Surveyor) startObservations() {
-	s.observations = []*ServiceObsListener{}
-	s.observationWatchers = make(map[string]struct{})
-	s.observationMetrics.observationsGauge.Set(0)
+	if s.serviceObsManager.IsRunning() {
+		return
+	}
 
+	s.serviceObsManager.start()
 	dir := s.opts.ObservationConfigDir
 	if dir == "" {
 		s.logger.Debugln("Skipping observation startup, no directory configured")
@@ -452,18 +458,19 @@ func (s *Surveyor) startObservations() {
 		return
 	}
 
-	err = filepath.WalkDir(dir, s.startObservationsInDir())
+	if err := s.serviceObsFsWatcher.start(); err != nil {
+		s.logger.Warnf("could not start filesystem watcher: %s", err)
+	}
+
+	err = filepath.WalkDir(dir, s.serviceObsFsWatcher.startObservationsInDir())
 	if err != nil {
 		s.logger.Warnf("error traversing observations dir: %s: %s", dir, err)
 		return
 	}
-	if err := s.watchObservations(dir, 5); err != nil {
-		s.logger.Warnf("error starting observations watcher: %s", err)
-	}
 }
 
-func (s *Surveyor) Observations() []*ServiceObsListener {
-	return s.observations
+func (s *Surveyor) ServiceObservationManager() *ServiceObsManager {
+	return s.serviceObsManager
 }
 
 // Start starts the surveyor
@@ -479,9 +486,7 @@ func (s *Surveyor) Start() error {
 		}
 	}
 
-	if s.observations == nil {
-		s.startObservations()
-	}
+	s.startObservations()
 
 	if s.jsAPIAudits == nil {
 		if err := s.startJetStreamAdvisories(); err != nil {
@@ -519,12 +524,8 @@ func (s *Surveyor) Stop() {
 		s.statzC = nil
 	}
 
-	if s.observations != nil {
-		for _, o := range s.observations {
-			o.nc.Close()
-		}
-		s.observations = nil
-	}
+	s.serviceObsFsWatcher.stop()
+	s.serviceObsManager.stop()
 
 	if s.jsAPIAudits != nil {
 		for _, j := range s.jsAPIAudits {

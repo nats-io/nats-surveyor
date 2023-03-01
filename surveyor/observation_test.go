@@ -37,23 +37,23 @@ func TestServiceObservation_Load(t *testing.T) {
 		Help: "Number of times the surveyor reconnected to the NATS cluster",
 	}, []string{"name"})
 
-	obs, err := NewServiceObservationFromFile("testdata/goodobs/good.json", *opt, metrics, reconnectCtr)
+	obs, err := NewServiceObservation("testdata/goodobs/good.json", *opt, metrics, reconnectCtr)
 	if err != nil {
 		t.Fatalf("observation load error: %s", err)
 	}
 	obs.Stop()
 
-	_, err = NewServiceObservationFromFile("testdata/badobs/missing.json", *opt, metrics, reconnectCtr)
+	_, err = NewServiceObservation("testdata/badobs/missing.json", *opt, metrics, reconnectCtr)
 	if err.Error() != "open testdata/badobs/missing.json: no such file or directory" {
 		t.Fatalf("observation load error: %s", err)
 	}
 
-	_, err = NewServiceObservationFromFile("testdata/badobs/bad.json", *opt, metrics, reconnectCtr)
-	if err.Error() != "invalid service observation configuration: testdata/badobs/bad.json: name is required, topic is required, jwt or nkey credentials is required" {
+	_, err = NewServiceObservation("testdata/badobs/bad.json", *opt, metrics, reconnectCtr)
+	if err.Error() != "invalid service observation config: testdata/badobs/bad.json: name is required, topic is required, jwt or nkey credentials is required" {
 		t.Fatalf("observation load error: %s", err)
 	}
 
-	_, err = NewServiceObservationFromFile("testdata/badobs/badauth.json", *opt, metrics, reconnectCtr)
+	_, err = NewServiceObservation("testdata/badobs/badauth.json", *opt, metrics, reconnectCtr)
 	if err.Error() != "nats connection failed: nats: Authorization Violation" {
 		t.Fatalf("observation load error: %s", err)
 	}
@@ -70,23 +70,23 @@ func TestServiceObservation_LoadDynamically(t *testing.T) {
 		Help: "Number of times the surveyor reconnected to the NATS cluster",
 	}, []string{"name"})
 
-	obs, err := NewServiceObservationFromFile("testdata/goodobs/good.json", *opt, metrics, reconnectCtr)
+	obs, err := NewServiceObservation("testdata/goodobs/good.json", *opt, metrics, reconnectCtr)
 	if err != nil {
 		t.Fatalf("observation load error: %s", err)
 	}
 	obs.Stop()
 
-	_, err = NewServiceObservationFromFile("testdata/badobs/missing.json", *opt, metrics, reconnectCtr)
+	_, err = NewServiceObservation("testdata/badobs/missing.json", *opt, metrics, reconnectCtr)
 	if err.Error() != "open testdata/badobs/missing.json: no such file or directory" {
 		t.Fatalf("observation load error: %s", err)
 	}
 
-	_, err = NewServiceObservationFromFile("testdata/badobs/bad.json", *opt, metrics, reconnectCtr)
-	if err.Error() != "invalid service observation configuration: testdata/badobs/bad.json: name is required, topic is required, jwt or nkey credentials is required" {
+	_, err = NewServiceObservation("testdata/badobs/bad.json", *opt, metrics, reconnectCtr)
+	if err.Error() != "invalid service observation config: testdata/badobs/bad.json: name is required, topic is required, jwt or nkey credentials is required" {
 		t.Fatalf("observation load error: %s", err)
 	}
 
-	_, err = NewServiceObservationFromFile("testdata/badobs/badauth.json", *opt, metrics, reconnectCtr)
+	_, err = NewServiceObservation("testdata/badobs/badauth.json", *opt, metrics, reconnectCtr)
 	if err.Error() != "nats connection failed: nats: Authorization Violation" {
 		t.Fatalf("observation load error: %s", err)
 	}
@@ -103,7 +103,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 		Help: "Number of times the surveyor reconnected to the NATS cluster",
 	}, []string{"name"})
 
-	obs, err := NewServiceObservationFromFile("testdata/goodobs/good.json", *opt, metrics, reconnectCtr)
+	obs, err := NewServiceObservation("testdata/goodobs/good.json", *opt, metrics, reconnectCtr)
 	if err != nil {
 		t.Fatalf("observation load error: %s", err)
 	}
