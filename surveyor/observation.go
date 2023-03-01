@@ -314,7 +314,7 @@ type ServiceObsManager struct {
 	watcherStopChMap map[string]chan struct{}
 }
 
-// newServiceObservationManager creates an ObservationManager, allowing for adding/deleting service observations to the surveyor.
+// newServiceObservationManager creates a ServiceObsManager, allowing for adding/deleting service observations to the surveyor.
 func newServiceObservationManager(logger *logrus.Logger, sopts Options, metrics *ServiceObsMetrics, reconnectCtr *prometheus.CounterVec) *ServiceObsManager {
 	return &ServiceObsManager{
 		logger:           logger,
