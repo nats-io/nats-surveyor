@@ -110,7 +110,7 @@ type Surveyor struct {
 	reconnectCtr        *prometheus.CounterVec
 	statzC              *StatzCollector
 	serviceObsManager   *ServiceObsManager
-	serviceObsFsWatcher *serviceObsFsWatcher
+	serviceObsFsWatcher *serviceObsFSWatcher
 	jsAPIMetrics        *JSAdvisoryMetrics
 	jsAPIAudits         []*JSAdvisoryListener
 	stop                chan struct{}
@@ -187,7 +187,7 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 	promRegistry.MustRegister(reconnectCtr)
 	serviceObsMetrics := NewServiceObservationMetrics(promRegistry, opts.ConstLabels)
 	serviceObsManager := newServiceObservationManager(opts.Logger, *opts, serviceObsMetrics, reconnectCtr)
-	serviceObsFsWatcher := newServiceObsFsWatcher(opts.Logger, serviceObsManager)
+	serviceObsFsWatcher := newServiceObservationFSWatcher(opts.Logger, serviceObsManager)
 	jsAPIMetrics := NewJetStreamAdvisoryMetrics(promRegistry, opts.ConstLabels)
 
 	return &Surveyor{

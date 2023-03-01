@@ -20,7 +20,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -179,6 +178,14 @@ func (o *ServiceObsConfig) Validate() error {
 	return errors.New(strings.Join(errs, ", "))
 }
 
+func (o *ServiceObsConfig) copy() *ServiceObsConfig {
+	if o == nil {
+		return nil
+	}
+	cp := *o
+	return &cp
+}
+
 // NewServiceObservationConfigFromFile creates a new ServiceObsConfig from a file
 // the ID of the ServiceObsConfig is set to the filename f
 func NewServiceObservationConfigFromFile(f string) (*ServiceObsConfig, error) {
@@ -219,15 +226,15 @@ func NewServiceObservation(f string, sopts Options, metrics *ServiceObsMetrics, 
 	return obs, nil
 }
 
-func newServiceObservationListener(serviceObs *ServiceObsConfig, sopts Options, metrics *ServiceObsMetrics, reconnectCtr *prometheus.CounterVec) (*ServiceObsListener, error) {
-	err := serviceObs.Validate()
+func newServiceObservationListener(config *ServiceObsConfig, sopts Options, metrics *ServiceObsMetrics, reconnectCtr *prometheus.CounterVec) (*ServiceObsListener, error) {
+	err := config.Validate()
 	if err != nil {
-		return nil, fmt.Errorf("invalid service observation config: %s: %s", serviceObs.ServiceName, err)
+		return nil, fmt.Errorf("invalid service observation config for id: %s, service name: %s, error: %v", config.ID, config.ServiceName, err)
 	}
 
-	sopts.Name = fmt.Sprintf("%s (observing %s)", sopts.Name, serviceObs.ServiceName)
-	sopts.Credentials = serviceObs.Credentials
-	sopts.Nkey = serviceObs.Nkey
+	sopts.Name = fmt.Sprintf("%s (observing %s)", sopts.Name, config.ServiceName)
+	sopts.Credentials = config.Credentials
+	sopts.Nkey = config.Nkey
 	nc, err := connect(&sopts, reconnectCtr)
 	if err != nil {
 		return nil, fmt.Errorf("nats connection failed: %s", err)
@@ -236,7 +243,7 @@ func newServiceObservationListener(serviceObs *ServiceObsConfig, sopts Options, 
 	return &ServiceObsListener{
 		nc:      nc,
 		logger:  sopts.Logger,
-		config:  serviceObs,
+		config:  config,
 		metrics: metrics,
 		sopts:   &sopts,
 	}, nil
@@ -246,7 +253,7 @@ func newServiceObservationListener(serviceObs *ServiceObsConfig, sopts Options, 
 func (o *ServiceObsListener) Start() error {
 	_, err := o.nc.Subscribe(o.config.Topic, o.observationHandler)
 	if err != nil {
-		return fmt.Errorf("could not subscribe to observation topic for %s (%s): %s", o.config.ServiceName, o.config.Topic, err)
+		return fmt.Errorf("could not subscribe to service observation topic for id: %s, service name: %s, topic: %s, error: %v", o.config.ID, o.config.ServiceName, o.config.Topic, err)
 	}
 	err = o.nc.Flush()
 	if err != nil {
@@ -254,7 +261,7 @@ func (o *ServiceObsListener) Start() error {
 	}
 
 	o.metrics.observationsGauge.Inc()
-	o.logger.Infof("Started observing stats on %s for %s", o.config.Topic, o.config.ServiceName)
+	o.logger.Infof("started service observation for id: %s, service name: %s, topic: %s", o.config.ID, o.config.ServiceName, o.config.Topic)
 
 	return nil
 }
@@ -263,8 +270,7 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 	kind, obs, err := jsm.ParseEvent(m.Data)
 	if err != nil {
 		o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName).Inc()
-		o.logger.Warnf("data: %s", m.Data)
-		o.logger.Warnf("Unparsable observation received on %s: %s", o.config.Topic, err)
+		o.logger.Warnf("unparsable service observation received for id: %s, service name: %s, subject: %s, error: %v, data: %q", o.config.ID, o.config.ServiceName, m.Subject, err, m.Data)
 		return
 	}
 
@@ -285,7 +291,7 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 
 	default:
 		o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName).Inc()
-		o.logger.Warnf("Unsupported observation received on %s: %s", o.config.Topic, kind)
+		o.logger.Warnf("unsupported service observation received for id: %s, service name: %s, subject: %s, kind: %s", o.config.ID, o.config.ServiceName, m.Subject, kind)
 		return
 	}
 }
@@ -366,9 +372,8 @@ func (om *ServiceObsManager) ConfigMap() map[string]*ServiceObsConfig {
 
 	obsMap := make(map[string]*ServiceObsConfig, len(om.listenerMap))
 	for id, obs := range om.listenerMap {
-		// copy value so that it can't be changed
-		obsMap[id] = &ServiceObsConfig{}
-		*obsMap[id] = *obs.config
+		// copy so that internal references cannot be changed
+		obsMap[id] = obs.config.copy()
 	}
 
 	return obsMap
@@ -383,40 +388,36 @@ func (om *ServiceObsManager) Set(config *ServiceObsConfig) error {
 		return err
 	}
 
-	{
-		// copy value so that it can't be changed
-		configCp := &ServiceObsConfig{}
-		*configCp = *config
-		config = configCp
-	}
+	// copy so that internal references cannot be changed
+	config = config.copy()
 
 	om.Lock()
 	if !om.running {
 		om.Unlock()
-		return fmt.Errorf("could not set observation for service: %s: observation manager is stopped", config.ServiceName)
+		return fmt.Errorf("observation manager is stopped; could not set observation for id: %s, service name: %s", config.ID, config.ServiceName)
 	}
 
 	existingObs, found := om.listenerMap[config.ID]
 	om.Unlock()
 
-	if found && reflect.DeepEqual(config, existingObs.config) {
+	if found && *config == *existingObs.config {
 		return nil
 	}
 
 	obs, err := newServiceObservationListener(config, om.sopts, om.metrics, om.reconnectCtr)
 	if err != nil {
-		return fmt.Errorf("could not update observation for service: %s: %s", config.ServiceName, err)
+		return fmt.Errorf("could not set observation for id: %s, service name: %s, error: %v", config.ID, config.ServiceName, err)
 	}
 
 	if err := obs.Start(); err != nil {
-		return fmt.Errorf("could not start updated observation for service: %s: %s", config.ServiceName, err)
+		return fmt.Errorf("could not start observation for id: %s, service name: %s, error: %v", config.ID, config.ServiceName, err)
 	}
 
 	om.Lock()
 	if !om.running {
 		om.Unlock()
 		obs.Stop()
-		return fmt.Errorf("could not set observation for service: %s: observation manager is stopped", config.ServiceName)
+		return fmt.Errorf("observation manager is stopped; could not set observation for id: %s, service name: %s", config.ID, config.ServiceName)
 	}
 
 	om.listenerMap[config.ID] = obs
@@ -433,7 +434,7 @@ func (om *ServiceObsManager) Delete(id string) error {
 	om.Lock()
 	if !om.running {
 		om.Unlock()
-		return fmt.Errorf("could not delete observation id: %s: observation manager is stopped", id)
+		return fmt.Errorf("observation manager is stopped; could not delete observation id: %s", id)
 	}
 
 	existingObs, found := om.listenerMap[id]
@@ -449,7 +450,7 @@ func (om *ServiceObsManager) Delete(id string) error {
 	return nil
 }
 
-type serviceObsFsWatcher struct {
+type serviceObsFSWatcher struct {
 	sync.Mutex
 	logger  *logrus.Logger
 	om      *ServiceObsManager
@@ -457,14 +458,14 @@ type serviceObsFsWatcher struct {
 	stopCh  chan struct{}
 }
 
-func newServiceObsFsWatcher(logger *logrus.Logger, om *ServiceObsManager) *serviceObsFsWatcher {
-	return &serviceObsFsWatcher{
+func newServiceObservationFSWatcher(logger *logrus.Logger, om *ServiceObsManager) *serviceObsFSWatcher {
+	return &serviceObsFSWatcher{
 		logger: logger,
 		om:     om,
 	}
 }
 
-func (w *serviceObsFsWatcher) start() error {
+func (w *serviceObsFSWatcher) start() error {
 	w.Lock()
 	defer w.Unlock()
 	if w.watcher != nil {
@@ -498,7 +499,7 @@ func (w *serviceObsFsWatcher) start() error {
 	return nil
 }
 
-func (w *serviceObsFsWatcher) stop() {
+func (w *serviceObsFSWatcher) stop() {
 	w.Lock()
 	defer w.Unlock()
 
@@ -511,7 +512,7 @@ func (w *serviceObsFsWatcher) stop() {
 	w.watcher = nil
 }
 
-func (w *serviceObsFsWatcher) startObservationsInDir() fs.WalkDirFunc {
+func (w *serviceObsFSWatcher) startObservationsInDir() fs.WalkDirFunc {
 	return func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -537,14 +538,14 @@ func (w *serviceObsFsWatcher) startObservationsInDir() fs.WalkDirFunc {
 
 		obs, err := NewServiceObservationConfigFromFile(path)
 		if err != nil {
-			return fmt.Errorf("could not create observation from %s: %s", path, err)
+			return fmt.Errorf("could not create observation from path: %s, error: %v", path, err)
 		}
 
 		return w.om.Set(obs)
 	}
 }
 
-func (w *serviceObsFsWatcher) handleWatcherEvent(event fsnotify.Event) error {
+func (w *serviceObsFSWatcher) handleWatcherEvent(event fsnotify.Event) error {
 	path := event.Name
 
 	switch {
@@ -558,10 +559,10 @@ func (w *serviceObsFsWatcher) handleWatcherEvent(event fsnotify.Event) error {
 	return nil
 }
 
-func (w *serviceObsFsWatcher) handleCreateEvent(path string) error {
+func (w *serviceObsFSWatcher) handleCreateEvent(path string) error {
 	stat, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("could not read observation file %s: %s", path, err)
+		return fmt.Errorf("could not stat observation path: %s, error: %v", path, err)
 	}
 
 	// if a new directory was created, start observations in dir
@@ -578,10 +579,10 @@ func (w *serviceObsFsWatcher) handleCreateEvent(path string) error {
 	return w.handleWriteEvent(path)
 }
 
-func (w *serviceObsFsWatcher) handleWriteEvent(path string) error {
+func (w *serviceObsFSWatcher) handleWriteEvent(path string) error {
 	stat, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("could not read observation file %s: %s", path, err)
+		return fmt.Errorf("could not stat observation path: %s, error: %v", path, err)
 	}
 
 	// if not a JSON file, ignore
@@ -589,15 +590,15 @@ func (w *serviceObsFsWatcher) handleWriteEvent(path string) error {
 		return nil
 	}
 
-	obs, err := NewServiceObservationConfigFromFile(path)
+	config, err := NewServiceObservationConfigFromFile(path)
 	if err != nil {
-		return fmt.Errorf("could not create observation from %s: %s", path, err)
+		return fmt.Errorf("could not create observation from path: %s, error: %v", path, err)
 	}
 
-	return w.om.Set(obs)
+	return w.om.Set(config)
 }
 
-func (w *serviceObsFsWatcher) handleRemoveEvent(path string) error {
+func (w *serviceObsFSWatcher) handleRemoveEvent(path string) error {
 	var removeIDs []string
 	configMap := w.om.ConfigMap()
 	dir := strings.TrimSuffix(path, string(filepath.Separator)) + string(filepath.Separator)
