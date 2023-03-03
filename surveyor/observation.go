@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nats-io/nats.go"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -27,7 +28,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/api/server/metric"
-	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
@@ -114,34 +114,35 @@ func NewServiceObservationMetrics(registry *prometheus.Registry, constLabels pro
 	return metrics
 }
 
-// ServiceObsListener listens for observations from nats service latency checks.
-//
-// Deprecated: ServiceObsListener will be unexported in a future release
-// Use ServiceObsConfig and Surveyor.ServiceObservationManager instead
-type ServiceObsListener struct {
-	nc      *nats.Conn
-	logger  *logrus.Logger
-	config  *ServiceObsConfig
-	metrics *ServiceObsMetrics
-	sopts   *Options
-}
-
 // ServiceObsConfig is used to configure service observations
 type ServiceObsConfig struct {
-	ID          string `json:"id"`
+	// unique identifier
+	ID string `json:"id"`
+
+	// service settings
 	ServiceName string `json:"name"`
 	Topic       string `json:"topic"`
+
+	// connection options
+	JWT         string `json:"jwt"`
+	Seed        string `json:"seed"`
 	Credentials string `json:"credential"`
 	Nkey        string `json:"nkey"`
+	Token       string `json:"token"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	TLSCA       string `json:"tls_ca"`
+	TLSCert     string `json:"tls_cert"`
+	TLSKey      string `json:"tls_key"`
 }
 
 // Validate is used to validate a ServiceObsConfig
 func (o *ServiceObsConfig) Validate() error {
-	var errs []string
 	if o == nil {
 		return fmt.Errorf("service observation config cannot be nil")
 	}
 
+	var errs []string
 	if o.ID == "" {
 		errs = append(errs, "id is required")
 	}
@@ -152,23 +153,6 @@ func (o *ServiceObsConfig) Validate() error {
 
 	if o.Topic == "" {
 		errs = append(errs, "topic is required")
-	}
-
-	switch {
-	case o.Credentials == "" && o.Nkey == "":
-		errs = append(errs, "jwt or nkey credentials is required")
-	case o.Credentials != "" && o.Nkey != "":
-		errs = append(errs, "both jwt and nkey credentials found, only one can be used")
-	case o.Credentials != "":
-		_, err := os.Stat(o.Credentials)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("invalid credential file: %s", err))
-		}
-	case o.Nkey != "":
-		_, err := os.Stat(o.Nkey)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("invalid nkey file: %s", err))
-		}
 	}
 
 	if len(errs) == 0 {
@@ -208,69 +192,85 @@ func NewServiceObservationConfigFromFile(f string) (*ServiceObsConfig, error) {
 	return obs, nil
 }
 
-// NewServiceObservation creates a new service observation listener from a JSON file.
-//
-// Deprecated: ServiceObsListener will be unexported in a future release
-// Use NewServiceObservationConfigFromFile and Surveyor.ServiceObservationManager instead
-func NewServiceObservation(f string, sopts Options, metrics *ServiceObsMetrics, reconnectCtr *prometheus.CounterVec) (*ServiceObsListener, error) {
-	serviceObs, err := NewServiceObservationConfigFromFile(f)
-	if err != nil {
-		return nil, err
-	}
-
-	obs, err := newServiceObservationListener(serviceObs, sopts, metrics, reconnectCtr)
-	if err != nil {
-		return nil, err
-	}
-
-	return obs, nil
+// serviceObsListener listens for observations from nats service latency checks
+type serviceObsListener struct {
+	sync.Mutex
+	config  *ServiceObsConfig
+	cp      *natsConnPool
+	logger  *logrus.Logger
+	metrics *ServiceObsMetrics
+	pc      *pooledNatsConn
+	sub     *nats.Subscription
 }
 
-func newServiceObservationListener(config *ServiceObsConfig, sopts Options, metrics *ServiceObsMetrics, reconnectCtr *prometheus.CounterVec) (*ServiceObsListener, error) {
+func newServiceObservationListener(config *ServiceObsConfig, cp *natsConnPool, logger *logrus.Logger, metrics *ServiceObsMetrics) (*serviceObsListener, error) {
 	err := config.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("invalid service observation config for id: %s, service name: %s, error: %v", config.ID, config.ServiceName, err)
 	}
 
-	sopts.Name = fmt.Sprintf("%s (observing %s)", sopts.Name, config.ServiceName)
-	sopts.Credentials = config.Credentials
-	sopts.Nkey = config.Nkey
-	nc, err := connect(&sopts, reconnectCtr)
-	if err != nil {
-		return nil, fmt.Errorf("nats connection failed: %s", err)
-	}
-
-	return &ServiceObsListener{
-		nc:      nc,
-		logger:  sopts.Logger,
+	return &serviceObsListener{
 		config:  config,
+		cp:      cp,
+		logger:  logger,
 		metrics: metrics,
-		sopts:   &sopts,
 	}, nil
 }
 
-// Start starts listening for observations.
-func (o *ServiceObsListener) Start() error {
-	_, err := o.nc.Subscribe(o.config.Topic, o.observationHandler)
+func (o *serviceObsListener) natsContext() *natsContext {
+	natsCtx := &natsContext{
+		JWT:         o.config.JWT,
+		Seed:        o.config.Seed,
+		Credentials: o.config.Credentials,
+		Nkey:        o.config.Nkey,
+		Token:       o.config.Token,
+		Username:    o.config.Username,
+		Password:    o.config.Password,
+		TLSCA:       o.config.TLSCA,
+		TLSCert:     o.config.TLSCert,
+		TLSKey:      o.config.TLSKey,
+	}
+
+	// legacy Credentials field
+	if natsCtx.Credentials == "" && o.config.Credentials != "" {
+		natsCtx.Credentials = o.config.Credentials
+		o.logger.Warnf("deprecated service observation config field 'credential', use 'creds' instead for id: %s, service name: %s", o.config.ID, o.config.ServiceName)
+	}
+	return natsCtx
+}
+
+// Start starts listening for observations
+func (o *serviceObsListener) Start() error {
+	o.Lock()
+	defer o.Unlock()
+	if o.pc != nil {
+		// already started
+		return nil
+	}
+
+	pc, err := o.cp.Get(o.natsContext())
 	if err != nil {
+		return fmt.Errorf("nats connection failed for id: %s, service name: %s, error: %v", o.config.ID, o.config.ServiceName, err)
+	}
+
+	sub, err := pc.nc.Subscribe(o.config.Topic, o.observationHandler)
+	if err != nil {
+		pc.ReturnToPool()
 		return fmt.Errorf("could not subscribe to service observation topic for id: %s, service name: %s, topic: %s, error: %v", o.config.ID, o.config.ServiceName, o.config.Topic, err)
 	}
-	err = o.nc.Flush()
-	if err != nil {
-		return err
-	}
 
+	o.pc = pc
+	o.sub = sub
 	o.metrics.observationsGauge.Inc()
 	o.logger.Infof("started service observation for id: %s, service name: %s, topic: %s", o.config.ID, o.config.ServiceName, o.config.Topic)
-
 	return nil
 }
 
-func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
+func (o *serviceObsListener) observationHandler(m *nats.Msg) {
 	kind, obs, err := jsm.ParseEvent(m.Data)
 	if err != nil {
 		o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName).Inc()
-		o.logger.Warnf("unparsable service observation received for id: %s, service name: %s, subject: %s, error: %v, data: %q", o.config.ID, o.config.ServiceName, m.Subject, err, m.Data)
+		o.logger.Warnf("unparsable service observation received for id: %s, service name: %s, error: %v, data: %q", o.config.ID, o.config.ServiceName, err, m.Data)
 		return
 	}
 
@@ -291,86 +291,91 @@ func (o *ServiceObsListener) observationHandler(m *nats.Msg) {
 
 	default:
 		o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName).Inc()
-		o.logger.Warnf("unsupported service observation received for id: %s, service name: %s, subject: %s, kind: %s", o.config.ID, o.config.ServiceName, m.Subject, kind)
+		o.logger.Warnf("unsupported service observation received for id: %s, service name: %s, kind: %s", o.config.ID, o.config.ServiceName, kind)
 		return
 	}
 }
 
-// Stop closes the connection to the network.
-func (o *ServiceObsListener) Stop() {
+// Stop stops listening for observations
+func (o *serviceObsListener) Stop() {
+	o.Lock()
+	defer o.Unlock()
+	if o.pc == nil {
+		// already stopped
+		return
+	}
+
+	if o.sub != nil {
+		_ = o.sub.Unsubscribe()
+		o.sub = nil
+	}
+
 	o.metrics.observationsGauge.Dec()
-	o.nc.Close()
+	o.pc.ReturnToPool()
+	o.pc = nil
 }
 
-// ServiceObsManager exposes methods to operate on service observations.
+// ServiceObsManager exposes methods to operate on service observations
 type ServiceObsManager struct {
 	sync.Mutex
-	listenerMap      map[string]*ServiceObsListener
-	logger           *logrus.Logger
-	metrics          *ServiceObsMetrics
-	reconnectCtr     *prometheus.CounterVec
-	sopts            Options
-	running          bool
-	watcherStopChMap map[string]chan struct{}
+	cp          *natsConnPool
+	listenerMap map[string]*serviceObsListener
+	logger      *logrus.Logger
+	metrics     *ServiceObsMetrics
 }
 
-// newServiceObservationManager creates a ServiceObsManager, allowing for adding/deleting service observations to the surveyor.
-func newServiceObservationManager(logger *logrus.Logger, sopts Options, metrics *ServiceObsMetrics, reconnectCtr *prometheus.CounterVec) *ServiceObsManager {
+// newServiceObservationManager creates a ServiceObsManager for managing Service Observations
+func newServiceObservationManager(cp *natsConnPool, logger *logrus.Logger, metrics *ServiceObsMetrics) *ServiceObsManager {
 	return &ServiceObsManager{
-		logger:           logger,
-		sopts:            sopts,
-		metrics:          metrics,
-		reconnectCtr:     reconnectCtr,
-		listenerMap:      map[string]*ServiceObsListener{},
-		watcherStopChMap: map[string]chan struct{}{},
-		running:          false,
+		cp:      cp,
+		logger:  logger,
+		metrics: metrics,
 	}
 }
 
 func (om *ServiceObsManager) start() {
 	om.Lock()
 	defer om.Unlock()
-	if om.running {
+	if om.listenerMap != nil {
+		// already started
 		return
 	}
 
-	om.running = true
+	om.listenerMap = map[string]*serviceObsListener{}
 }
 
 // IsRunning returns true if the observation manager is running or false if it is stopped
 func (om *ServiceObsManager) IsRunning() bool {
 	om.Lock()
 	defer om.Unlock()
-	return om.running
+	return om.listenerMap != nil
 }
 
 func (om *ServiceObsManager) stop() {
 	om.Lock()
 	defer om.Unlock()
-	if !om.running {
+	if om.listenerMap == nil {
+		// already stopped
 		return
 	}
 
 	for _, obs := range om.listenerMap {
 		obs.Stop()
 	}
-	om.listenerMap = map[string]*ServiceObsListener{}
-
-	for _, watcherStopCh := range om.watcherStopChMap {
-		watcherStopCh <- struct{}{}
-	}
-	om.watcherStopChMap = map[string]chan struct{}{}
-
 	om.metrics.observationsGauge.Set(0)
-	om.running = false
+	om.listenerMap = nil
 }
 
-// ConfigMap returns a map of id:*ServiceObsConfig for all running observations.
+// ConfigMap returns a map of id:*ServiceObsConfig for all running observations
 func (om *ServiceObsManager) ConfigMap() map[string]*ServiceObsConfig {
 	om.Lock()
 	defer om.Unlock()
 
 	obsMap := make(map[string]*ServiceObsConfig, len(om.listenerMap))
+	if om.listenerMap == nil {
+		return obsMap
+	}
+
 	for id, obs := range om.listenerMap {
 		// copy so that internal references cannot be changed
 		obsMap[id] = obs.config.copy()
@@ -392,7 +397,7 @@ func (om *ServiceObsManager) Set(config *ServiceObsConfig) error {
 	config = config.copy()
 
 	om.Lock()
-	if !om.running {
+	if om.listenerMap == nil {
 		om.Unlock()
 		return fmt.Errorf("observation manager is stopped; could not set observation for id: %s, service name: %s", config.ID, config.ServiceName)
 	}
@@ -404,7 +409,7 @@ func (om *ServiceObsManager) Set(config *ServiceObsConfig) error {
 		return nil
 	}
 
-	obs, err := newServiceObservationListener(config, om.sopts, om.metrics, om.reconnectCtr)
+	obs, err := newServiceObservationListener(config, om.cp, om.logger, om.metrics)
 	if err != nil {
 		return fmt.Errorf("could not set observation for id: %s, service name: %s, error: %v", config.ID, config.ServiceName, err)
 	}
@@ -414,7 +419,7 @@ func (om *ServiceObsManager) Set(config *ServiceObsConfig) error {
 	}
 
 	om.Lock()
-	if !om.running {
+	if om.listenerMap == nil {
 		om.Unlock()
 		obs.Stop()
 		return fmt.Errorf("observation manager is stopped; could not set observation for id: %s, service name: %s", config.ID, config.ServiceName)
@@ -432,9 +437,9 @@ func (om *ServiceObsManager) Set(config *ServiceObsConfig) error {
 // Delete deletes existing observations with provided ID
 func (om *ServiceObsManager) Delete(id string) error {
 	om.Lock()
-	if !om.running {
+	if om.listenerMap == nil {
 		om.Unlock()
-		return fmt.Errorf("observation manager is stopped; could not delete observation id: %s", id)
+		return fmt.Errorf("could not delete observation id: %s: observation manager is stopped", id)
 	}
 
 	existingObs, found := om.listenerMap[id]
@@ -454,8 +459,8 @@ type serviceObsFSWatcher struct {
 	sync.Mutex
 	logger  *logrus.Logger
 	om      *ServiceObsManager
-	watcher *fsnotify.Watcher
 	stopCh  chan struct{}
+	watcher *fsnotify.Watcher
 }
 
 func newServiceObservationFSWatcher(logger *logrus.Logger, om *ServiceObsManager) *serviceObsFSWatcher {

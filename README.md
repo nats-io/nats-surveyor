@@ -367,71 +367,55 @@ More information can be found [here](https://github.com/prometheus/prometheus/is
 ## Service Observations
 
 Services can be observed by creating JSON files in the `observations` directory.
-Both jwt credential files and nkey seed files are supported. The name of the observation has to unique. A second observation with a duplicate name will be ignored.
-
-Here's an example using a jwt credential file:
+The file extension must be `.json`. 
+Only one authentication method needs to be provided.
+Example file format:
 
 ```json
 {
-  "name": "email.subscribe",
-  "topic": "monitor.email.subscribe",
-  "credential": "/observations/email.subscribe.cred"
-}
-```
-Example with nkey seed file:
-```json
-{
-  "name": "email.subscribe",
-  "topic": "monitor.email.subscribe",
-  "nkey": "/observations/email.subscribe.nkey"
+  "name":       "my service",
+  "topic":      "email.subscribe.>",
+  "jwt":        "jwt portion of creds, must include seed also",
+  "seed":       "seed portion of creds, must include jwt also",
+  "credential": "/path/to/file.creds",
+  "nkey":       "nkey seed",
+  "token":      "token",
+  "username":   "username, must include password also",
+  "password":   "password, must include user also",
+  "tls_ca":     "/path/to/ca.pem, defaults to surveyor's ca if one exists",
+  "tls_cert":   "/path/to/cert.pem, defaults to surveyor's cert if one exists",
+  "tls_key":    "/path/to/key.pem, defaults to surveyor's key if one exists"
 }
 ```
 
-Place this in `observations/email.surbscribe.json` and create a credential giving access to this topic in `observations/email.subscribe.cred`, when you restart the service any observations published by the NATS system will be tracked and graphed.
+Files are watched and updated using [fsnotify](https://github.com/fsnotify/fsnotify) 
 
 ## JetStream
 
 JetStream can be monitored on a per-account basis by creating JSON files in the `jetstream` directory.
-Place those files in `jetstream/youraccount.json`. Be sure that you give access to the `$JS.EVENT.>` subject to your user.
-
-When you add/modify account files, you'll need restart the NATS Surveyor service in order for the JetStream in this account to be monitored.
-
-There are some ways to establish authentication, here are some examples:
+The file extension must be `.json`.
+Only one authentication method needs to be provided.
+e sure that you give access to the `$JS.EVENT.>` subject to your user.
+Example file format:
 
 ### Credentials
 ```json
 {
-  "name": "Your Account",
-  "credential": "/jetstream/youraccount.cred"
+  "name":       "my account",
+  "jwt":        "jwt portion of creds, must include seed also",
+  "seed":       "seed portion of creds, must include jwt also",
+  "credential": "/path/to/file.creds",
+  "nkey":       "nkey seed",
+  "token":      "token",
+  "username":   "username, must include password also",
+  "password":   "password, must include user also",
+  "tls_ca":     "/path/to/ca.pem, defaults to surveyor's ca if one exists",
+  "tls_cert":   "/path/to/cert.pem, defaults to surveyor's cert if one exists",
+  "tls_key":    "/path/to/key.pem, defaults to surveyor's key if one exists"
 }
 ```
 
-### User/Password
-```json
-{
-  "name": "Your Account",
-  "username": "accounta",
-  "password": "changeit"
-}
-```
-
-### NKeys
-```json
-{
-  "name": "Your Account",
-  "nkey": "UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4"
-}
-```
-### mTLS
-
-```json
-{
-  "name": "Your Account",
-  "tls_ca": "/etc/nats-certs/your-account/ca.crt",
-  "tls_cert": "/etc/nats-certs/your-account/tls.crt",
-  "tls_key": "/etc/nats-certs/your-account/tls.key"
-}
-```
+Files are watched and updated using [fsnotify](https://github.com/fsnotify/fsnotify)
 
 ## TODO
 
