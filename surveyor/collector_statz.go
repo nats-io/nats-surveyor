@@ -110,22 +110,24 @@ type statzDescs struct {
 // StatzCollector collects statz from a server deployment
 type StatzCollector struct {
 	sync.Mutex
-	nc              *nats.Conn
-	logger          *logrus.Logger
-	start           time.Time
-	stats           []*server.ServerStatsMsg
-	accStats        []accountStats
-	rtts            map[string]time.Duration
-	pollTimeout     time.Duration
-	reply           string
-	polling         bool
-	pollkey         string
-	numServers      int
-	servers         map[string]bool
-	doneCh          chan struct{}
-	descs           statzDescs
-	collectAccounts bool
-	natsUp          *prometheus.Desc
+	nc                  *nats.Conn
+	logger              *logrus.Logger
+	start               time.Time
+	stats               []*server.ServerStatsMsg
+	statsChan           chan *server.ServerStatsMsg
+	accStats            []accountStats
+	rtts                map[string]time.Duration
+	pollTimeout         time.Duration
+	reply               string
+	polling             bool
+	pollkey             string
+	numServers          int
+	serverDiscoveryWait time.Duration
+	servers             map[string]bool
+	doneCh              chan struct{}
+	descs               statzDescs
+	collectAccounts     bool
+	natsUp              *prometheus.Desc
 
 	serverLabels       []string
 	serverInfoLabels   []string
@@ -348,16 +350,17 @@ func (sc *StatzCollector) buildDescs() {
 }
 
 // NewStatzCollector creates a NATS Statz Collector
-func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, pollTimeout time.Duration, accounts bool, constLabels prometheus.Labels) *StatzCollector {
+func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, serverDiscoveryWait, pollTimeout time.Duration, accounts bool, constLabels prometheus.Labels) *StatzCollector {
 	sc := &StatzCollector{
-		nc:              nc,
-		logger:          logger,
-		numServers:      numServers,
-		reply:           nc.NewRespInbox(),
-		pollTimeout:     pollTimeout,
-		servers:         make(map[string]bool, numServers),
-		doneCh:          make(chan struct{}, 1),
-		collectAccounts: accounts,
+		nc:                  nc,
+		logger:              logger,
+		numServers:          numServers,
+		serverDiscoveryWait: serverDiscoveryWait,
+		reply:               nc.NewRespInbox(),
+		pollTimeout:         pollTimeout,
+		servers:             make(map[string]bool),
+		doneCh:              make(chan struct{}, 1),
+		collectAccounts:     accounts,
 
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
 		serverLabels:       []string{"server_cluster", "server_name", "server_id"},
@@ -396,13 +399,9 @@ func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 	isCurrent := strings.HasSuffix(msg.Subject, sc.pollkey)
 	rtt := time.Since(sc.start)
 	if sc.polling && isCurrent { //nolint
-		sc.stats = append(sc.stats, m)
+		sc.statsChan <- m
 		sc.rtts[m.Server.ID] = rtt
-		if len(sc.stats) == sc.numServers {
-			sc.polling = false
-			sc.doneCh <- struct{}{}
-		}
-	} else if !isCurrent || len(sc.stats) < sc.numServers {
+	} else if !isCurrent {
 		sc.logger.Infof("Late reply for server [%15s : %15s : %s]: %v", m.Server.Cluster, serverName(m), m.Server.ID, rtt)
 		sc.lateReplies.WithLabelValues(fmt.Sprintf("%.1f", sc.pollTimeout.Seconds())).Inc()
 	} else {
@@ -418,6 +417,8 @@ func (sc *StatzCollector) poll() error {
 	sc.pollkey = strconv.Itoa(int(sc.start.UnixNano()))
 	sc.stats = nil
 	sc.rtts = make(map[string]time.Duration, sc.numServers)
+	sc.statsChan = make(chan *server.ServerStatsMsg)
+	expectedServers := sc.numServers
 	sc.Unlock()
 
 	// not all error paths clean this up, so this way might be easier
@@ -439,10 +440,31 @@ func (sc *StatzCollector) poll() error {
 	}
 
 	// Wait to collect all the servers responses.
-	select {
-	case <-sc.doneCh:
-	case <-time.After(sc.pollTimeout):
-		sc.logger.Warnf("Poll timeout after %v while waiting for %d responses", sc.pollTimeout, sc.numServers)
+	// For set number of expected servers (> 0), terminate as soon as either expected
+	// number of responses is reached or we reach polling timeout.
+	// For unlimited number of expected servers (-1), terminate once the interval between
+	// server responses reaches server-discovery-timeout value (defaults to 500ms) or we reach
+	// polling timeout.
+	timer := time.NewTimer(sc.serverDiscoveryWait)
+	var done bool
+	for !done {
+		select {
+		case stat := <-sc.statsChan:
+			timer.Reset(sc.serverDiscoveryWait)
+			sc.stats = append(sc.stats, stat)
+			if expectedServers != -1 && len(sc.stats) == expectedServers {
+				done = true
+			}
+		case <-sc.doneCh:
+			done = true
+		case <-timer.C:
+			if expectedServers == -1 {
+				done = true
+			}
+		case <-time.After(sc.pollTimeout):
+			done = true
+			sc.logger.Warnf("Poll timeout after %v while waiting for responses", sc.pollTimeout)
+		}
 	}
 
 	sc.Lock()
@@ -453,7 +475,7 @@ func (sc *StatzCollector) poll() error {
 	sc.Unlock()
 
 	// If we do not see expected number of servers complain.
-	if ns != sc.numServers {
+	if sc.numServers != -1 && ns != sc.numServers {
 		sort.Slice(stats, func(i, j int) bool {
 			a := fmt.Sprintf("%s-%s", stats[i].Server.Cluster, serverName(stats[i]))
 			b := fmt.Sprintf("%s-%s", stats[j].Server.Cluster, serverName(stats[j]))
@@ -488,11 +510,11 @@ func (sc *StatzCollector) poll() error {
 		sc.logger.Infof("Expected %d servers, only saw responses from %d. Missing %v", sc.numServers, ns, missingServers)
 	}
 
-	if ns == sc.numServers {
+	if ns == sc.numServers || sc.numServers == -1 {
 		// Build map of what is our expected set...
-		sc.servers = make(map[string]bool, sc.numServers)
+		sc.servers = make(map[string]bool)
 		for _, stat := range stats {
-			key := fmt.Sprintf("%s:%s", stat.Server.Cluster, stat.Server.Host)
+			key := fmt.Sprintf("%s:%s", stat.Server.Cluster, stat.Server.ID)
 			sc.servers[key] = false
 		}
 	}

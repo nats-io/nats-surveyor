@@ -19,31 +19,32 @@ Usage:
   nats-surveyor [flags]
 
 Flags:
-      --accounts                Export per account metrics
-  -a, --addr string             Network host to listen on. (default "0.0.0.0")
-      --config string           config file (default is ./nats-surveyor.yaml)
-  -c, --count int               Expected number of servers (default 1)
-      --creds string            Credentials File
-  -h, --help                    help for nats-surveyor
-      --http-pass string        Set the password for HTTP scrapes. NATS bcrypt supported.
-      --http-tlscacert string   Client certificate CA for verification (used with HTTPS).
-      --http-tlscert string     Server certificate file (Enables HTTPS).
-      --http-tlskey string      Private key for server certificate (used with HTTPS).
-      --http-user string        Enable basic auth and set user name for HTTP scrapes.
-      --jetstream string        Listen for JetStream Advisories based on config files in a directory.
-      --log-level string        Log level, one of: trace|debug|info|warn|error|fatal|panic (default "info")
-      --nkey string             Nkey Seed File
-      --observe string          Listen for observation statistics based on config files in a directory.
-      --password string         NATS user password
-  -p, --port int                Port to listen on. (default 7777)
-      --prefix string           Replace the default prefix for all the metrics.
-  -s, --servers string          NATS Cluster url(s) (default "nats://127.0.0.1:4222")
-      --timeout duration        Polling timeout (default 3s)
-      --tlscacert string        Client certificate CA on NATS connections.
-      --tlscert string          Client certificate file for NATS connections.
-      --tlskey string           Client private key for NATS connections.
-      --user string             NATS user name or token
-  -v, --version                 version for nats-surveyor
+      --accounts                            Export per account metrics
+  -a, --addr string                         Network host to listen on. (default "0.0.0.0")
+      --config string                       config file (default is ./nats-surveyor.yaml)
+  -c, --count int                           Expected number of servers (-1 for undefined). (default 1)
+      --creds string                        Credentials File
+  -h, --help                                help for nats-surveyor
+      --http-pass string                    Set the password for HTTP scrapes. NATS bcrypt supported.
+      --http-tlscacert string               Client certificate CA for verification (used with HTTPS).
+      --http-tlscert string                 Server certificate file (Enables HTTPS).
+      --http-tlskey string                  Private key for server certificate (used with HTTPS).
+      --http-user string                    Enable basic auth and set user name for HTTP scrapes.
+      --jetstream string                    Listen for JetStream Advisories based on config files in a directory.
+      --log-level string                    Log level, one of: trace|debug|info|warn|error|fatal|panic (default "info")
+      --nkey string                         Nkey Seed File
+      --observe string                      Listen for observation statistics based on config files in a directory.
+      --password string                     NATS user password
+  -p, --port int                            Port to listen on. (default 7777)
+      --prefix string                       Replace the default prefix for all the metrics.
+      --server-discovery-timeout duration   Maximum wait time between responses from servers during server discovery. Use in conjunction with -count=-1. (default 500ms)
+  -s, --servers string                      NATS Cluster url(s) (default "nats://127.0.0.1:4222")
+      --timeout duration                    Polling timeout (default 3s)
+      --tlscacert string                    Client certificate CA on NATS connections.
+      --tlscert string                      Client certificate file for NATS connections.
+      --tlskey string                       Client private key for NATS connections.
+      --user string                         NATS user name or token
+  -v, --version                             version for nats-surveyor
 ```
 
 At this time, NATS 2.0 System credentials are required for meaningful usage.

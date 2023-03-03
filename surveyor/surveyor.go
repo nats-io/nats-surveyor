@@ -40,11 +40,12 @@ import (
 
 // Defaults
 var (
-	DefaultListenPort      = 7777
-	DefaultListenAddress   = "0.0.0.0"
-	DefaultURL             = nats.DefaultURL
-	DefaultExpectedServers = 1
-	DefaultPollTimeout     = time.Second * 3
+	DefaultListenPort         = 7777
+	DefaultListenAddress      = "0.0.0.0"
+	DefaultURL                = nats.DefaultURL
+	DefaultExpectedServers    = 1
+	DefaultPollTimeout        = time.Second * 3
+	DefaultServerResponseWait = 500 * time.Millisecond
 
 	// bcryptPrefix from nats-server
 	bcryptPrefix = "$2a$"
@@ -60,6 +61,7 @@ type Options struct {
 	NATSPassword         string
 	PollTimeout          time.Duration
 	ExpectedServers      int
+	ServerResponseWait   time.Duration
 	ListenAddress        string
 	ListenPort           int
 	CertFile             string
@@ -88,13 +90,14 @@ func GetDefaultOptions() *Options {
 	}
 
 	opts := &Options{
-		Name:            fmt.Sprintf("NATS_Surveyor - %s", hostname),
-		ListenAddress:   DefaultListenAddress,
-		ListenPort:      DefaultListenPort,
-		URLs:            DefaultURL,
-		PollTimeout:     DefaultPollTimeout,
-		ExpectedServers: DefaultExpectedServers,
-		Logger:          logrus.New(),
+		Name:               fmt.Sprintf("NATS_Surveyor - %s", hostname),
+		ListenAddress:      DefaultListenAddress,
+		ListenPort:         DefaultListenPort,
+		URLs:               DefaultURL,
+		PollTimeout:        DefaultPollTimeout,
+		ExpectedServers:    DefaultExpectedServers,
+		ServerResponseWait: DefaultServerResponseWait,
+		Logger:             logrus.New(),
 	}
 	return opts
 }
@@ -215,7 +218,7 @@ func (s *Surveyor) createStatszCollector() error {
 		s.logger.Debugln("Skipping per-account exports")
 	}
 
-	s.statzC = NewStatzCollector(nc, s.logger, s.opts.ExpectedServers, s.opts.PollTimeout, s.opts.Accounts, s.opts.ConstLabels)
+	s.statzC = NewStatzCollector(nc, s.logger, s.opts.ExpectedServers, s.opts.ServerResponseWait, s.opts.PollTimeout, s.opts.Accounts, s.opts.ConstLabels)
 	s.promRegistry.MustRegister(s.statzC)
 	return nil
 }

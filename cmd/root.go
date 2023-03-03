@@ -157,8 +157,12 @@ func init() {
 	_ = viper.BindPFlag("password", rootCmd.Flags().Lookup("password"))
 
 	// count
-	rootCmd.Flags().IntP("count", "c", 1, "Expected number of servers")
+	rootCmd.Flags().IntP("count", "c", 1, "Expected number of servers (-1 for undefined).")
 	_ = viper.BindPFlag("count", rootCmd.Flags().Lookup("count"))
+
+	// server-discovery-timeout
+	rootCmd.Flags().DurationP("server-discovery-timeout", "", 500*time.Millisecond, "Maximum wait time between responses from servers during server discovery. Use in conjunction with -count=-1.")
+	_ = viper.BindPFlag("server-discovery-timeout", rootCmd.Flags().Lookup("server-discovery-timeout"))
 
 	// timeout
 	rootCmd.Flags().Duration("timeout", surveyor.DefaultPollTimeout, "Polling timeout")
@@ -250,6 +254,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.ObservationConfigDir = viper.GetString("observe")
 	opts.JetStreamConfigDir = viper.GetString("jetstream")
 	opts.Accounts = viper.GetBool("accounts")
+	opts.ServerResponseWait = viper.GetDuration("server-discovery-timeout")
 
 	logLevel, err := logrus.ParseLevel(viper.GetString("log-level"))
 	if err == nil {
