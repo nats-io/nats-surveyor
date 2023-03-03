@@ -117,51 +117,83 @@ func pollAndCheckDefault(t *testing.T, result string) (string, error) {
 func TestSurveyor_Basic(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
+	checkOutput := func(t *testing.T, output string) {
+		t.Helper()
+		// check for route output
+		if !strings.Contains(output, "nats_core_route_recv_msg_count") {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		// check for gateway output
+		if !strings.Contains(output, "nats_core_gateway_sent_bytes") {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		if !strings.Contains(output, "server_name") {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		if !strings.Contains(output, "server_cluster") {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		if !strings.Contains(output, "server_id") {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		if !strings.Contains(output, "server_gateway_name") {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		if !strings.Contains(output, "server_gateway_id") {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		if !strings.Contains(output, "server_route_id") {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		if !strings.Contains(output, "nats_survey_surveyed_count 3") {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+	}
 
-	s, err := NewSurveyor(getTestOptions())
-	if err != nil {
-		t.Fatalf("couldn't create surveyor: %v", err)
-	}
-	if err = s.Start(); err != nil {
-		t.Fatalf("start error: %v", err)
-	}
-	defer s.Stop()
+	testOpts := getTestOptions()
+	t.Run("with 3 expected servers", func(t *testing.T) {
+		testOpts.ExpectedServers = 3
+		s, err := NewSurveyor(testOpts)
+		if err != nil {
+			t.Fatalf("couldn't create surveyor: %v", err)
+		}
+		if err = s.Start(); err != nil {
+			t.Fatalf("start error: %v", err)
+		}
+		defer s.Stop()
 
-	// poll and check for basic core NATS output
-	output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
-	if err != nil {
-		t.Fatalf("poll error:  %v\n", err)
-	}
+		// poll and check for basic core NATS output
+		output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
+		if err != nil {
+			t.Fatalf("poll error:  %v\n", err)
+		}
 
-	// check for route output
-	if strings.Contains(output, "nats_core_route_recv_msg_count") == false {
-		t.Fatalf("invalid output:  %v\n", err)
-	}
+		checkOutput(t, output)
+	})
 
-	// check for gateway output
-	if strings.Contains(output, "nats_core_gateway_sent_bytes") == false {
-		t.Fatalf("invalid output:  %v\n", err)
-	}
+	t.Run("with unlimited expected servers", func(t *testing.T) {
+		testOpts.ExpectedServers = -1
+		testOpts.ServerResponseWait = 100 * time.Millisecond
+		s, err := NewSurveyor(testOpts)
+		if err != nil {
+			t.Fatalf("couldn't create surveyor: %v", err)
+		}
+		if err = s.Start(); err != nil {
+			t.Fatalf("start error: %v", err)
+		}
+		defer s.Stop()
 
-	// check for labels
-	if strings.Contains(output, "server_name") == false {
-		t.Fatalf("invalid output:  %v\n", output)
-	}
-	if strings.Contains(output, "server_cluster") == false {
-		t.Fatalf("invalid output:  %v\n", output)
-	}
-	if strings.Contains(output, "server_id") == false {
-		t.Fatalf("invalid output:  %v\n", output)
-	}
-	if strings.Contains(output, "server_gateway_name") == false {
-		t.Fatalf("invalid output:  %v\n", output)
-	}
-	if strings.Contains(output, "server_gateway_id") == false {
-		t.Fatalf("invalid output:  %v\n", output)
-	}
-	if strings.Contains(output, "server_route_id") == false {
-		t.Fatalf("invalid output:  %v\n", output)
-	}
+		// poll and check for basic core NATS output
+		output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
+		if err != nil {
+			t.Fatalf("poll error:  %v\n", err)
+		}
+
+		if !strings.Contains(output, "nats_survey_expected_count -1") {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		checkOutput(t, output)
+	})
 }
 
 func TestSurveyor_StartTwice(t *testing.T) {
@@ -251,7 +283,7 @@ func TestSurveyor_Reconnect(t *testing.T) {
 
 	// this poll should fail...
 	output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
-	if strings.Contains(output, "nats_up 0") == false {
+	if !strings.Contains(output, "nats_up 0") {
 		t.Fatalf("output did not contain nats_up 0.\n====Output====\n%s", output)
 	}
 
@@ -398,22 +430,84 @@ func TestSurveyor_MissingResponses(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
 
-	s, err := NewSurveyor(getTestOptions())
-	if err != nil {
-		t.Fatalf("couldn't create surveyor: %v", err)
-	}
-	if err = s.Start(); err != nil {
-		t.Fatalf("start error: %v", err)
-	}
-	defer s.Stop()
+	testOpts := getTestOptions()
 
-	sc.Servers[1].Shutdown()
+	t.Run("with 3 expected servers", func(t *testing.T) {
+		testOpts.ExpectedServers = 3
+		testOpts.PollTimeout = 300 * time.Millisecond
+		s, err := NewSurveyor(testOpts)
+		if err != nil {
+			t.Fatalf("couldn't create surveyor: %v", err)
+		}
+		if err = s.Start(); err != nil {
+			t.Fatalf("start error: %v", err)
+		}
+		defer s.Stop()
+		output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
+		if err != nil {
+			t.Fatalf("poll error:  %v\n", err)
+		}
+		if !strings.Contains(output, `nats_survey_surveyed_count 3`) {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		if strings.Contains(output, `nats_survey_no_replies_count`) {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
 
-	// poll and check for basic core NATS output
-	_, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
-	if err != nil {
-		t.Fatalf("poll error:  %v\n", err)
-	}
+		sc.Servers[2].Shutdown()
+
+		// poll and check for basic core NATS output
+		output, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
+		if err != nil {
+			t.Fatalf("poll error:  %v\n", err)
+		}
+		if !strings.Contains(output, `nats_survey_surveyed_count 2`) {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		// expect missing servers reported
+		if !strings.Contains(output, `nats_survey_no_replies_count{expected="3"} 1`) {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+	})
+
+	t.Run("with unlimited expected servers", func(t *testing.T) {
+		testOpts.ExpectedServers = -1
+		testOpts.ServerResponseWait = 100 * time.Millisecond
+
+		s, err := NewSurveyor(testOpts)
+		if err != nil {
+			t.Fatalf("couldn't create surveyor: %v", err)
+		}
+		if err = s.Start(); err != nil {
+			t.Fatalf("start error: %v", err)
+		}
+		defer s.Stop()
+		output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
+		if err != nil {
+			t.Fatalf("poll error:  %v\n", err)
+		}
+		if !strings.Contains(output, `nats_survey_surveyed_count 2`) {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		if strings.Contains(output, `nats_survey_no_replies_count`) {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+
+		sc.Servers[1].Shutdown()
+
+		// poll and check for basic core NATS output
+		output, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
+		if err != nil {
+			t.Fatalf("poll error:  %v\n", err)
+		}
+		if !strings.Contains(output, `nats_survey_surveyed_count 1`) {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+		// expect missing servers reported
+		if strings.Contains(output, `nats_survey_no_replies_count`) {
+			t.Fatalf("invalid output:  %v\n", output)
+		}
+	})
 }
 
 func TestSurveyor_ObservationsFromFile(t *testing.T) {
