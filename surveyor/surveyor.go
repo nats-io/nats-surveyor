@@ -174,9 +174,9 @@ func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *na
 		}),
 		nats.ErrorHandler(func(c *nats.Conn, s *nats.Subscription, err error) {
 			if s != nil {
-				opts.Logger.Warnf("Error: name=%q err=%v", c.Opts.Name, err)
-			} else {
 				opts.Logger.Warnf("Error: name=%q, subject=%s, err=%v", c.Opts.Name, s.Subject, err)
+			} else {
+				opts.Logger.Warnf("Error: name=%q err=%v", c.Opts.Name, err)
 			}
 		}),
 		nats.MaxReconnects(10240),
