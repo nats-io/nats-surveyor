@@ -23,7 +23,7 @@ import (
 
 	"github.com/nats-io/nats-server/v2/logger"
 	ns "github.com/nats-io/nats-server/v2/server"
-	nats "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go"
 )
 
 // Test variables
@@ -103,7 +103,6 @@ func StartBasicServer() *ns.Server {
 func StartServer(t *testing.T, confFile string) *ns.Server {
 	resetPreviousHTTPConnections()
 	opts, err := ns.ProcessConfigFile(confFile)
-
 	if err != nil {
 		t.Fatalf("Error processing config file: %v", err)
 	}

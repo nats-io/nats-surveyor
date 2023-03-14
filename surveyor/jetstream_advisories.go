@@ -16,8 +16,6 @@ package surveyor
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
-	"github.com/nats-io/nats.go"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -25,6 +23,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/nats-io/nats.go"
 
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/api"

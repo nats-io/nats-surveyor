@@ -4,11 +4,12 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"os"
+	"sync"
+
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/singleflight"
-	"os"
-	"sync"
 )
 
 type natsContext struct {
@@ -24,6 +25,59 @@ type natsContext struct {
 	TLSCA       string `json:"tls_ca"`
 	TLSCert     string `json:"tls_cert"`
 	TLSKey      string `json:"tls_key"`
+}
+
+func (c *natsContext) copy() *natsContext {
+	if c == nil {
+		return nil
+	}
+	cp := *c
+	return &cp
+}
+
+func (c *natsContext) hash() (string, error) {
+	b, err := json.Marshal(c)
+	if err != nil {
+		return "", fmt.Errorf("error marshaling context to json: %v", err)
+	}
+	if c.Nkey != "" {
+		fb, err := os.ReadFile(c.Nkey)
+		if err != nil {
+			return "", fmt.Errorf("error opening nkey file %s: %v", c.Nkey, err)
+		}
+		b = append(b, fb...)
+	}
+	if c.Credentials != "" {
+		fb, err := os.ReadFile(c.Credentials)
+		if err != nil {
+			return "", fmt.Errorf("error opening creds file %s: %v", c.Credentials, err)
+		}
+		b = append(b, fb...)
+	}
+	if c.TLSCA != "" {
+		fb, err := os.ReadFile(c.TLSCA)
+		if err != nil {
+			return "", fmt.Errorf("error opening ca file %s: %v", c.TLSCA, err)
+		}
+		b = append(b, fb...)
+	}
+	if c.TLSCert != "" {
+		fb, err := os.ReadFile(c.TLSCert)
+		if err != nil {
+			return "", fmt.Errorf("error opening cert file %s: %v", c.TLSCert, err)
+		}
+		b = append(b, fb...)
+	}
+	if c.TLSKey != "" {
+		fb, err := os.ReadFile(c.TLSKey)
+		if err != nil {
+			return "", fmt.Errorf("error opening key file %s: %v", c.TLSKey, err)
+		}
+		b = append(b, fb...)
+	}
+	hash := sha256.New()
+	hash.Write(b)
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
 type natsContextDefaults struct {
@@ -81,12 +135,8 @@ func (cp *natsConnPool) Get(cfg *natsContext) (*pooledNatsConn, error) {
 		return nil, fmt.Errorf("nats context must not be nil")
 	}
 
-	{
-		// copy cfg
-		cfgCp := &natsContext{}
-		*cfgCp = *cfg
-		cfg = cfgCp
-	}
+	// copy cfg
+	cfg = cfg.copy()
 
 	// set defaults
 	if cfg.Name == "" {
@@ -105,48 +155,11 @@ func (cp *natsConnPool) Get(cfg *natsContext) (*pooledNatsConn, error) {
 		cfg.TLSKey = cp.natsDefaults.TLSKey
 	}
 
-	b, err := json.Marshal(cfg)
+	// get hash
+	key, err := cfg.hash()
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling context to json: %v", err)
+		return nil, err
 	}
-	if cfg.Nkey != "" {
-		fb, err := os.ReadFile(cfg.Nkey)
-		if err != nil {
-			return nil, fmt.Errorf("error opening nkey file %s: %v", cfg.Nkey, err)
-		}
-		b = append(b, fb...)
-	}
-	if cfg.Credentials != "" {
-		fb, err := os.ReadFile(cfg.Credentials)
-		if err != nil {
-			return nil, fmt.Errorf("error opening creds file %s: %v", cfg.Credentials, err)
-		}
-		b = append(b, fb...)
-	}
-	if cfg.TLSCA != "" {
-		fb, err := os.ReadFile(cfg.TLSCA)
-		if err != nil {
-			return nil, fmt.Errorf("error opening ca file %s: %v", cfg.TLSCA, err)
-		}
-		b = append(b, fb...)
-	}
-	if cfg.TLSCert != "" {
-		fb, err := os.ReadFile(cfg.TLSCert)
-		if err != nil {
-			return nil, fmt.Errorf("error opening cert file %s: %v", cfg.TLSCert, err)
-		}
-		b = append(b, fb...)
-	}
-	if cfg.TLSKey != "" {
-		fb, err := os.ReadFile(cfg.TLSKey)
-		if err != nil {
-			return nil, fmt.Errorf("error opening key file %s: %v", cfg.TLSKey, err)
-		}
-		b = append(b, fb...)
-	}
-	hash := sha256.New()
-	hash.Write(b)
-	key := fmt.Sprintf("%x", hash.Sum(nil))
 
 GetFromPool:
 	conn, err, _ := cp.group.Do(key, func() (interface{}, error) {
@@ -158,7 +171,7 @@ GetFromPool:
 		}
 		cp.Unlock()
 
-		opts := cp.natsOpts[:]
+		opts := cp.natsOpts
 		opts = append(opts, func(options *nats.Options) error {
 			if cfg.Name != "" {
 				options.Name = cfg.Name

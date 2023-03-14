@@ -510,7 +510,7 @@ func (s *Surveyor) Stop() {
 	s.serviceObsManager.stop()
 
 	s.jsAdvisoryFSWatcher.stop()
-	s.jsAdvisoryManager.start()
+	s.jsAdvisoryManager.stop()
 
 	s.sysAcctPC.ReturnToPool()
 	s.sysAcctPC = nil

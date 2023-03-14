@@ -1,10 +1,11 @@
 package surveyor
 
 import (
-	"github.com/nats-io/nats.go"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/nats-io/nats.go"
 
 	natsservertest "github.com/nats-io/nats-server/v2/test"
 	"github.com/sirupsen/logrus"

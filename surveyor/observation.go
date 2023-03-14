@@ -17,13 +17,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nats-io/nats.go"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/nats-io/nats.go"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/nats-io/jsm.go"

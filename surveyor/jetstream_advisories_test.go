@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/nats-io/nats.go"
 	"os"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/nats-io/nats.go"
 
 	"github.com/nats-io/jsm.go"
 	st "github.com/nats-io/nats-surveyor/test"
@@ -431,7 +432,7 @@ func TestSurveyor_AdvisoriesWatcher(t *testing.T) {
 	opts.URLs = js.ClientURL()
 
 	dirName := fmt.Sprintf("testdata/adv%d", time.Now().UnixNano())
-	if err := os.Mkdir(dirName, 0700); err != nil {
+	if err := os.Mkdir(dirName, 0o700); err != nil {
 		t.Fatalf("Error creating advisories dir: %s", err)
 	}
 	defer os.RemoveAll(dirName)
@@ -461,7 +462,7 @@ func TestSurveyor_AdvisoriesWatcher(t *testing.T) {
 			t.Fatalf("marshalling error: %s", err)
 		}
 		advPath := fmt.Sprintf("%s/create.json", dirName)
-		if err := os.WriteFile(advPath, advConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(advPath, advConfigJSON, 0o600); err != nil {
 			t.Fatalf("Error writing advisory config file: %s", err)
 		}
 
@@ -489,7 +490,7 @@ func TestSurveyor_AdvisoriesWatcher(t *testing.T) {
 			t.Fatalf("Error closing file: %s", err)
 		}
 		time.Sleep(200 * time.Millisecond)
-		if err := os.WriteFile(advPath, advConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(advPath, advConfigJSON, 0o600); err != nil {
 			t.Fatalf("Error writing to file: %s", err)
 		}
 
@@ -508,14 +509,14 @@ func TestSurveyor_AdvisoriesWatcher(t *testing.T) {
 			t.Fatalf("marshalling error: %s", err)
 		}
 
-		if err := os.Mkdir(fmt.Sprintf("%s/subdir", dirName), 0700); err != nil {
+		if err := os.Mkdir(fmt.Sprintf("%s/subdir", dirName), 0o700); err != nil {
 			t.Fatalf("Error creating subdirectory: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
 
 		advPath := fmt.Sprintf("%s/subdir/subadv.json", dirName)
 
-		err = os.WriteFile(advPath, advConfigJSON, 0600)
+		err = os.WriteFile(advPath, advConfigJSON, 0o600)
 		if err != nil {
 			t.Fatalf("Error writing advisory config file: %s", err)
 		}
@@ -535,7 +536,7 @@ func TestSurveyor_AdvisoriesWatcher(t *testing.T) {
 		}
 		advPath = fmt.Sprintf("%s/subdir/abc.json", dirName)
 
-		if err := os.WriteFile(advPath, advConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(advPath, advConfigJSON, 0o600); err != nil {
 			t.Fatalf("Error writing advisory config file: %s", err)
 		}
 
@@ -550,13 +551,13 @@ func TestSurveyor_AdvisoriesWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
-		if err := os.Mkdir(fmt.Sprintf("%s/subdir/nested", dirName), 0700); err != nil {
+		if err := os.Mkdir(fmt.Sprintf("%s/subdir/nested", dirName), 0o700); err != nil {
 			t.Fatalf("Error creating subdirectory: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
 
 		advPath = fmt.Sprintf("%s/subdir/nested/nested.json", dirName)
-		err = os.WriteFile(advPath, advConfigJSON, 0600)
+		err = os.WriteFile(advPath, advConfigJSON, 0o600)
 		if err != nil {
 			t.Fatalf("Error writing advisory config file: %s", err)
 		}
@@ -578,7 +579,7 @@ func TestSurveyor_AdvisoriesWatcher(t *testing.T) {
 		}
 
 		advPath := fmt.Sprintf("%s/write.json", dirName)
-		if err := os.WriteFile(advPath, advConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(advPath, advConfigJSON, 0o600); err != nil {
 			t.Fatalf("Error writing to file: %s", err)
 		}
 
@@ -587,7 +588,7 @@ func TestSurveyor_AdvisoriesWatcher(t *testing.T) {
 		waitForAdvUpdate(t, am, expectedAdvisories)
 
 		// update file with invalid JSON - existing advisory should not be impacted
-		if err := os.WriteFile(advPath, []byte("abc"), 0600); err != nil {
+		if err := os.WriteFile(advPath, []byte("abc"), 0o600); err != nil {
 			t.Fatalf("Error writing to file: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -624,7 +625,7 @@ func TestSurveyor_AdvisoriesWatcher(t *testing.T) {
 		}
 
 		advPath = fmt.Sprintf("%s/another.json", dirName)
-		if err := os.WriteFile(advPath, advConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(advPath, advConfigJSON, 0o600); err != nil {
 			t.Fatalf("Error writing advisory config file: %s", err)
 		}
 

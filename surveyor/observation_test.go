@@ -454,7 +454,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 	opts := getTestOptions()
 
 	dirName := fmt.Sprintf("testdata/obs%d", time.Now().UnixNano())
-	if err := os.Mkdir(dirName, 0700); err != nil {
+	if err := os.Mkdir(dirName, 0o700); err != nil {
 		t.Fatalf("Error creating observations dir: %s", err)
 	}
 	defer os.RemoveAll(dirName)
@@ -484,7 +484,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("marshalling error: %s", err)
 		}
 		obsPath := fmt.Sprintf("%s/create.json", dirName)
-		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0o600); err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
 
@@ -512,7 +512,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("Error closing file: %s", err)
 		}
 		time.Sleep(200 * time.Millisecond)
-		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0o600); err != nil {
 			t.Fatalf("Error writing to file: %s", err)
 		}
 
@@ -532,14 +532,14 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 			t.Fatalf("marshalling error: %s", err)
 		}
 
-		if err := os.Mkdir(fmt.Sprintf("%s/subdir", dirName), 0700); err != nil {
+		if err := os.Mkdir(fmt.Sprintf("%s/subdir", dirName), 0o700); err != nil {
 			t.Fatalf("Error creating subdirectory: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
 
 		obsPath := fmt.Sprintf("%s/subdir/subobs.json", dirName)
 
-		err = os.WriteFile(obsPath, obsConfigJSON, 0600)
+		err = os.WriteFile(obsPath, obsConfigJSON, 0o600)
 		if err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
@@ -559,7 +559,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 		obsPath = fmt.Sprintf("%s/subdir/abc.json", dirName)
 
-		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0o600); err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
 
@@ -576,13 +576,13 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshalling error: %s", err)
 		}
-		if err := os.Mkdir(fmt.Sprintf("%s/subdir/nested", dirName), 0700); err != nil {
+		if err := os.Mkdir(fmt.Sprintf("%s/subdir/nested", dirName), 0o700); err != nil {
 			t.Fatalf("Error creating subdirectory: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
 
 		obsPath = fmt.Sprintf("%s/subdir/nested/nested.json", dirName)
-		err = os.WriteFile(obsPath, obsConfigJSON, 0600)
+		err = os.WriteFile(obsPath, obsConfigJSON, 0o600)
 		if err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
@@ -604,7 +604,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 
 		obsPath := fmt.Sprintf("%s/write.json", dirName)
-		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0o600); err != nil {
 			t.Fatalf("Error writing to file: %s", err)
 		}
 
@@ -613,7 +613,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		waitForObsUpdate(t, om, expectedObservations)
 
 		// update file with invalid JSON - existing observation should not be impacted
-		if err := os.WriteFile(obsPath, []byte("abc"), 0600); err != nil {
+		if err := os.WriteFile(obsPath, []byte("abc"), 0o600); err != nil {
 			t.Fatalf("Error writing to file: %s", err)
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -650,7 +650,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		}
 
 		obsPath = fmt.Sprintf("%s/another.json", dirName)
-		if err := os.WriteFile(obsPath, obsConfigJSON, 0600); err != nil {
+		if err := os.WriteFile(obsPath, obsConfigJSON, 0o600); err != nil {
 			t.Fatalf("Error writing observation config file: %s", err)
 		}
 

@@ -191,8 +191,10 @@ func jsDomainLabelValue(sm *server.ServerStatsMsg) string {
 
 func jetstreamInfoLabelValues(sm *server.ServerStatsMsg) []string {
 	// Maybe also "meta_leader", "store_dir"?
-	return []string{sm.Server.Name, sm.Server.Host, sm.Server.ID, sm.Server.Cluster, jsDomainLabelValue(sm), sm.Server.Version,
-		strconv.FormatBool(sm.Server.JetStream)}
+	return []string{
+		sm.Server.Name, sm.Server.Host, sm.Server.ID, sm.Server.Cluster, jsDomainLabelValue(sm), sm.Server.Version,
+		strconv.FormatBool(sm.Server.JetStream),
+	}
 }
 
 func (sc *StatzCollector) serverLabelValues(sm *server.ServerStatsMsg) []string {

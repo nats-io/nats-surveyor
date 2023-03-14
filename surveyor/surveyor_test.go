@@ -17,13 +17,14 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/nats-io/nats.go"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nats-io/nats.go"
 
 	st "github.com/nats-io/nats-surveyor/test"
 )

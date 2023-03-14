@@ -15,8 +15,9 @@
 package test
 
 import (
-	"github.com/nats-io/nats.go"
 	"testing"
+
+	"github.com/nats-io/nats.go"
 )
 
 // Keep our coverage up
