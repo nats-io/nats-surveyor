@@ -70,7 +70,6 @@ type Options struct {
 	HTTPCertFile         string
 	HTTPKeyFile          string
 	HTTPCaFile           string
-	NATSServerURL        string
 	HTTPUser             string // User in metrics scrape by Prometheus.
 	HTTPPassword         string
 	Prefix               string // TODO
@@ -105,74 +104,18 @@ func GetDefaultOptions() *Options {
 // A Surveyor instance
 type Surveyor struct {
 	sync.Mutex
-	opts                Options
-	logger              *logrus.Logger
-	listener            net.Listener
+	cp                  *natsConnPool
 	httpServer          *http.Server
+	jsAdvisoryManager   *JSAdvisoryManager
+	jsAdvisoryFSWatcher *jsAdvisoryFSWatcher
+	listener            net.Listener
+	logger              *logrus.Logger
+	opts                Options
 	promRegistry        *prometheus.Registry
-	reconnectCtr        *prometheus.CounterVec
 	statzC              *StatzCollector
 	serviceObsManager   *ServiceObsManager
-	serviceObsFsWatcher *serviceObsFSWatcher
-	jsAPIMetrics        *JSAdvisoryMetrics
-	jsAPIAudits         []*JSAdvisoryListener
-	stop                chan struct{}
-}
-
-func connect(opts *Options, reconnectCtr *prometheus.CounterVec) (*nats.Conn, error) {
-	nopts := []nats.Option{
-		nats.Name(opts.Name),
-	}
-
-	switch {
-	case opts.Credentials != "":
-		nopts = append(nopts, nats.UserCredentials(opts.Credentials))
-	case opts.Nkey != "":
-		o, err := nats.NkeyOptionFromSeed(opts.Nkey)
-		if err != nil {
-			return nil, fmt.Errorf("unable to load nkey: %v", err)
-		}
-		nopts = append(nopts, o)
-	case opts.NATSUser != "":
-		nopts = append(nopts, nats.UserInfo(opts.NATSUser, opts.NATSPassword))
-	}
-
-	nopts = append(nopts, nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
-		if err != nil {
-			opts.Logger.Warnf("%q disconnected, will possibly miss replies: %v", c.Opts.Name, err)
-		}
-	}))
-	nopts = append(nopts, nats.ReconnectHandler(func(c *nats.Conn) {
-		reconnectCtr.WithLabelValues(c.Opts.Name).Inc()
-		opts.Logger.Infof("%q reconnected to %v", c.Opts.Name, c.ConnectedAddr())
-	}))
-	nopts = append(nopts, nats.ClosedHandler(func(c *nats.Conn) {
-		opts.Logger.Infof("%q connection closing", c.Opts.Name)
-	}))
-	nopts = append(nopts, nats.ErrorHandler(func(c *nats.Conn, s *nats.Subscription, err error) {
-		if s != nil {
-			opts.Logger.Warnf("Error: name=%q err=%v", c.Opts.Name, err)
-		} else {
-			opts.Logger.Warnf("Error: name=%q, subject=%s, err=%v", c.Opts.Name, s.Subject, err)
-		}
-	}))
-	nopts = append(nopts, nats.MaxReconnects(10240))
-
-	// NATS TLS Options
-	if opts.CaFile != "" {
-		nopts = append(nopts, nats.RootCAs(opts.CaFile))
-	}
-	if opts.CertFile != "" {
-		nopts = append(nopts, nats.ClientCert(opts.CertFile, opts.KeyFile))
-	}
-
-	nc, err := nats.Connect(opts.URLs, nopts...)
-	if err != nil {
-		return nil, err
-	}
-	opts.Logger.Infof("%s connected to NATS Deployment: %v", opts.Name, nc.ConnectedAddr())
-
-	return nc, err
+	serviceObsFSWatcher *serviceObsFSWatcher
+	sysAcctPC           *pooledNatsConn
 }
 
 // NewSurveyor creates a surveyor
@@ -188,20 +131,57 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 		ConstLabels: opts.ConstLabels,
 	}, []string{"name"})
 	promRegistry.MustRegister(reconnectCtr)
+	cp := newSurveyorConnPool(opts, reconnectCtr)
 	serviceObsMetrics := NewServiceObservationMetrics(promRegistry, opts.ConstLabels)
-	serviceObsManager := newServiceObservationManager(opts.Logger, *opts, serviceObsMetrics, reconnectCtr)
-	serviceObsFsWatcher := newServiceObservationFSWatcher(opts.Logger, serviceObsManager)
-	jsAPIMetrics := NewJetStreamAdvisoryMetrics(promRegistry, opts.ConstLabels)
+	serviceObsManager := newServiceObservationManager(cp, opts.Logger, serviceObsMetrics)
+	serviceFsWatcher := newServiceObservationFSWatcher(opts.Logger, serviceObsManager)
+	jsAdvisoryMetrics := NewJetStreamAdvisoryMetrics(promRegistry, opts.ConstLabels)
+	jsAdvisoryManager := newJetStreamAdvisoryManager(cp, opts.Logger, jsAdvisoryMetrics)
+	jsFsWatcher := newJetStreamAdvisoryFSWatcher(opts.Logger, jsAdvisoryManager)
 
 	return &Surveyor{
-		opts:                *opts,
+		cp:                  cp,
+		jsAdvisoryManager:   jsAdvisoryManager,
+		jsAdvisoryFSWatcher: jsFsWatcher,
 		logger:              opts.Logger,
+		opts:                *opts,
 		promRegistry:        promRegistry,
-		reconnectCtr:        reconnectCtr,
 		serviceObsManager:   serviceObsManager,
-		serviceObsFsWatcher: serviceObsFsWatcher,
-		jsAPIMetrics:        jsAPIMetrics,
+		serviceObsFSWatcher: serviceFsWatcher,
 	}, nil
+}
+
+func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *natsConnPool {
+	natsDefaults := &natsContextDefaults{
+		Name:    opts.Name,
+		URL:     opts.URLs,
+		TLSCert: opts.CertFile,
+		TLSKey:  opts.KeyFile,
+		TLSCA:   opts.CaFile,
+	}
+	natsOpts := []nats.Option{
+		nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
+			if err != nil {
+				opts.Logger.Warnf("%q disconnected, will possibly miss replies: %v", c.Opts.Name, err)
+			}
+		}),
+		nats.ReconnectHandler(func(c *nats.Conn) {
+			reconnectCtr.WithLabelValues(c.Opts.Name).Inc()
+			opts.Logger.Infof("%q reconnected to %v", c.Opts.Name, c.ConnectedAddr())
+		}),
+		nats.ClosedHandler(func(c *nats.Conn) {
+			opts.Logger.Infof("%q connection closing", c.Opts.Name)
+		}),
+		nats.ErrorHandler(func(c *nats.Conn, s *nats.Subscription, err error) {
+			if s != nil {
+				opts.Logger.Warnf("Error: name=%q, subject=%s, err=%v", c.Opts.Name, s.Subject, err)
+			} else {
+				opts.Logger.Warnf("Error: name=%q err=%v", c.Opts.Name, err)
+			}
+		}),
+		nats.MaxReconnects(10240),
+	}
+	return newNatsConnPool(opts.Logger, natsDefaults, natsOpts)
 }
 
 func (s *Surveyor) createStatszCollector() error {
@@ -209,16 +189,11 @@ func (s *Surveyor) createStatszCollector() error {
 		return nil
 	}
 
-	nc, err := connect(&s.opts, s.reconnectCtr)
-	if err != nil {
-		return err
-	}
-
 	if !s.opts.Accounts {
 		s.logger.Debugln("Skipping per-account exports")
 	}
 
-	s.statzC = NewStatzCollector(nc, s.logger, s.opts.ExpectedServers, s.opts.ServerResponseWait, s.opts.PollTimeout, s.opts.Accounts, s.opts.ConstLabels)
+	s.statzC = NewStatzCollector(s.sysAcctPC.nc, s.logger, s.opts.ExpectedServers, s.opts.ServerResponseWait, s.opts.PollTimeout, s.opts.Accounts, s.opts.ConstLabels)
 	s.promRegistry.MustRegister(s.statzC)
 	return nil
 }
@@ -391,54 +366,41 @@ func (s *Surveyor) startHTTP() error {
 	return nil
 }
 
-func (s *Surveyor) startJetStreamAdvisories() error {
-	s.jsAPIAudits = []*JSAdvisoryListener{}
-	s.jsAPIMetrics.jsAdvisoriesGauge.Set(0)
+func (s *Surveyor) startJetStreamAdvisories() {
+	if s.jsAdvisoryManager.IsRunning() {
+		return
+	}
 
+	s.jsAdvisoryManager.start()
 	dir := s.opts.JetStreamConfigDir
 	if dir == "" {
-		s.logger.Debugln("Skipping JetStream API Audit startup, no directory configured")
-		return nil
+		s.logger.Debugln("skipping JetStream advisory startup, no directory configured")
+		return
 	}
 
 	fs, err := os.Stat(dir)
 	if err != nil {
-		return fmt.Errorf("could not start JetStream API Audit, %s does not exist", dir)
+		s.logger.Warnf("could not start JetStream advisories, dir %s does not exist", dir)
+		return
 	}
 
 	if !fs.IsDir() {
-		return fmt.Errorf("JetStream API Audit dir %s is not a directory", dir)
+		s.logger.Warnf("JetStream advisories dir %s is not a directory", dir)
+		return
 	}
 
-	// TODO: new watcher should be created in each directory
-	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+	if err := s.jsAdvisoryFSWatcher.start(); err != nil {
+		s.logger.Warnf("could not start JetStream advisories filesystem watcher: %s", err)
+	}
 
-		if filepath.Ext(info.Name()) != ".json" {
-			return nil
-		}
-
-		obs, err := NewJetStreamAdvisoryListener(path, s.opts, s.jsAPIMetrics, s.reconnectCtr)
-		if err != nil {
-			return fmt.Errorf("could not create JetStream API Audit from %s: %s", path, err)
-		}
-
-		err = obs.Start()
-		if err != nil {
-			return fmt.Errorf("could not start observation from %s: %s", path, err)
-		}
-
-		s.jsAPIAudits = append(s.jsAPIAudits, obs)
-
-		return nil
-	})
-
-	return err
+	err = filepath.WalkDir(dir, s.jsAdvisoryFSWatcher.startAdvisoriesInDir())
+	if err != nil {
+		s.logger.Warnf("error traversing JetStream advisories dir: %s, error: %s", dir, err)
+		return
+	}
 }
 
-func (s *Surveyor) startObservations() {
+func (s *Surveyor) startServiceObservations() {
 	if s.serviceObsManager.IsRunning() {
 		return
 	}
@@ -446,28 +408,28 @@ func (s *Surveyor) startObservations() {
 	s.serviceObsManager.start()
 	dir := s.opts.ObservationConfigDir
 	if dir == "" {
-		s.logger.Debugln("Skipping observation startup, no directory configured")
+		s.logger.Debugln("skipping service observation startup, no directory configured")
 		return
 	}
 
 	fs, err := os.Stat(dir)
 	if err != nil {
-		s.logger.Warnf("could not start observations, %s does not exist", dir)
+		s.logger.Warnf("could not start service observations, dir %s does not exist", dir)
 		return
 	}
 
 	if !fs.IsDir() {
-		s.logger.Warnf("observations dir %s is not a directory", dir)
+		s.logger.Warnf("service observations dir %s is not a directory", dir)
 		return
 	}
 
-	if err := s.serviceObsFsWatcher.start(); err != nil {
-		s.logger.Warnf("could not start filesystem watcher: %s", err)
+	if err := s.serviceObsFSWatcher.start(); err != nil {
+		s.logger.Warnf("could not start service observations filesystem watcher: %s", err)
 	}
 
-	err = filepath.WalkDir(dir, s.serviceObsFsWatcher.startObservationsInDir())
+	err = filepath.WalkDir(dir, s.serviceObsFSWatcher.startObservationsInDir())
 	if err != nil {
-		s.logger.Warnf("error traversing observations dir: %s: %s", dir, err)
+		s.logger.Warnf("error traversing service observations dir: %s, error: %s", dir, err)
 		return
 	}
 }
@@ -476,12 +438,31 @@ func (s *Surveyor) ServiceObservationManager() *ServiceObsManager {
 	return s.serviceObsManager
 }
 
+func (s *Surveyor) JetStreamAdvisoryManager() *JSAdvisoryManager {
+	return s.jsAdvisoryManager
+}
+
 // Start starts the surveyor
 func (s *Surveyor) Start() error {
 	s.Lock()
 	defer s.Unlock()
+	if s.sysAcctPC != nil {
+		// already running
+		return nil
+	}
 
-	s.stop = make(chan struct{})
+	var err error
+	natsCtx := &natsContext{
+		Credentials: s.opts.Credentials,
+		Nkey:        s.opts.Nkey,
+		Username:    s.opts.NATSUser,
+		Password:    s.opts.NATSPassword,
+	}
+
+	s.sysAcctPC, err = s.cp.Get(natsCtx)
+	if err != nil {
+		return err
+	}
 
 	if s.statzC == nil {
 		if err := s.createStatszCollector(); err != nil {
@@ -489,13 +470,8 @@ func (s *Surveyor) Start() error {
 		}
 	}
 
-	s.startObservations()
-
-	if s.jsAPIAudits == nil {
-		if err := s.startJetStreamAdvisories(); err != nil {
-			return err
-		}
-	}
+	s.startServiceObservations()
+	s.startJetStreamAdvisories()
 
 	if !s.opts.DisableHTTPServer && s.listener == nil && s.httpServer == nil {
 		if err := s.startHTTP(); err != nil {
@@ -510,6 +486,10 @@ func (s *Surveyor) Start() error {
 func (s *Surveyor) Stop() {
 	s.Lock()
 	defer s.Unlock()
+	if s.sysAcctPC == nil {
+		// already stopped
+		return
+	}
 
 	if s.httpServer != nil {
 		_ = s.httpServer.Shutdown(context.Background())
@@ -523,20 +503,17 @@ func (s *Surveyor) Stop() {
 
 	if s.statzC != nil {
 		s.promRegistry.Unregister(s.statzC)
-		s.statzC.nc.Close()
 		s.statzC = nil
 	}
 
-	s.serviceObsFsWatcher.stop()
+	s.serviceObsFSWatcher.stop()
 	s.serviceObsManager.stop()
 
-	if s.jsAPIAudits != nil {
-		for _, j := range s.jsAPIAudits {
-			j.nc.Close()
-		}
-		s.jsAPIAudits = nil
-	}
-	close(s.stop)
+	s.jsAdvisoryFSWatcher.stop()
+	s.jsAdvisoryManager.stop()
+
+	s.sysAcctPC.ReturnToPool()
+	s.sysAcctPC = nil
 }
 
 // Gather implements the prometheus.Gatherer interface

@@ -16,16 +16,21 @@ package surveyor
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/nats-io/nats.go"
 
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/api"
 	"github.com/nats-io/jsm.go/api/jetstream/advisory"
 	"github.com/nats-io/jsm.go/api/jetstream/metric"
-	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
@@ -222,39 +227,39 @@ func NewJetStreamAdvisoryMetrics(registry *prometheus.Registry, constLabels prom
 	return metrics
 }
 
-// JSAdvisoryListener listens for JetStream advisories and expose them as prometheus data
-type JSAdvisoryListener struct {
-	nc      *nats.Conn
-	logger  *logrus.Logger
-	opts    *jsAdvisoryOptions
-	metrics *JSAdvisoryMetrics
-	sopts   *Options
-}
+type JSAdvisoryConfig struct {
+	// unique identifier
+	ID string `json:"id"`
 
-type jsAdvisoryOptions struct {
+	// account name
 	AccountName string `json:"name"`
+
+	// connection options
+	JWT         string `json:"jwt"`
+	Seed        string `json:"seed"`
 	Credentials string `json:"credential"`
+	Nkey        string `json:"nkey"`
+	Token       string `json:"token"`
 	Username    string `json:"username"`
 	Password    string `json:"password"`
-	NKey        string `json:"nkey"`
+	TLSCA       string `json:"tls_ca"`
 	TLSCert     string `json:"tls_cert"`
 	TLSKey      string `json:"tls_key"`
-	TLSCA       string `json:"tls_ca"`
 }
 
-// Validate checks the options meet our expectations
-func (o *jsAdvisoryOptions) Validate() error {
-	errs := []string{}
+// Validate is used to validate a JSAdvisoryConfig
+func (o *JSAdvisoryConfig) Validate() error {
+	if o == nil {
+		return fmt.Errorf("js advisory config cannot be nil")
+	}
+
+	var errs []string
+	if o.ID == "" {
+		errs = append(errs, "id is required")
+	}
 
 	if o.AccountName == "" {
 		errs = append(errs, "name is required")
-	}
-
-	if o.Credentials != "" {
-		_, err := os.Stat(o.Credentials)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("invalid credential file: %s", err))
-		}
 	}
 
 	if len(errs) == 0 {
@@ -264,68 +269,111 @@ func (o *jsAdvisoryOptions) Validate() error {
 	return fmt.Errorf(strings.Join(errs, ", "))
 }
 
-// NewJetStreamAdvisoryListener creates a new JetStream advisory reporter
-func NewJetStreamAdvisoryListener(f string, sopts Options, metrics *JSAdvisoryMetrics, reconnectCtr *prometheus.CounterVec) (*JSAdvisoryListener, error) {
+func (o *JSAdvisoryConfig) copy() *JSAdvisoryConfig {
+	if o == nil {
+		return nil
+	}
+	cp := *o
+	return &cp
+}
+
+// NewJetStreamAdvisoryConfigFromFile creates a new JSAdvisoryConfig from a file
+// the ID of the JSAdvisoryConfig is set to the filename f
+func NewJetStreamAdvisoryConfigFromFile(f string) (*JSAdvisoryConfig, error) {
 	js, err := os.ReadFile(f)
 	if err != nil {
 		return nil, err
 	}
 
-	opts := &jsAdvisoryOptions{}
-	err = json.Unmarshal(js, opts)
+	jsa := &JSAdvisoryConfig{}
+	err = json.Unmarshal(js, jsa)
 	if err != nil {
-		return nil, fmt.Errorf("invalid JetStream advisory configuration: %s: %s", f, err)
+		return nil, fmt.Errorf("invalid JetStream advisory config: %s: %s", f, err)
 	}
-
-	err = opts.Validate()
+	jsa.ID = f
+	err = jsa.Validate()
 	if err != nil {
-		return nil, fmt.Errorf("invalid JetStream advisory configuration: %s: %s", f, err)
+		return nil, fmt.Errorf("invalid JetStream advisory config: %s: %s", f, err)
 	}
 
-	sopts.Name = fmt.Sprintf("%s (jetstream %s)", sopts.Name, opts.AccountName)
-	sopts.Credentials = opts.Credentials
-	sopts.NATSUser = opts.Username
-	sopts.NATSPassword = opts.Password
-	sopts.Nkey = opts.NKey
+	return jsa, nil
+}
 
-	if opts.TLSKey != "" && opts.TLSCert != "" && opts.TLSCA != "" {
-		sopts.CaFile = opts.TLSCA
-		sopts.CertFile = opts.TLSCert
-		sopts.KeyFile = opts.TLSKey
-	}
+// jsAdvisoryListener listens for JetStream advisories and expose them as prometheus data
+type jsAdvisoryListener struct {
+	sync.Mutex
+	config      *JSAdvisoryConfig
+	cp          *natsConnPool
+	logger      *logrus.Logger
+	metrics     *JSAdvisoryMetrics
+	pc          *pooledNatsConn
+	subAdvisory *nats.Subscription
+	subMetric   *nats.Subscription
+}
 
-	nc, err := connect(&sopts, reconnectCtr)
+func newJetStreamAdvisoryListener(config *JSAdvisoryConfig, cp *natsConnPool, logger *logrus.Logger, metrics *JSAdvisoryMetrics) (*jsAdvisoryListener, error) {
+	err := config.Validate()
 	if err != nil {
-		return nil, fmt.Errorf("nats connection failed: %s", err)
+		return nil, fmt.Errorf("invalid JetStream advisory config for id: %s, account name: %s, error: %v", config.ID, config.AccountName, err)
 	}
 
-	return &JSAdvisoryListener{
-		nc:      nc,
-		logger:  sopts.Logger,
-		opts:    opts,
+	return &jsAdvisoryListener{
+		config:  config,
+		cp:      cp,
+		logger:  logger,
 		metrics: metrics,
-		sopts:   &sopts,
 	}, nil
 }
 
-// Start starts listening for observations
-func (o *JSAdvisoryListener) Start() error {
-	_, err := o.nc.Subscribe(api.JSAdvisoryPrefix+".>", o.advisoryHandler)
-	if err != nil {
-		return fmt.Errorf("could not subscribe to JetStream Advisory topic for %s (%s): %s", o.opts.AccountName, api.JSAdvisoryPrefix, err)
+func (o *jsAdvisoryListener) natsContext() *natsContext {
+	natsCtx := &natsContext{
+		JWT:         o.config.JWT,
+		Seed:        o.config.Seed,
+		Credentials: o.config.Credentials,
+		Nkey:        o.config.Nkey,
+		Token:       o.config.Token,
+		Username:    o.config.Username,
+		Password:    o.config.Password,
+		TLSCA:       o.config.TLSCA,
+		TLSCert:     o.config.TLSCert,
+		TLSKey:      o.config.TLSKey,
 	}
-	o.logger.Infof("Started JetStream Advisory listener stats on %s.> for %s", api.JSAdvisoryPrefix, o.opts.AccountName)
 
-	_, err = o.nc.Subscribe(api.JSMetricPrefix+".>", o.advisoryHandler)
-	if err != nil {
-		return fmt.Errorf("could not subscribe to JetStream Advisory topic for %s (%s): %s", o.opts.AccountName, api.JSMetricPrefix, err)
+	return natsCtx
+}
+
+// Start starts listening for JetStream advisories
+func (o *jsAdvisoryListener) Start() error {
+	o.Lock()
+	defer o.Unlock()
+	if o.pc != nil {
+		// already started
+		return nil
 	}
-	o.logger.Infof("Started JetStream Metric listener stats on %s.> for %s", api.JSMetricPrefix, o.opts.AccountName)
 
-	_ = o.nc.Flush()
+	pc, err := o.cp.Get(o.natsContext())
+	if err != nil {
+		return fmt.Errorf("nats connection failed for id: %s, account name: %s, error: %v", o.config.ID, o.config.AccountName, err)
+	}
 
+	subAdvisory, err := pc.nc.Subscribe(api.JSAdvisoryPrefix+".>", o.advisoryHandler)
+	if err != nil {
+		pc.ReturnToPool()
+		return fmt.Errorf("could not subscribe to JetStream advisory for id: %s, account name: %s, topic: %s, error: %v", o.config.ID, o.config.AccountName, api.JSAdvisoryPrefix, err)
+	}
+
+	subMetric, err := pc.nc.Subscribe(api.JSMetricPrefix+".>", o.advisoryHandler)
+	if err != nil {
+		_ = subAdvisory.Unsubscribe()
+		pc.ReturnToPool()
+		return fmt.Errorf("could not subscribe to JetStream advisory for id: %s, account name: %s, topic: %s, error: %v", o.config.ID, o.config.AccountName, api.JSMetricPrefix, err)
+	}
+
+	o.pc = pc
+	o.subAdvisory = subAdvisory
+	o.subMetric = subMetric
+	o.logger.Infof("started JetStream advisory for id: %s, account name: %s, advisory topic: %s, metric topic: %s", o.config.ID, o.config.AccountName, api.JSAdvisoryPrefix, api.JSMetricPrefix)
 	o.metrics.jsAdvisoriesGauge.Inc()
-
 	return nil
 }
 
@@ -365,71 +413,404 @@ func limitJSSubject(subj string) string {
 	return subj
 }
 
-func (o *JSAdvisoryListener) advisoryHandler(m *nats.Msg) {
+func (o *jsAdvisoryListener) advisoryHandler(m *nats.Msg) {
 	schema, event, err := jsm.ParseEvent(m.Data)
 	if err != nil {
-		o.metrics.jsAdvisoryParseErrorCtr.WithLabelValues(o.opts.AccountName).Inc()
+		o.metrics.jsAdvisoryParseErrorCtr.WithLabelValues(o.config.AccountName).Inc()
 		o.logger.Warnf("Could not parse JetStream API Audit Advisory: %s", err)
 		return
 	}
 
-	o.metrics.jsTotalAdvisoryCtr.WithLabelValues(o.opts.AccountName).Inc()
+	o.metrics.jsTotalAdvisoryCtr.WithLabelValues(o.config.AccountName).Inc()
 
 	switch event := event.(type) {
 	case *advisory.JetStreamAPIAuditV1:
-		o.metrics.jsAPIAuditCtr.WithLabelValues(limitJSSubject(event.Subject), o.opts.AccountName).Inc()
+		o.metrics.jsAPIAuditCtr.WithLabelValues(limitJSSubject(event.Subject), o.config.AccountName).Inc()
 
 	case *advisory.ConsumerDeliveryExceededAdvisoryV1:
-		o.metrics.jsDeliveryExceededCtr.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
+		o.metrics.jsDeliveryExceededCtr.WithLabelValues(o.config.AccountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
 
 	case *metric.ConsumerAckMetricV1:
-		o.metrics.jsAckMetricDelay.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Observe(time.Duration(event.Delay).Seconds())
-		o.metrics.jsAckMetricDeliveries.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
+		o.metrics.jsAckMetricDelay.WithLabelValues(o.config.AccountName, event.Stream, event.Consumer).Observe(time.Duration(event.Delay).Seconds())
+		o.metrics.jsAckMetricDeliveries.WithLabelValues(o.config.AccountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
 
 	case *advisory.JSConsumerActionAdvisoryV1:
-		o.metrics.jsConsumerActionCtr.WithLabelValues(o.opts.AccountName, event.Stream, event.Action.String()).Inc()
+		o.metrics.jsConsumerActionCtr.WithLabelValues(o.config.AccountName, event.Stream, event.Action.String()).Inc()
 
 	case *advisory.JSStreamActionAdvisoryV1:
-		o.metrics.jsStreamActionCtr.WithLabelValues(o.opts.AccountName, event.Stream, event.Action.String()).Inc()
+		o.metrics.jsStreamActionCtr.WithLabelValues(o.config.AccountName, event.Stream, event.Action.String()).Inc()
 
 	case *advisory.JSConsumerDeliveryTerminatedAdvisoryV1:
-		o.metrics.jsDeliveryTerminatedCtr.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Inc()
+		o.metrics.jsDeliveryTerminatedCtr.WithLabelValues(o.config.AccountName, event.Stream, event.Consumer).Inc()
 
 	case *advisory.JSRestoreCreateAdvisoryV1:
-		o.metrics.jsRestoreCreatedCtr.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
+		o.metrics.jsRestoreCreatedCtr.WithLabelValues(o.config.AccountName, event.Stream).Inc()
 
 	case *advisory.JSRestoreCompleteAdvisoryV1:
-		o.metrics.jsRestoreSizeCtr.WithLabelValues(o.opts.AccountName, event.Stream).Add(float64(event.Bytes))
-		o.metrics.jsRestoreDuration.WithLabelValues(o.opts.AccountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
+		o.metrics.jsRestoreSizeCtr.WithLabelValues(o.config.AccountName, event.Stream).Add(float64(event.Bytes))
+		o.metrics.jsRestoreDuration.WithLabelValues(o.config.AccountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
 
 	case *advisory.JSSnapshotCreateAdvisoryV1:
-		o.metrics.jsSnapshotSizeCtr.WithLabelValues(o.opts.AccountName, event.Stream).Add(float64(event.BlkSize * event.NumBlks))
+		o.metrics.jsSnapshotSizeCtr.WithLabelValues(o.config.AccountName, event.Stream).Add(float64(event.BlkSize * event.NumBlks))
 
 	case *advisory.JSSnapshotCompleteAdvisoryV1:
-		o.metrics.jsSnapthotDuration.WithLabelValues(o.opts.AccountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
+		o.metrics.jsSnapthotDuration.WithLabelValues(o.config.AccountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
 
 	case *advisory.JSConsumerLeaderElectedV1:
-		o.metrics.jsConsumerLeaderElected.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
+		o.metrics.jsConsumerLeaderElected.WithLabelValues(o.config.AccountName, event.Stream).Inc()
 
 	case *advisory.JSConsumerQuorumLostV1:
-		o.metrics.jsConsumerQuorumLost.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
+		o.metrics.jsConsumerQuorumLost.WithLabelValues(o.config.AccountName, event.Stream).Inc()
 
 	case *advisory.JSStreamLeaderElectedV1:
-		o.metrics.jsStreamLeaderElected.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
+		o.metrics.jsStreamLeaderElected.WithLabelValues(o.config.AccountName, event.Stream).Inc()
 
 	case *advisory.JSStreamQuorumLostV1:
-		o.metrics.jsStreamQuorumLost.WithLabelValues(o.opts.AccountName, event.Stream).Inc()
+		o.metrics.jsStreamQuorumLost.WithLabelValues(o.config.AccountName, event.Stream).Inc()
 
 	case *advisory.JSConsumerDeliveryNakAdvisoryV1:
-		o.metrics.jsConsumerDeliveryNAK.WithLabelValues(o.opts.AccountName, event.Stream, event.Consumer).Inc()
+		o.metrics.jsConsumerDeliveryNAK.WithLabelValues(o.config.AccountName, event.Stream, event.Consumer).Inc()
 
 	default:
-		o.metrics.jsUnknownAdvisoryCtr.WithLabelValues(schema, o.opts.AccountName).Inc()
+		o.metrics.jsUnknownAdvisoryCtr.WithLabelValues(schema, o.config.AccountName).Inc()
 		o.logger.Warnf("Could not handle event as an JetStream Advisory with schema %s", schema)
 	}
 }
 
-// Stop closes the connection to the network
-func (o *JSAdvisoryListener) Stop() {
-	o.nc.Close()
+// Stop stops listening for JetStream advisories
+func (o *jsAdvisoryListener) Stop() {
+	o.Lock()
+	defer o.Unlock()
+	if o.pc == nil {
+		// already stopped
+		return
+	}
+
+	if o.subAdvisory != nil {
+		_ = o.subAdvisory.Unsubscribe()
+		o.subAdvisory = nil
+	}
+
+	if o.subMetric != nil {
+		_ = o.subMetric.Unsubscribe()
+		o.subMetric = nil
+	}
+
+	o.metrics.jsAdvisoriesGauge.Dec()
+	o.pc.ReturnToPool()
+	o.pc = nil
+}
+
+// JSAdvisoryManager exposes methods to operate on JetStream advisories
+type JSAdvisoryManager struct {
+	sync.Mutex
+	cp          *natsConnPool
+	listenerMap map[string]*jsAdvisoryListener
+	logger      *logrus.Logger
+	metrics     *JSAdvisoryMetrics
+}
+
+// newJetStreamAdvisoryManager creates a JSAdvisoryManager for managing JetStream advisories
+func newJetStreamAdvisoryManager(cp *natsConnPool, logger *logrus.Logger, metrics *JSAdvisoryMetrics) *JSAdvisoryManager {
+	return &JSAdvisoryManager{
+		cp:      cp,
+		logger:  logger,
+		metrics: metrics,
+	}
+}
+
+func (am *JSAdvisoryManager) start() {
+	am.Lock()
+	defer am.Unlock()
+	if am.listenerMap != nil {
+		// already started
+		return
+	}
+
+	am.listenerMap = map[string]*jsAdvisoryListener{}
+}
+
+// IsRunning returns true if the advisory manager is running or false if it is stopped
+func (am *JSAdvisoryManager) IsRunning() bool {
+	am.Lock()
+	defer am.Unlock()
+	return am.listenerMap != nil
+}
+
+func (am *JSAdvisoryManager) stop() {
+	am.Lock()
+	defer am.Unlock()
+	if am.listenerMap == nil {
+		// already stopped
+		return
+	}
+
+	for _, adv := range am.listenerMap {
+		adv.Stop()
+	}
+	am.metrics.jsAdvisoriesGauge.Set(0)
+	am.listenerMap = nil
+}
+
+// ConfigMap returns a map of id:*JSAdvisoryConfig for all running advisories
+func (am *JSAdvisoryManager) ConfigMap() map[string]*JSAdvisoryConfig {
+	am.Lock()
+	defer am.Unlock()
+
+	advMap := make(map[string]*JSAdvisoryConfig, len(am.listenerMap))
+	if am.listenerMap == nil {
+		return advMap
+	}
+
+	for id, adv := range am.listenerMap {
+		// copy so that internal references cannot be changed
+		advMap[id] = adv.config.copy()
+	}
+
+	return advMap
+}
+
+// Set creates or updates an advisory
+// if an advisory exists with the same ID, it is updated
+// otherwise, a new advisory is created
+func (am *JSAdvisoryManager) Set(config *JSAdvisoryConfig) error {
+	err := config.Validate()
+	if err != nil {
+		return err
+	}
+
+	// copy so that internal references cannot be changed
+	config = config.copy()
+
+	am.Lock()
+	if am.listenerMap == nil {
+		am.Unlock()
+		return fmt.Errorf("advisory manager is stopped; could not set advisory for id: %s, account name: %s", config.ID, config.AccountName)
+	}
+
+	existingAdv, found := am.listenerMap[config.ID]
+	am.Unlock()
+
+	if found && *config == *existingAdv.config {
+		return nil
+	}
+
+	adv, err := newJetStreamAdvisoryListener(config, am.cp, am.logger, am.metrics)
+	if err != nil {
+		return fmt.Errorf("could not set advisory for id: %s, account name: %s, error: %v", config.ID, config.AccountName, err)
+	}
+
+	if err := adv.Start(); err != nil {
+		return fmt.Errorf("could not start advisory for id: %s, account name: %s, error: %v", config.ID, config.AccountName, err)
+	}
+
+	am.Lock()
+	if am.listenerMap == nil {
+		am.Unlock()
+		adv.Stop()
+		return fmt.Errorf("advisory manager is stopped; could not set advisory for id: %s, account name: %s", config.ID, config.AccountName)
+	}
+
+	am.listenerMap[config.ID] = adv
+	am.Unlock()
+
+	if found {
+		existingAdv.Stop()
+	}
+	return nil
+}
+
+// Delete deletes existing advisory with provided ID
+func (am *JSAdvisoryManager) Delete(id string) error {
+	am.Lock()
+	if am.listenerMap == nil {
+		am.Unlock()
+		return fmt.Errorf("advisory manager is stopped; could not delete advisory id: %s", id)
+	}
+
+	existingAdv, found := am.listenerMap[id]
+	if !found {
+		am.Unlock()
+		return fmt.Errorf("advisory with given ID does not exist: %s", id)
+	}
+
+	delete(am.listenerMap, id)
+	am.Unlock()
+
+	existingAdv.Stop()
+	return nil
+}
+
+type jsAdvisoryFSWatcher struct {
+	sync.Mutex
+	am      *JSAdvisoryManager
+	logger  *logrus.Logger
+	stopCh  chan struct{}
+	watcher *fsnotify.Watcher
+}
+
+func newJetStreamAdvisoryFSWatcher(logger *logrus.Logger, am *JSAdvisoryManager) *jsAdvisoryFSWatcher {
+	return &jsAdvisoryFSWatcher{
+		logger: logger,
+		am:     am,
+	}
+}
+
+func (w *jsAdvisoryFSWatcher) start() error {
+	w.Lock()
+	defer w.Unlock()
+	if w.watcher != nil {
+		return nil
+	}
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	stopCh := make(chan struct{}, 1)
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if err := w.handleWatcherEvent(event); err != nil {
+					w.logger.Warn(err)
+				}
+			case <-stopCh:
+				return
+			}
+		}
+	}()
+
+	w.watcher = watcher
+	w.stopCh = stopCh
+	return nil
+}
+
+func (w *jsAdvisoryFSWatcher) stop() {
+	w.Lock()
+	defer w.Unlock()
+
+	if w.watcher == nil {
+		return
+	}
+
+	w.stopCh <- struct{}{}
+	_ = w.watcher.Close()
+	w.watcher = nil
+}
+
+func (w *jsAdvisoryFSWatcher) startAdvisoriesInDir() fs.WalkDirFunc {
+	return func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// skip directories starting with '..'
+		// this prevents double advisory loading when using kubernetes mounts
+		if info.IsDir() && strings.HasPrefix(info.Name(), "..") {
+			return filepath.SkipDir
+		}
+
+		if info.IsDir() {
+			w.Lock()
+			if w.watcher != nil {
+				_ = w.watcher.Add(path)
+			}
+			w.Unlock()
+		}
+
+		if filepath.Ext(info.Name()) != ".json" {
+			return nil
+		}
+
+		adv, err := NewJetStreamAdvisoryConfigFromFile(path)
+		if err != nil {
+			return fmt.Errorf("could not create advisory from path: %s, error: %v", path, err)
+		}
+
+		return w.am.Set(adv)
+	}
+}
+
+func (w *jsAdvisoryFSWatcher) handleWatcherEvent(event fsnotify.Event) error {
+	path := event.Name
+
+	switch {
+	case event.Has(fsnotify.Create):
+		return w.handleCreateEvent(path)
+	case event.Has(fsnotify.Write) && !event.Has(fsnotify.Remove):
+		return w.handleWriteEvent(path)
+	case event.Has(fsnotify.Remove):
+		return w.handleRemoveEvent(path)
+	}
+	return nil
+}
+
+func (w *jsAdvisoryFSWatcher) handleCreateEvent(path string) error {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("could not stat advisory path %s: %s", path, err)
+	}
+
+	// if a new directory was created, start advisory in dir
+	if stat.IsDir() {
+		return filepath.WalkDir(path, w.startAdvisoriesInDir())
+	}
+
+	// if not a directory and not a JSON, ignore
+	if filepath.Ext(stat.Name()) != ".json" {
+		return nil
+	}
+
+	// handle as a write event
+	return w.handleWriteEvent(path)
+}
+
+func (w *jsAdvisoryFSWatcher) handleWriteEvent(path string) error {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("could not stat advisory path: %s, error: %v", path, err)
+	}
+
+	// if not a JSON file, ignore
+	if stat.IsDir() || filepath.Ext(stat.Name()) != ".json" {
+		return nil
+	}
+
+	config, err := NewJetStreamAdvisoryConfigFromFile(path)
+	if err != nil {
+		return fmt.Errorf("could not create advisory from path: %s, error: %v", path, err)
+	}
+
+	return w.am.Set(config)
+}
+
+func (w *jsAdvisoryFSWatcher) handleRemoveEvent(path string) error {
+	var removeIDs []string
+	configMap := w.am.ConfigMap()
+	dir := strings.TrimSuffix(path, string(filepath.Separator)) + string(filepath.Separator)
+	for id := range configMap {
+		if id == path {
+			// file
+			removeIDs = append(removeIDs, id)
+		} else if strings.HasPrefix(id, dir) {
+			// directory
+			removeIDs = append(removeIDs, id)
+		}
+	}
+
+	var err error
+	if len(removeIDs) > 0 {
+		for _, removeID := range removeIDs {
+			if removeErr := w.am.Delete(removeID); removeErr != nil {
+				err = removeErr
+			}
+		}
+	}
+
+	return err
 }

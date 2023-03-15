@@ -16,6 +16,8 @@ package test
 
 import (
 	"testing"
+
+	"github.com/nats-io/nats.go"
 )
 
 // Keep our coverage up
@@ -37,6 +39,11 @@ func TestStartSingleServer(t *testing.T) {
 
 func TestStartServers(t *testing.T) {
 	ns := StartServer(t, "../test/r1s1.conf")
-	ConnectAndVerify(t, ns.ClientURL())
+	ConnectAndVerify(t, ns.ClientURL(), nats.UserCredentials("../test/myuser.creds"))
+	ns.Shutdown()
+}
+
+func TestStartJetStreamServer(t *testing.T) {
+	ns := NewJetStreamServer(t)
 	ns.Shutdown()
 }

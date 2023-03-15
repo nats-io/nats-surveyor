@@ -23,7 +23,7 @@ import (
 
 	"github.com/nats-io/nats-server/v2/logger"
 	ns "github.com/nats-io/nats-server/v2/server"
-	nats "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go"
 )
 
 // Test variables
@@ -103,7 +103,6 @@ func StartBasicServer() *ns.Server {
 func StartServer(t *testing.T, confFile string) *ns.Server {
 	resetPreviousHTTPConnections()
 	opts, err := ns.ProcessConfigFile(confFile)
-
 	if err != nil {
 		t.Fatalf("Error processing config file: %v", err)
 	}
@@ -151,7 +150,7 @@ func NewSuperCluster(t *testing.T) *SuperCluster {
 // NewSingleServer creates a single NATS server with a system account
 func NewSingleServer(t *testing.T) *ns.Server {
 	s := StartServer(t, "../test/r1s1.conf")
-	ConnectAndVerify(t, s.ClientURL())
+	ConnectAndVerify(t, s.ClientURL(), nats.UserCredentials("../test/myuser.creds"))
 	return s
 }
 
@@ -174,8 +173,8 @@ func (sc *SuperCluster) Shutdown() {
 
 // ConnectAndVerify connects to a server a verifies it is
 // ready to process messages.
-func ConnectAndVerify(t *testing.T, url string) *nats.Conn {
-	c, err := nats.Connect(url, nats.UserCredentials("../test/myuser.creds"))
+func ConnectAndVerify(t *testing.T, url string, options ...nats.Option) *nats.Conn {
+	c, err := nats.Connect(url, options...)
 	if err != nil {
 		t.Fatalf("Couldn't connect a client to %s: %v", url, err)
 	}
@@ -198,7 +197,7 @@ func ConnectAndVerify(t *testing.T, url string) *nats.Conn {
 
 func (sc *SuperCluster) setupClientsAndVerify(t *testing.T) {
 	for _, s := range sc.Servers {
-		c := ConnectAndVerify(t, s.ClientURL())
+		c := ConnectAndVerify(t, s.ClientURL(), nats.UserCredentials("../test/myuser.creds"))
 		sc.Clients = append(sc.Clients, c)
 	}
 
