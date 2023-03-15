@@ -130,6 +130,9 @@ func newNatsConnPool(logger *logrus.Logger, natsDefaults *natsContextDefaults, n
 	}
 }
 
+const getPooledConnMaxTries = 10
+
+// Get returns a *pooledNatsConn
 func (cp *natsConnPool) Get(cfg *natsContext) (*pooledNatsConn, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("nats context must not be nil")
@@ -161,7 +164,30 @@ func (cp *natsConnPool) Get(cfg *natsContext) (*pooledNatsConn, error) {
 		return nil, err
 	}
 
-GetFromPool:
+	for i := 0; i < getPooledConnMaxTries; i++ {
+		connection, err := cp.getPooledConn(key, cfg)
+		if err != nil {
+			return nil, err
+		}
+
+		cp.Lock()
+		if connection.closed {
+			// ReturnToPool closed this while lock not held, try again
+			cp.Unlock()
+			continue
+		}
+
+		// increment count out of the pool
+		connection.count++
+		cp.Unlock()
+		return connection, nil
+	}
+
+	return nil, fmt.Errorf("failed to get pooled conneciton after %d attempts", getPooledConnMaxTries)
+}
+
+// getPooledConn gets or establishes a *pooledNatsConn in a singleflight group, but does not increment its count
+func (cp *natsConnPool) getPooledConn(key string, cfg *natsContext) (*pooledNatsConn, error) {
 	conn, err, _ := cp.group.Do(key, func() (interface{}, error) {
 		cp.Lock()
 		pooledConn, ok := cp.cache[key]
@@ -239,16 +265,5 @@ GetFromPool:
 	if !ok {
 		return nil, fmt.Errorf("not a pooledNatsConn")
 	}
-
-	cp.Lock()
-	if connection.closed {
-		// ReturnToPool closed this while lock not held, try again
-		cp.Unlock()
-		goto GetFromPool
-	}
-	// increment count out of the pool
-	connection.count++
-	cp.Unlock()
-
 	return connection, nil
 }
