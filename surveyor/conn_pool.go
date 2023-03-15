@@ -183,7 +183,7 @@ func (cp *natsConnPool) Get(cfg *natsContext) (*pooledNatsConn, error) {
 		return connection, nil
 	}
 
-	return nil, fmt.Errorf("failed to get pooled conneciton after %d attempts", getPooledConnMaxTries)
+	return nil, fmt.Errorf("failed to get pooled connection after %d attempts", getPooledConnMaxTries)
 }
 
 // getPooledConn gets or establishes a *pooledNatsConn in a singleflight group, but does not increment its count
