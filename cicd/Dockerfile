@@ -38,4 +38,6 @@ COPY --from=assets entrypoint.sh /entrypoint.sh
 
 RUN ln -s /usr/local/bin/${GO_APP} /${GO_APP} && chmod +x /entrypoint.sh
 
+EXPOSE 7777
+
 ENTRYPOINT ["/entrypoint.sh"]
