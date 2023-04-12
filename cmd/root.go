@@ -148,6 +148,14 @@ func init() {
 	rootCmd.Flags().String("nkey", "", "Nkey Seed File")
 	_ = viper.BindPFlag("nkey", rootCmd.Flags().Lookup("nkey"))
 
+	// jwt
+	rootCmd.Flags().String("jwt", "", "User JWT. Use in conjunction with --seed")
+	_ = viper.BindPFlag("jwt", rootCmd.Flags().Lookup("jwt"))
+
+	// seed
+	rootCmd.Flags().String("seed", "", "Private key (nkey seed). Use in conjunction with --jwt")
+	_ = viper.BindPFlag("seed", rootCmd.Flags().Lookup("seed"))
+
 	// user
 	rootCmd.Flags().String("user", "", "NATS user name or token")
 	_ = viper.BindPFlag("user", rootCmd.Flags().Lookup("user"))
@@ -236,6 +244,8 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.URLs = viper.GetString("servers")
 	opts.Credentials = viper.GetString("creds")
 	opts.Nkey = viper.GetString("nkey")
+	opts.JWT = viper.GetString("jwt")
+	opts.Seed = viper.GetString("seed")
 	opts.NATSUser = viper.GetString("user")
 	opts.NATSPassword = viper.GetString("password")
 	opts.ExpectedServers = viper.GetInt("count")

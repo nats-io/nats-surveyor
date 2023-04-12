@@ -57,6 +57,8 @@ type Options struct {
 	URLs                 string
 	Credentials          string
 	Nkey                 string
+	JWT                  string
+	Seed                 string
 	NATSUser             string
 	NATSPassword         string
 	PollTimeout          time.Duration
@@ -455,6 +457,8 @@ func (s *Surveyor) Start() error {
 	natsCtx := &natsContext{
 		Credentials: s.opts.Credentials,
 		Nkey:        s.opts.Nkey,
+		JWT:         s.opts.JWT,
+		Seed:        s.opts.Seed,
 		Username:    s.opts.NATSUser,
 		Password:    s.opts.NATSPassword,
 	}
