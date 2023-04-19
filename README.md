@@ -31,12 +31,14 @@ Flags:
       --http-tlskey string                  Private key for server certificate (used with HTTPS).
       --http-user string                    Enable basic auth and set user name for HTTP scrapes.
       --jetstream string                    Listen for JetStream Advisories based on config files in a directory.
+      --jwt string                          User JWT. Use in conjunction with --seed
       --log-level string                    Log level, one of: trace|debug|info|warn|error|fatal|panic (default "info")
       --nkey string                         Nkey Seed File
       --observe string                      Listen for observation statistics based on config files in a directory.
       --password string                     NATS user password
   -p, --port int                            Port to listen on. (default 7777)
       --prefix string                       Replace the default prefix for all the metrics.
+      --seed string                         Private key (nkey seed). Use in conjunction with --jwt
       --server-discovery-timeout duration   Maximum wait time between responses from servers during server discovery. Use in conjunction with -count=-1. (default 500ms)
   -s, --servers string                      NATS Cluster url(s) (default "nats://127.0.0.1:4222")
       --timeout duration                    Polling timeout (default 3s)
@@ -47,10 +49,21 @@ Flags:
   -v, --version                             version for nats-surveyor
 ```
 
-At this time, NATS 2.0 System credentials are required for meaningful usage.
+At this time, NATS 2.0 System credentials are required for meaningful usage. Those can be provided in 2 ways:
+
+- using `--creds` option to supply chained credentials file (containing JWT and NKey seed):
 
 ```sh
 ./nats-surveyor --creds ./test/SYS.creds
+2019/10/14 21:35:40 Connected to NATS Deployment: 127.0.0.1:4222
+2019/10/14 21:35:40 No certificate file specified; using http.
+2019/10/14 21:35:40 Prometheus exporter listening at http://0.0.0.0:7777/metrics
+```
+
+- using `--jwt` and `--seed` options to provide user JWT and NKey seed directly:
+
+```sh
+./nats-surveyor --jwt $NATS_USER_JWT --seed $NATS_NKEY_SEED
 2019/10/14 21:35:40 Connected to NATS Deployment: 127.0.0.1:4222
 2019/10/14 21:35:40 No certificate file specified; using http.
 2019/10/14 21:35:40 Prometheus exporter listening at http://0.0.0.0:7777/metrics
