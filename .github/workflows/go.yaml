@@ -9,16 +9,16 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ 1.19 ]
+        go: [ '1.19' ]
         os: [ ubuntu-latest, macOS-latest ]
     runs-on: ${{matrix.os}}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
         with:
           path: src/github.com/nats-io/nats-surveyor
       - name: Setup Go
-        uses: actions/setup-go@v1
+        uses: actions/setup-go@v3
         with:
           go-version: ${{matrix.go}}
       - name: Install deps
