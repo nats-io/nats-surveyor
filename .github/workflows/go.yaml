@@ -15,30 +15,22 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          path: src/github.com/nats-io/nats-surveyor
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
           go-version: ${{matrix.go}}
       - name: Install deps
         shell: bash --noprofile --norc -x -eo pipefail {0}
-        env:
-          GO111MODULE: "on"
         run: |
-          export GOPATH="$RUNNER_WORKSPACE"
-          cd /tmp && go install -v github.com/wadey/gocovmerge@latest
-          cd /tmp && go install -v github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          cd /tmp
+          go install -v github.com/wadey/gocovmerge@latest
+          go install -v github.com/golangci/golangci-lint/cmd/golangci-lint@latest
       - name: Lint
         shell: bash --noprofile --norc -x -eo pipefail {0}
-        env:
-          GO111MODULE: "on"
         run: |
-          export GOPATH="$RUNNER_WORKSPACE"
-
           go mod tidy
           go vet ./...
-          $(go env GOPATH)/bin/golangci-lint run \
+          golangci-lint run \
              --no-config --exclude-use-default=false --max-same-issues=0 \
                --disable errcheck \
                --enable stylecheck \
@@ -57,7 +49,6 @@ jobs:
       - name: Run tests
         shell: bash --noprofile --norc -x -eo pipefail {0}
         env:
-          GO111MODULE: "on"
           CODECOV_TOKEN: ${{secrets.CODECOV_TOKEN}}
         run: |
           export GOPATH="$RUNNER_WORKSPACE"
