@@ -18,11 +18,12 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats-server/v2/logger"
-	ns "github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 )
 
@@ -36,14 +37,14 @@ func resetPreviousHTTPConnections() {
 }
 
 // StartBasicServer runs the NATS server with a monitor port in a go routine
-func StartBasicServer() *ns.Server {
+func StartBasicServer() *server.Server {
 	resetPreviousHTTPConnections()
 
 	// To enable debug/trace output in the NATS server,
 	// flip the enableLogging flag.
 	// enableLogging = true
 
-	opts := &ns.Options{
+	opts := &server.Options{
 		Host:     "127.0.0.1",
 		Port:     4222,
 		HTTPHost: "127.0.0.1",
@@ -52,7 +53,7 @@ func StartBasicServer() *ns.Server {
 		NoSigs:   true,
 	}
 
-	s, err := ns.NewServer(opts)
+	s, err := server.NewServer(opts)
 	if err != nil {
 		panic(err)
 	}
@@ -100,9 +101,9 @@ func StartBasicServer() *ns.Server {
 }
 
 // StartServer starts a a NATS server
-func StartServer(t *testing.T, confFile string) *ns.Server {
+func StartServer(t *testing.T, confFile string) *server.Server {
 	resetPreviousHTTPConnections()
-	opts, err := ns.ProcessConfigFile(confFile)
+	opts, err := server.ProcessConfigFile(confFile)
 	if err != nil {
 		t.Fatalf("Error processing config file: %v", err)
 	}
@@ -110,7 +111,7 @@ func StartServer(t *testing.T, confFile string) *ns.Server {
 	// remove this line for debugging
 	opts.NoLog = true
 
-	s, err := ns.NewServer(opts)
+	s, err := server.NewServer(opts)
 	if err != nil || s == nil {
 		panic(fmt.Sprintf("No NATS Server object returned: %v", err))
 	}
@@ -131,11 +132,12 @@ func StartServer(t *testing.T, confFile string) *ns.Server {
 
 // SuperCluster holds client connections and NATS servers
 type SuperCluster struct {
-	Servers []*ns.Server
+	Servers []*server.Server
 	Clients []*nats.Conn
 }
 
 var configFiles = []string{"../test/r1s1.conf", "../test/r1s2.conf", "../test/r2s1.conf"}
+var jetStreamConfigFiles = []string{"../test/js1.conf", "../test/js2.conf", "../test/js3.conf"}
 
 // NewSuperCluster creates a small supercluster for testing, with one client per server.
 func NewSuperCluster(t *testing.T) *SuperCluster {
@@ -148,16 +150,81 @@ func NewSuperCluster(t *testing.T) *SuperCluster {
 }
 
 // NewSingleServer creates a single NATS server with a system account
-func NewSingleServer(t *testing.T) *ns.Server {
+func NewSingleServer(t *testing.T) *server.Server {
 	s := StartServer(t, "../test/r1s1.conf")
 	ConnectAndVerify(t, s.ClientURL(), nats.UserCredentials("../test/myuser.creds"))
 	return s
 }
 
 // NewJetStreamServer creates a single NATS server with JetStream enabled globally
-func NewJetStreamServer(t *testing.T) *ns.Server {
+func NewJetStreamServer(t *testing.T) *server.Server {
 	s := StartServer(t, "../test/jetstream.conf")
 	ConnectAndVerify(t, s.ClientURL())
+	return s
+}
+
+func NewJetStreamCluster(t *testing.T) *SuperCluster {
+	t.Helper()
+	cluster := SuperCluster{
+		Servers: make([]*server.Server, 0),
+	}
+	for _, confFile := range jetStreamConfigFiles {
+		srv := StartJetStreamServerFromConfig(t, confFile)
+		cluster.Servers = append(cluster.Servers, srv)
+	}
+	for _, s := range cluster.Servers {
+		nc, err := nats.Connect(s.ClientURL())
+		if err != nil {
+			t.Fatalf("Unable to connect to server %q: %s", s.Name(), err)
+		}
+
+		// wait until JetStream is ready
+		timeout := time.Now().Add(10 * time.Second)
+		for time.Now().Before(timeout) {
+			jsm, err := nc.JetStream()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = jsm.AccountInfo()
+			if err != nil {
+				time.Sleep(500 * time.Millisecond)
+			}
+			break
+		}
+		if err != nil {
+			t.Fatalf("Unexpected error creating stream: %v", err)
+		}
+		cluster.Clients = append(cluster.Clients, nc)
+	}
+	return &cluster
+}
+
+// StartJetStreamServerFromConfig starts a JetStream server using the provided configuration
+// StoreDir from config will not be used - instead, a tmp directory will be created for the test
+func StartJetStreamServerFromConfig(t *testing.T, confFile string) *server.Server {
+	opts, err := server.ProcessConfigFile(confFile)
+
+	if err != nil {
+		t.Fatalf("Error processing config file: %v", err)
+	}
+
+	opts.NoLog = true
+	tdir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("%s_%s-", opts.ServerName, opts.Cluster.Name))
+	if err != nil {
+		t.Fatalf("Error creating jetstream store directory: %s", err)
+	}
+	opts.StoreDir = tdir
+
+	s, err := server.NewServer(opts)
+	if err != nil {
+		t.Fatalf("Error creating server: %s", err)
+	}
+
+	s.Start()
+
+	if !s.ReadyForConnections(10 * time.Second) {
+		t.Fatal("Unable to start NATS Server")
+	}
 	return s
 }
 

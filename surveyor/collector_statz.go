@@ -535,8 +535,8 @@ func (sc *StatzCollector) pollAccountInfo() error {
 	}
 
 	accStats := make(map[string]accountStats, len(accs))
-	for _, acc := range accs {
-		sts := accountStats{accountID: acc.Account}
+	for accID, acc := range accs {
+		sts := accountStats{accountID: accID}
 
 		sts.leafCount = float64(acc.LeafNodes)
 		sts.subCount = float64(acc.NumSubs)
@@ -548,9 +548,9 @@ func (sc *StatzCollector) pollAccountInfo() error {
 
 		accStats[acc.Account] = sts
 	}
-	jsInfos := sc.getJSInfos(nc, accs)
-	for _, jsInfo := range jsInfos {
-		sts, ok := accStats[jsInfo.Id]
+	jsInfos := sc.getJSInfos(nc)
+	for accID, jsInfo := range jsInfos {
+		sts, ok := accStats[accID]
 		if !ok {
 			continue
 		}
@@ -581,34 +581,28 @@ func (sc *StatzCollector) pollAccountInfo() error {
 	return nil
 }
 
-func (sc *StatzCollector) getJSInfos(nc *nats.Conn, accounts []*server.AccountStat) []*server.AccountDetail {
-	inbox := nc.NewRespInbox()
-	sub, err := nc.SubscribeSync(inbox)
-	if err != nil {
-		sc.logger.Warnf("Error creating nats subscription: %s", err)
-		return nil
+func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDetail {
+	opts := server.JSzOptions{
+		Accounts: true,
+		Streams:  true,
+		Consumer: true,
+		Config:   true,
 	}
-	defer sub.Unsubscribe()
-	opts := []byte(`{"streams": true, "consumer": true, "config": true}`)
-	reqDispatched := len(accounts)
-	for _, acc := range accounts {
-		subj := fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.JSZ", acc.Account)
-		if err := nc.PublishRequest(subj, inbox, opts); err != nil {
-			reqDispatched--
-			sc.logger.Warnf("Unable to request JetStream info for account %s: %s", acc.Account, err.Error())
-			continue
-		}
+	res := make([]*server.JSInfo, 0)
+	req, err := json.Marshal(opts)
+	if err != nil {
+		sc.logger.Warnf("Error marshaling request: %s", err)
 	}
 
-	res := make([]*server.AccountDetail, 0, len(accounts))
-	for i := 0; i < reqDispatched; i++ {
-		msg, err := sub.NextMsg(sc.pollTimeout)
-		if err != nil {
-			sc.logger.Warnf("Error fetching JetStream info: %s", err)
-			continue
-		}
+	subj := "$SYS.REQ.SERVER.PING.JSZ"
+	msgs, err := requestMany(nc, sc, subj, req)
+	if err != nil {
+		sc.logger.Warnf("Unable to request JetStream info: %s", err)
+	}
+
+	for _, msg := range msgs {
 		var r server.ServerAPIResponse
-		var d server.AccountDetail
+		var d server.JSInfo
 		r.Data = &d
 		if err := json.Unmarshal(msg.Data, &r); err != nil {
 			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
@@ -622,11 +616,28 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn, accounts []*server.AccountSt
 			continue
 		}
 		res = append(res, &d)
+		if sc.numServers != -1 && len(res) == sc.numServers {
+			break
+		}
 	}
-	return res
+
+	jsAccInfos := make(map[string]*server.AccountDetail)
+	for _, jsInfo := range res {
+		for _, acc := range jsInfo.AccountDetails {
+			accInfo, ok := jsAccInfos[acc.Id]
+			if !ok {
+				jsAccInfos[acc.Id] = acc
+				continue
+			}
+			mergeStreamDetails(accInfo, acc)
+			jsAccInfos[acc.Id] = acc
+		}
+	}
+
+	return jsAccInfos
 }
 
-func (sc *StatzCollector) getAccStatz(nc *nats.Conn) ([]*server.AccountStat, error) {
+func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.AccountStat, error) {
 	req := &server.AccountStatzOptions{
 		IncludeUnused: true,
 	}
@@ -634,19 +645,91 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) ([]*server.AccountStat, err
 	if err != nil {
 		return nil, err
 	}
+	res := make([]*server.AccountStatz, 0)
 	const subj = "$SYS.REQ.ACCOUNT.PING.STATZ"
-	msg, err := nc.Request(subj, reqJSON, sc.pollTimeout)
+
+	msgs, err := requestMany(nc, sc, subj, reqJSON)
 	if err != nil {
-		return nil, err
-	}
-	var r server.ServerAPIResponse
-	var d server.AccountStatz
-	r.Data = &d
-	if err := json.Unmarshal(msg.Data, &r); err != nil {
-		return nil, err
+		sc.logger.Warnf("Unable to request JetStream info: %s", err)
 	}
 
-	return d.Accounts, nil
+	for _, msg := range msgs {
+		var r server.ServerAPIResponse
+		var d server.AccountStatz
+		r.Data = &d
+		if err := json.Unmarshal(msg.Data, &r); err != nil {
+			return nil, err
+		}
+		r.Data = &d
+		if err := json.Unmarshal(msg.Data, &r); err != nil {
+			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
+			continue
+		}
+		if r.Error != nil {
+			if strings.Contains(r.Error.Description, "jetstream not enabled") {
+				// jetstream is not enabled on server
+				return nil, r.Error
+			}
+			continue
+		}
+		res = append(res, &d)
+		if sc.numServers != -1 && len(res) == sc.numServers {
+			break
+		}
+	}
+
+	accStatz := make(map[string]*server.AccountStat)
+	for _, statz := range res {
+		for _, acc := range statz.Accounts {
+			accInfo, ok := accStatz[acc.Account]
+			if !ok {
+				accStatz[acc.Account] = acc
+				continue
+			}
+			mergeAccountStats(accInfo, acc)
+			accStatz[acc.Account] = acc
+		}
+	}
+
+	return accStatz, nil
+}
+
+func mergeStreamDetails(from, to *server.AccountDetail) {
+Outer:
+	for _, stream := range from.Streams {
+		for i, toStream := range to.Streams {
+			if stream.Name == toStream.Name {
+				mergeStreamConsumers(&stream, &toStream)
+				to.Streams[i] = toStream
+				continue Outer
+			}
+		}
+		to.Streams = append(to.Streams, stream)
+	}
+}
+
+func mergeStreamConsumers(from, to *server.StreamDetail) {
+Outer:
+	for _, cons := range from.Consumer {
+		for _, toCons := range to.Consumer {
+			if cons.Name == toCons.Name {
+				continue Outer
+			}
+		}
+		to.Consumer = append(to.Consumer, cons)
+	}
+}
+
+func mergeAccountStats(from, to *server.AccountStat) {
+	to.Conns += from.Conns
+	to.LeafNodes += from.LeafNodes
+	to.TotalConns += from.TotalConns
+	to.NumSubs += from.NumSubs
+	to.Sent.Msgs += from.Sent.Msgs
+	to.Sent.Bytes += from.Sent.Bytes
+	to.Received.Msgs += from.Received.Msgs
+	to.Received.Bytes += from.Received.Bytes
+	to.SlowConsumers += from.SlowConsumers
 }
 
 // Describe is the Prometheus interface to describe metrics for
@@ -917,6 +1000,44 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				ch <- newGaugeMetric(sc.descs.accJetstreamConsumerCount, streamStat.consumerCount, append(id, streamStat.streamName))
 				ch <- newGaugeMetric(sc.descs.accJetstreamReplicaCount, streamStat.replicaCount, append(id, streamStat.streamName))
 			}
+		}
+	}
+}
+
+func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte) ([]*nats.Msg, error) {
+	if subject == "" {
+		return nil, fmt.Errorf("subject cannot be empty")
+	}
+
+	inbox := nats.NewInbox()
+	res := make([]*nats.Msg, 0)
+	msgsChan := make(chan *nats.Msg, 100)
+
+	intervalTimer := time.NewTimer(sc.pollTimeout)
+	sub, err := nc.Subscribe(inbox, func(msg *nats.Msg) {
+		intervalTimer.Reset(sc.serverDiscoveryWait)
+		msgsChan <- msg
+	})
+	defer sub.Unsubscribe()
+
+	if err := nc.PublishRequest(subject, inbox, data); err != nil {
+		return nil, err
+	}
+
+	for {
+		select {
+		case msg := <-msgsChan:
+			if msg.Header.Get("Status") == "503" {
+				return nil, fmt.Errorf("server request on subject %q failed: %w", subject, err)
+			}
+			res = append(res, msg)
+			if sc.numServers != -1 && len(res) == sc.numServers {
+				return res, nil
+			}
+		case <-intervalTimer.C:
+			return res, nil
+		case <-time.After(sc.pollTimeout):
+			return res, nil
 		}
 	}
 }
