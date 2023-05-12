@@ -120,32 +120,32 @@ func TestSurveyor_Basic(t *testing.T) {
 		t.Helper()
 		// check for route output
 		if !strings.Contains(output, "nats_core_route_recv_msg_count") {
-			t.Fatalf("invalid output:  %v\n", output)
+			t.Fatalf("invalid output, missing 'nats_core_route_recv_msg_count':  %v\n", output)
 		}
 		// check for gateway output
 		if !strings.Contains(output, "nats_core_gateway_sent_bytes") {
-			t.Fatalf("invalid output:  %v\n", output)
+			t.Fatalf("invalid output, missing 'nats_core_gateway_sent_bytes':  %v\n", output)
 		}
 		if !strings.Contains(output, "server_name") {
-			t.Fatalf("invalid output:  %v\n", output)
+			t.Fatalf("invalid output, missing 'server_name':  %v\n", output)
 		}
 		if !strings.Contains(output, "server_cluster") {
-			t.Fatalf("invalid output:  %v\n", output)
+			t.Fatalf("invalid output, missing 'server_cluster':  %v\n", output)
 		}
 		if !strings.Contains(output, "server_id") {
-			t.Fatalf("invalid output:  %v\n", output)
+			t.Fatalf("invalid output, missing 'server_id':  %v\n", output)
 		}
 		if !strings.Contains(output, "server_gateway_name") {
-			t.Fatalf("invalid output:  %v\n", output)
+			t.Fatalf("invalid output, missing 'server_gateway_name':  %v\n", output)
 		}
 		if !strings.Contains(output, "server_gateway_id") {
-			t.Fatalf("invalid output:  %v\n", output)
+			t.Fatalf("invalid output, missing 'server_gateway_id':  %v\n", output)
 		}
 		if !strings.Contains(output, "server_route_id") {
-			t.Fatalf("invalid output:  %v\n", output)
+			t.Fatalf("invalid output, missing 'server_route_id':  %v\n", output)
 		}
 		if !strings.Contains(output, "nats_survey_surveyed_count 3") {
-			t.Fatalf("invalid output:  %v\n", output)
+			t.Fatalf("invalid output, missing 'nats_survey_surveyed_count 3':  %v\n", output)
 		}
 	}
 
@@ -219,6 +219,7 @@ func TestSurveyor_Account(t *testing.T) {
 
 	opt := getTestOptions()
 	opt.Accounts = true
+	opt.ExpectedServers = 3
 	s, err := NewSurveyor(opt)
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
@@ -226,6 +227,7 @@ func TestSurveyor_Account(t *testing.T) {
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
+
 	defer s.Stop()
 
 	output, err := PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
@@ -244,6 +246,85 @@ func TestSurveyor_Account(t *testing.T) {
 		"nats_core_account_msgs_recv",
 		"nats_core_account_msgs_sent",
 		"nats_core_account_sub_count",
+	}
+	for _, m := range want {
+		if !strings.Contains(output, m) {
+			t.Logf("output: %s", output)
+			t.Fatalf("missing: %s", m)
+		}
+	}
+}
+
+func TestSurveyor_AccountJetStreamAssets(t *testing.T) {
+	sc := st.NewJetStreamCluster(t)
+	defer sc.Shutdown()
+
+	opt := getTestOptions()
+	opt.Credentials = ""
+	opt.NATSUser = "admin"
+	opt.NATSPassword = "s3cr3t!"
+	opt.Accounts = true
+	opt.ExpectedServers = 3
+	s, err := NewSurveyor(opt)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	nc := sc.Clients[0]
+	js, err := nc.JetStream()
+	if err != nil {
+		t.Fatalf("Error creating JetStream context: %s", err)
+	}
+	// create 10 streams, half of them with replicas
+	for i := 0; i < 5; i++ {
+		_, err = js.AddStream(&nats.StreamConfig{Name: fmt.Sprintf("single%d", i), Subjects: []string{fmt.Sprintf("SINGLE.%d", i)}})
+		if err != nil {
+			t.Fatalf("Error adding stream: %s", err)
+		}
+		_, err = js.AddStream(&nats.StreamConfig{Name: fmt.Sprintf("repl%d", i), Subjects: []string{fmt.Sprintf("REPL.%d", i)}, Replicas: 3})
+		if err != nil {
+			t.Fatalf("Error adding stream: %s", err)
+		}
+	}
+
+	// create 15 consumers, 3 variants
+	for i := 0; i < 5; i++ {
+		// non-replicated consumer on non-replicated stream
+		_, err = js.AddConsumer("single1", &nats.ConsumerConfig{Durable: fmt.Sprintf("singlecons_%d", i)})
+		if err != nil {
+			t.Fatalf("Error adding consumer: %s", err)
+		}
+		// consumer with replicas on stream with replicas
+		_, err = js.AddConsumer("repl1", &nats.ConsumerConfig{Durable: fmt.Sprintf("replcons_%d", i), Replicas: 3})
+		if err != nil {
+			t.Fatalf("Error adding consumer: %s", err)
+		}
+		// non-replicated consumer on stream with replicas
+		_, err = js.AddConsumer("repl2", &nats.ConsumerConfig{Durable: fmt.Sprintf("singleonrepl_%d", i), Replicas: 1})
+		if err != nil {
+			t.Fatalf("Error adding consumer: %s", err)
+		}
+	}
+
+	output, err := PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{
+		"nats_core_account_bytes_recv",
+		"nats_core_account_bytes_sent",
+		"nats_core_account_conn_count",
+		"nats_core_account_count",
+		"nats_core_account_jetstream_enabled",
+		`nats_core_account_jetstream_stream_count{account="JS"} 10`,
+		`nats_core_account_jetstream_consumer_count{account="JS",stream="repl1"} 5`,
+		`nats_core_account_jetstream_consumer_count{account="JS",stream="repl2"} 5`,
+		`nats_core_account_jetstream_consumer_count{account="JS",stream="single1"} 5`,
 	}
 	for _, m := range want {
 		if !strings.Contains(output, m) {
