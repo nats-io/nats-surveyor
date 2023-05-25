@@ -69,6 +69,7 @@ type Options struct {
 	CertFile             string
 	KeyFile              string
 	CaFile               string
+	TLSConfig            *tls.Config
 	HTTPCertFile         string
 	HTTPKeyFile          string
 	HTTPCaFile           string
@@ -155,11 +156,12 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 
 func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *natsConnPool {
 	natsDefaults := &natsContextDefaults{
-		Name:    opts.Name,
-		URL:     opts.URLs,
-		TLSCert: opts.CertFile,
-		TLSKey:  opts.KeyFile,
-		TLSCA:   opts.CaFile,
+		Name:      opts.Name,
+		URL:       opts.URLs,
+		TLSCert:   opts.CertFile,
+		TLSKey:    opts.KeyFile,
+		TLSCA:     opts.CaFile,
+		TLSConfig: opts.TLSConfig,
 	}
 	natsOpts := []nats.Option{
 		nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
