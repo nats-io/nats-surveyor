@@ -14,6 +14,7 @@
 package surveyor
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -245,6 +246,10 @@ type JSAdvisoryConfig struct {
 	TLSCA       string `json:"tls_ca"`
 	TLSCert     string `json:"tls_cert"`
 	TLSKey      string `json:"tls_key"`
+
+	// tls.Config cannot be provided in observation config file,
+	// only programmatically
+	TLSConfig *tls.Config `json:"-"`
 }
 
 // Validate is used to validate a JSAdvisoryConfig
@@ -274,6 +279,7 @@ func (o *JSAdvisoryConfig) copy() *JSAdvisoryConfig {
 		return nil
 	}
 	cp := *o
+	cp.TLSConfig = o.TLSConfig.Clone()
 	return &cp
 }
 
@@ -337,6 +343,7 @@ func (o *jsAdvisoryListener) natsContext() *natsContext {
 		TLSCA:       o.config.TLSCA,
 		TLSCert:     o.config.TLSCert,
 		TLSKey:      o.config.TLSKey,
+		TLSConfig:   o.config.TLSConfig,
 	}
 
 	return natsCtx

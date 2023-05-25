@@ -40,8 +40,18 @@ const (
 )
 
 func httpGetSecure(url string) (*http.Response, error) {
+	tlsConfig, err := parseTLSConfig(clientCert, clientKey, caCertFile)
+	if err != nil {
+		return nil, err
+	}
+	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	httpClient := &http.Client{Transport: transport, Timeout: 30 * time.Second}
+	return httpClient.Get(url)
+}
+
+func parseTLSConfig(certFile, keyFile, caFile string) (*tls.Config, error) {
 	tlsConfig := &tls.Config{}
-	caCert, err := os.ReadFile(caCertFile)
+	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		return nil, fmt.Errorf("Got error reading RootCA file: %s", err)
 	}
@@ -50,15 +60,13 @@ func httpGetSecure(url string) (*http.Response, error) {
 	tlsConfig.RootCAs = caCertPool
 
 	cert, err := tls.LoadX509KeyPair(
-		clientCert,
-		clientKey)
+		certFile,
+		keyFile)
 	if err != nil {
 		return nil, fmt.Errorf("Got error reading client certificates: %s", err)
 	}
 	tlsConfig.Certificates = []tls.Certificate{cert}
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	httpClient := &http.Client{Transport: transport, Timeout: 30 * time.Second}
-	return httpClient.Get(url)
+	return tlsConfig, nil
 }
 
 func httpGet(url string) (*http.Response, error) {
@@ -74,6 +82,7 @@ func getTestOptions() *Options {
 
 // PollSurveyorEndpoint polls a surveyor endpoint for data
 func PollSurveyorEndpoint(t *testing.T, url string, secure bool, expectedRc int) (string, error) {
+	t.Helper()
 	var resp *http.Response
 	var err error
 
@@ -102,15 +111,16 @@ func PollSurveyorEndpoint(t *testing.T, url string, secure bool, expectedRc int)
 	return string(body), nil
 }
 
-func pollAndCheckDefault(t *testing.T, result string) (string, error) {
+func pollAndCheckDefault(t *testing.T, result string) string {
+	t.Helper()
 	results, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
 	if err != nil {
-		return "", err
+		t.Fatalf("Error polling surveyor: %s", err)
 	}
 	if !strings.Contains(results, result) {
-		return results, fmt.Errorf("response did not have NATS data")
+		t.Fatalf("Response does not contain expected data: %s", result)
 	}
-	return results, nil
+	return results
 }
 
 func TestSurveyor_Basic(t *testing.T) {
@@ -162,10 +172,7 @@ func TestSurveyor_Basic(t *testing.T) {
 		defer s.Stop()
 
 		// poll and check for basic core NATS output
-		output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
-		if err != nil {
-			t.Fatalf("poll error:  %v\n", err)
-		}
+		output := pollAndCheckDefault(t, "nats_core_mem_bytes")
 
 		checkOutput(t, output)
 	})
@@ -183,10 +190,7 @@ func TestSurveyor_Basic(t *testing.T) {
 		defer s.Stop()
 
 		// poll and check for basic core NATS output
-		output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
-		if err != nil {
-			t.Fatalf("poll error:  %v\n", err)
-		}
+		output := pollAndCheckDefault(t, "nats_core_mem_bytes")
 
 		if !strings.Contains(output, "nats_survey_expected_count -1") {
 			t.Fatalf("invalid output:  %v\n", output)
@@ -351,7 +355,7 @@ func TestSurveyor_Reconnect(t *testing.T) {
 	defer s.Stop()
 
 	// poll and check for basic core NATS output
-	_, err = pollAndCheckDefault(t, "nats")
+	pollAndCheckDefault(t, "nats")
 	if err != nil {
 		t.Fatalf("poll error:  %v\n", err)
 	}
@@ -361,11 +365,7 @@ func TestSurveyor_Reconnect(t *testing.T) {
 
 	time.Sleep(time.Second * 2)
 
-	// this poll should fail...
-	output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
-	if !strings.Contains(output, "nats_up 0") {
-		t.Fatalf("output did not contain nats_up 0.\n====Output====\n%s", output)
-	}
+	pollAndCheckDefault(t, "nats_up 0")
 
 	// restart the server
 	ns = st.NewSingleServer(t)
@@ -373,8 +373,8 @@ func TestSurveyor_Reconnect(t *testing.T) {
 
 	// poll and check for basic core NATS output, the next server should
 	for i := 0; i < 5; i++ {
-		_, err = pollAndCheckDefault(t, "nats_up 1")
-		if err == nil {
+		results, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
+		if err == nil || strings.Contains(results, "nats_up 1") {
 			break
 		}
 		time.Sleep(1 * time.Second)
@@ -409,23 +409,66 @@ func TestSurveyor_ClientTLSFail(t *testing.T) {
 func TestSurveyor_ClientTLS(t *testing.T) {
 	ns := st.StartServer(t, "../test/tls.conf")
 	defer ns.Shutdown()
+	t.Run("pass cert and key files", func(t *testing.T) {
+		opts := getTestOptions()
+		opts.URLs = "127.0.0.1:4223"
+		opts.CaFile = caCertFile
+		opts.CertFile = clientCert
+		opts.KeyFile = clientKey
 
-	opts := getTestOptions()
-	opts.URLs = "127.0.0.1:4223"
-	opts.CaFile = caCertFile
-	opts.CertFile = clientCert
-	opts.KeyFile = clientKey
+		s, err := NewSurveyor(opts)
+		if err != nil {
+			t.Fatalf("couldn't create surveyor: %v", err)
+		}
+		if err = s.Start(); err != nil {
+			t.Fatalf("start error: %v", err)
+		}
+		defer s.Stop()
 
-	s, err := NewSurveyor(opts)
-	if err != nil {
-		t.Fatalf("couldn't create surveyor: %v", err)
-	}
-	if err = s.Start(); err != nil {
-		t.Fatalf("start error: %v", err)
-	}
-	defer s.Stop()
+		pollAndCheckDefault(t, "nats_core_mem_bytes")
+	})
+	t.Run("pass tls config", func(t *testing.T) {
+		tlsConfig, err := parseTLSConfig(clientCert, clientKey, caCertFile)
+		if err != nil {
+			t.Fatalf("Error parsing TLS config: %s", err)
+		}
 
-	pollAndCheckDefault(t, "nats_core_mem_bytes")
+		opts := getTestOptions()
+		opts.URLs = "127.0.0.1:4223"
+		opts.TLSConfig = tlsConfig
+
+		s, err := NewSurveyor(opts)
+		if err != nil {
+			t.Fatalf("couldn't create surveyor: %v", err)
+		}
+		if err = s.Start(); err != nil {
+			t.Fatalf("start error: %v", err)
+		}
+		defer s.Stop()
+
+		pollAndCheckDefault(t, "nats_core_mem_bytes")
+	})
+	t.Run("error passing both tls config and files", func(t *testing.T) {
+		tlsConfig, err := parseTLSConfig(clientCert, clientKey, caCertFile)
+		if err != nil {
+			t.Fatalf("Error parsing TLS config: %s", err)
+		}
+
+		opts := getTestOptions()
+		opts.URLs = "127.0.0.1:4223"
+		opts.CaFile = caCertFile
+		opts.CertFile = clientCert
+		opts.KeyFile = clientKey
+		opts.TLSConfig = tlsConfig
+
+		s, err := NewSurveyor(opts)
+		if err != nil {
+			t.Fatalf("couldn't create surveyor: %v", err)
+		}
+		if err = s.Start(); err == nil || !strings.Contains(err.Error(), "both TLS certificate file and tls.Config cannot be provided") {
+			t.Fatalf("start error: %v", err)
+		}
+	})
 }
 
 func TestSurveyor_HTTPS(t *testing.T) {
@@ -447,7 +490,7 @@ func TestSurveyor_HTTPS(t *testing.T) {
 	defer s.Stop()
 
 	// Check that we CANNOT connect with http
-	if _, err = PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK); err == nil {
+	if _, err = PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK); err == nil {
 		t.Fatalf("didn't receive an error")
 	}
 	// Check that we CAN connect with https
@@ -523,10 +566,7 @@ func TestSurveyor_MissingResponses(t *testing.T) {
 			t.Fatalf("start error: %v", err)
 		}
 		defer s.Stop()
-		output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
-		if err != nil {
-			t.Fatalf("poll error:  %v\n", err)
-		}
+		output := pollAndCheckDefault(t, "nats_core_mem_bytes")
 		if !strings.Contains(output, `nats_survey_surveyed_count 3`) {
 			t.Fatalf("invalid output:  %v\n", output)
 		}
@@ -537,10 +577,7 @@ func TestSurveyor_MissingResponses(t *testing.T) {
 		sc.Servers[2].Shutdown()
 
 		// poll and check for basic core NATS output
-		output, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
-		if err != nil {
-			t.Fatalf("poll error:  %v\n", err)
-		}
+		output = pollAndCheckDefault(t, "nats_core_mem_bytes")
 		if !strings.Contains(output, `nats_survey_surveyed_count 2`) {
 			t.Fatalf("invalid output:  %v\n", output)
 		}
@@ -562,10 +599,7 @@ func TestSurveyor_MissingResponses(t *testing.T) {
 			t.Fatalf("start error: %v", err)
 		}
 		defer s.Stop()
-		output, err := pollAndCheckDefault(t, "nats_core_mem_bytes")
-		if err != nil {
-			t.Fatalf("poll error:  %v\n", err)
-		}
+		output := pollAndCheckDefault(t, "nats_core_mem_bytes")
 		if !strings.Contains(output, `nats_survey_surveyed_count 2`) {
 			t.Fatalf("invalid output:  %v\n", output)
 		}
@@ -576,10 +610,7 @@ func TestSurveyor_MissingResponses(t *testing.T) {
 		sc.Servers[1].Shutdown()
 
 		// poll and check for basic core NATS output
-		output, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
-		if err != nil {
-			t.Fatalf("poll error:  %v\n", err)
-		}
+		output = pollAndCheckDefault(t, "nats_core_mem_bytes")
 		if !strings.Contains(output, `nats_survey_surveyed_count 1`) {
 			t.Fatalf("invalid output:  %v\n", output)
 		}
@@ -604,7 +635,7 @@ func TestSurveyor_ConcurrentBlock(t *testing.T) {
 	defer s.Stop()
 
 	s.statzC.polling = true
-	_, err = pollAndCheckDefault(t, "nats_core_mem_bytes")
+	_, err = PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
 	if err == nil {
 		t.Fatalf("Expected an error but none were encountered")
 	}
