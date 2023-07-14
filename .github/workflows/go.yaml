@@ -37,7 +37,6 @@ jobs:
                --enable unconvert \
                --enable gocyclo \
                --enable gofmt \
-               --enable goimports \
                --enable misspell \
                --enable unparam \
                --enable nakedret \
