@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats-surveyor/surveyor/models"
 	st "github.com/nats-io/nats-surveyor/test"
 	"github.com/nats-io/nuid"
 	"github.com/prometheus/client_golang/prometheus"
@@ -127,17 +127,17 @@ nats_latency_observations_count 1
 	// send a bunch of observations
 	for i := 0; i < 10; i++ {
 		now := time.Now()
-		observation := &server.ServiceLatency{
-			TypedEvent: server.TypedEvent{
+		observation := &models.ServiceLatency{
+			TypedEvent: models.TypedEvent{
 				Type: "io.nats.server.metric.v1.service_latency",
 				ID:   nuid.New().Next(),
 				Time: time.Now().UTC(),
 			},
-			Requestor: &server.ClientInfo{
+			Requestor: &models.ClientInfo{
 				Start: &now,
 				RTT:   333 * time.Second,
 			},
-			Responder: &server.ClientInfo{
+			Responder: &models.ClientInfo{
 				Name:  "testing_service",
 				RTT:   time.Second,
 				Start: &now,

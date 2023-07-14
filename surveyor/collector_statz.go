@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats-surveyor/surveyor/models"
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
@@ -113,8 +113,8 @@ type StatzCollector struct {
 	nc                  *nats.Conn
 	logger              *logrus.Logger
 	start               time.Time
-	stats               []*server.ServerStatsMsg
-	statsChan           chan *server.ServerStatsMsg
+	stats               []*models.ServerStatsMsg
+	statsChan           chan *models.ServerStatsMsg
 	accStats            []accountStats
 	rtts                map[string]time.Duration
 	pollTimeout         time.Duration
@@ -172,7 +172,7 @@ type streamAccountStats struct {
 	replicaCount  float64
 }
 
-func serverName(sm *server.ServerStatsMsg) string {
+func serverName(sm *models.ServerStatsMsg) string {
 	if sm.Server.Name == "" {
 		return sm.Server.ID
 	}
@@ -180,7 +180,7 @@ func serverName(sm *server.ServerStatsMsg) string {
 	return sm.Server.Name
 }
 
-func jsDomainLabelValue(sm *server.ServerStatsMsg) string {
+func jsDomainLabelValue(sm *models.ServerStatsMsg) string {
 	if sm.Server.Domain == "" {
 		// Labels with empty values are ignored by Prometheus, but a JS Domain of "" is a valid configuration.
 		// Use a name with '*' as a placeholder. This is an invalid JS Domain.
@@ -189,7 +189,7 @@ func jsDomainLabelValue(sm *server.ServerStatsMsg) string {
 	return sm.Server.Domain
 }
 
-func jetstreamInfoLabelValues(sm *server.ServerStatsMsg) []string {
+func jetstreamInfoLabelValues(sm *models.ServerStatsMsg) []string {
 	// Maybe also "meta_leader", "store_dir"?
 	return []string{
 		sm.Server.Name, sm.Server.Host, sm.Server.ID, sm.Server.Cluster, jsDomainLabelValue(sm), sm.Server.Version,
@@ -197,19 +197,19 @@ func jetstreamInfoLabelValues(sm *server.ServerStatsMsg) []string {
 	}
 }
 
-func (sc *StatzCollector) serverLabelValues(sm *server.ServerStatsMsg) []string {
+func (sc *StatzCollector) serverLabelValues(sm *models.ServerStatsMsg) []string {
 	return []string{sm.Server.Cluster, serverName(sm), sm.Server.ID}
 }
 
-func (sc *StatzCollector) serverInfoLabelValues(sm *server.ServerStatsMsg) []string {
+func (sc *StatzCollector) serverInfoLabelValues(sm *models.ServerStatsMsg) []string {
 	return []string{sm.Server.Cluster, serverName(sm), sm.Server.ID, sm.Server.Version}
 }
 
-func (sc *StatzCollector) routeLabelValues(sm *server.ServerStatsMsg, rStat *server.RouteStat) []string {
+func (sc *StatzCollector) routeLabelValues(sm *models.ServerStatsMsg, rStat *models.RouteStat) []string {
 	return []string{sm.Server.Cluster, serverName(sm), sm.Server.ID, strconv.FormatUint(rStat.ID, 10)}
 }
 
-func (sc *StatzCollector) gatewayLabelValues(sm *server.ServerStatsMsg, gStat *server.GatewayStat) []string {
+func (sc *StatzCollector) gatewayLabelValues(sm *models.ServerStatsMsg, gStat *models.GatewayStat) []string {
 	return []string{sm.Server.Cluster, serverName(sm), sm.Server.ID, gStat.Name, strconv.FormatUint(gStat.ID, 10)}
 }
 
@@ -391,7 +391,7 @@ func (sc *StatzCollector) Polling() bool {
 }
 
 func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
-	m := &server.ServerStatsMsg{}
+	m := &models.ServerStatsMsg{}
 	if err := json.Unmarshal(msg.Data, m); err != nil {
 		sc.logger.Warnf("Error unmarshalling statz json: %v", err)
 	}
@@ -419,7 +419,7 @@ func (sc *StatzCollector) poll() error {
 	sc.pollkey = strconv.Itoa(int(sc.start.UnixNano()))
 	sc.stats = nil
 	sc.rtts = make(map[string]time.Duration, sc.numServers)
-	sc.statsChan = make(chan *server.ServerStatsMsg)
+	sc.statsChan = make(chan *models.ServerStatsMsg)
 	expectedServers := sc.numServers
 	sc.Unlock()
 
@@ -472,7 +472,7 @@ func (sc *StatzCollector) poll() error {
 	sc.Lock()
 	sc.polling = false
 	ns := len(sc.stats)
-	stats := append([]*server.ServerStatsMsg(nil), sc.stats...)
+	stats := append([]*models.ServerStatsMsg(nil), sc.stats...)
 	rtts := sc.rtts
 	sc.Unlock()
 
@@ -581,14 +581,14 @@ func (sc *StatzCollector) pollAccountInfo() error {
 	return nil
 }
 
-func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDetail {
-	opts := server.JSzOptions{
+func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*models.AccountDetail {
+	opts := models.JSzOptions{
 		Accounts: true,
 		Streams:  true,
 		Consumer: true,
 		Config:   true,
 	}
-	res := make([]*server.JSInfo, 0)
+	res := make([]*models.JSInfo, 0)
 	req, err := json.Marshal(opts)
 	if err != nil {
 		sc.logger.Warnf("Error marshaling request: %s", err)
@@ -601,8 +601,8 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDe
 	}
 
 	for _, msg := range msgs {
-		var r server.ServerAPIResponse
-		var d server.JSInfo
+		var r models.ServerAPIResponse
+		var d models.JSInfo
 		r.Data = &d
 		if err := json.Unmarshal(msg.Data, &r); err != nil {
 			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
@@ -621,7 +621,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDe
 		}
 	}
 
-	jsAccInfos := make(map[string]*server.AccountDetail)
+	jsAccInfos := make(map[string]*models.AccountDetail)
 	for _, jsInfo := range res {
 		for _, acc := range jsInfo.AccountDetails {
 			accInfo, ok := jsAccInfos[acc.Id]
@@ -637,15 +637,15 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDe
 	return jsAccInfos
 }
 
-func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.AccountStat, error) {
-	req := &server.AccountStatzOptions{
+func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*models.AccountStat, error) {
+	req := &models.AccountStatzOptions{
 		IncludeUnused: true,
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
-	res := make([]*server.AccountStatz, 0)
+	res := make([]*models.AccountStatz, 0)
 	const subj = "$SYS.REQ.ACCOUNT.PING.STATZ"
 
 	msgs, err := requestMany(nc, sc, subj, reqJSON)
@@ -654,8 +654,8 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.Account
 	}
 
 	for _, msg := range msgs {
-		var r server.ServerAPIResponse
-		var d server.AccountStatz
+		var r models.ServerAPIResponse
+		var d models.AccountStatz
 		r.Data = &d
 		if err := json.Unmarshal(msg.Data, &r); err != nil {
 			return nil, err
@@ -678,7 +678,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.Account
 		}
 	}
 
-	accStatz := make(map[string]*server.AccountStat)
+	accStatz := make(map[string]*models.AccountStat)
 	for _, statz := range res {
 		for _, acc := range statz.Accounts {
 			accInfo, ok := accStatz[acc.Account]
@@ -694,7 +694,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.Account
 	return accStatz, nil
 }
 
-func mergeStreamDetails(from, to *server.AccountDetail) {
+func mergeStreamDetails(from, to *models.AccountDetail) {
 Outer:
 	for _, stream := range from.Streams {
 		for i, toStream := range to.Streams {
@@ -708,7 +708,7 @@ Outer:
 	}
 }
 
-func mergeStreamConsumers(from, to *server.StreamDetail) {
+func mergeStreamConsumers(from, to *models.StreamDetail) {
 Outer:
 	for _, cons := range from.Consumer {
 		for _, toCons := range to.Consumer {
@@ -720,7 +720,7 @@ Outer:
 	}
 }
 
-func mergeAccountStats(from, to *server.AccountStat) {
+func mergeAccountStats(from, to *models.AccountStat) {
 	to.Conns += from.Conns
 	to.LeafNodes += from.LeafNodes
 	to.TotalConns += from.TotalConns
