@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +75,8 @@ func TestJetStream_limitJSSubject(t *testing.T) {
 		{"$JS.API.STREAM.MSG.GET.ORDERS", "$JS.API.STREAM.MSG.GET"},
 		{"$JS.API.STREAM.LIST", "$JS.API.STREAM.LIST"},
 		{"$JS.API.CONSUMER.CREATE.ORDERS", "$JS.API.CONSUMER.CREATE"},
+		{"$JS.API.CONSUMER.CREATE.ORDERS.NEW", "$JS.API.CONSUMER.CREATE"},
+		{"$JS.API.CONSUMER.CREATE.ORDERS.NEW.filter", "$JS.API.CONSUMER.CREATE"},
 		{"$JS.API.CONSUMER.DURABLE.CREATE.ORDERS.NEW", "$JS.API.CONSUMER.DURABLE.CREATE"},
 	}
 
@@ -218,6 +221,166 @@ nats_jetstream_acknowledgement_deliveries{account="global",consumer="OUT",stream
 	err = ptu.CollectAndCompare(metrics.jsConsumerDeliveryNAK, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("metrics failed: %s", err)
+	}
+}
+
+func TestJetStream_AggMetrics(t *testing.T) {
+	configFiles := []string{"aggregate_stream", "aggregate_service"}
+	for _, configFile := range configFiles {
+		t.Run(configFile, func(t *testing.T) {
+			js := st.NewJetStreamServer(t)
+			defer js.Shutdown()
+
+			opt := GetDefaultOptions()
+			opt.URLs = js.ClientURL()
+			metrics := NewJetStreamAdvisoryMetrics(prometheus.NewRegistry(), nil)
+			reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
+				Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
+				Help: "Number of times the surveyor reconnected to the NATS cluster",
+			}, []string{"name"})
+			cp := newSurveyorConnPool(opt, reconnectCtr)
+
+			config, err := NewJetStreamAdvisoryConfigFromFile(fmt.Sprintf("testdata/goodjs/%s.json", configFile))
+			if err != nil {
+				t.Fatalf("advisory config error: %s", err)
+			}
+			adv, err := newJetStreamAdvisoryListener(config, cp, opt.Logger, metrics)
+			if err != nil {
+				t.Fatalf("advisory listener error: %s", err)
+			}
+			err = adv.Start()
+			if err != nil {
+				t.Fatalf("advisory start error: %s", err)
+			}
+			defer adv.Stop()
+
+			urlA := "nats://a:a@" + strings.TrimPrefix(js.ClientURL(), "nats://")
+			urlB := "nats://b:b@" + strings.TrimPrefix(js.ClientURL(), "nats://")
+			ncA, err := nats.Connect(urlA, nats.UseOldRequestStyle())
+			if err != nil {
+				t.Fatalf("could not connect nats client: %s", err)
+			}
+			ncB, err := nats.Connect(urlB)
+			if err != nil {
+				t.Fatalf("could not connect nats client: %s", err)
+			}
+
+			mgrA, err := jsm.New(ncA, jsm.WithTimeout(1100*time.Millisecond))
+			if err != nil {
+				t.Fatalf("could not get manager: %s", err)
+			}
+			mgrB, err := jsm.New(ncB, jsm.WithTimeout(1100*time.Millisecond))
+			if err != nil {
+				t.Fatalf("could not get manager: %s", err)
+			}
+
+			if known, _ := mgrA.IsKnownStream("StreamA"); known {
+				t.Fatalf("SURVEYOR stream already exist")
+			}
+			if known, _ := mgrB.IsKnownStream("StreamB"); known {
+				t.Fatalf("SURVEYOR stream already exist")
+			}
+
+			strA, err := mgrA.NewStream("StreamA", jsm.Subjects("js.in.streamA"), jsm.MemoryStorage())
+			if err != nil {
+				t.Fatalf("could not create stream: %s", err)
+			}
+			_, err = mgrB.NewStream("StreamB", jsm.Subjects("js.in.streamB"), jsm.MemoryStorage())
+			if err != nil {
+				t.Fatalf("could not create stream: %s", err)
+			}
+
+			msg, err := ncA.Request("js.in.streamA", []byte("1"), time.Second)
+			if err != nil {
+				t.Fatalf("publish failed: %s", err)
+			}
+			if jsm.IsErrorResponse(msg) {
+				t.Fatalf("publish failed: %s", string(msg.Data))
+			}
+
+			consumer, err := strA.NewConsumer(jsm.AckWait(500*time.Millisecond), jsm.DurableName("OUT"), jsm.MaxDeliveryAttempts(1), jsm.SamplePercent(100))
+			if err != nil {
+				t.Fatalf("could not create consumer: %s", err)
+			}
+
+			consumer.NextMsg()
+			consumer.NextMsg()
+
+			msg, err = ncA.Request("js.in.streamA", []byte("2"), time.Second)
+			if err != nil {
+				t.Fatalf("publish failed: %s", err)
+			}
+			if jsm.IsErrorResponse(msg) {
+				t.Fatalf("publish failed: %s", string(msg.Data))
+			}
+
+			msg, err = consumer.NextMsg()
+			if err != nil {
+				t.Fatalf("next failed: %s", err)
+			}
+			msg.Respond(nil)
+
+			msg, err = ncA.Request("js.in.streamA", []byte("3"), time.Second)
+			if err != nil {
+				t.Fatalf("publish failed: %s", err)
+			}
+			if jsm.IsErrorResponse(msg) {
+				t.Fatalf("publish failed: %s", string(msg.Data))
+			}
+
+			msg, err = consumer.NextMsg()
+			if err != nil {
+				t.Fatalf("next failed: %s", err)
+			}
+			msg.Nak()
+
+			// time for advisories to be sent and handled
+			time.Sleep(5 * time.Millisecond)
+
+			expected := `
+# HELP nats_jetstream_delivery_exceeded_count Advisories about JetStream Consumer Delivery Exceeded events
+# TYPE nats_jetstream_delivery_exceeded_count counter
+nats_jetstream_delivery_exceeded_count{account="a",consumer="OUT",stream="StreamA"} 1
+`
+			err = ptu.CollectAndCompare(metrics.jsDeliveryExceededCtr, bytes.NewReader([]byte(expected)))
+			if err != nil {
+				t.Fatalf("metrics failed: %s", err)
+			}
+
+			expected = `
+# HELP nats_jetstream_api_audit JetStream API access audit events
+# TYPE nats_jetstream_api_audit counter
+nats_jetstream_api_audit{account="a",subject="$JS.API.CONSUMER.DURABLE.CREATE"} 1
+nats_jetstream_api_audit{account="a",subject="$JS.API.STREAM.CREATE"} 1
+nats_jetstream_api_audit{account="b",subject="$JS.API.STREAM.CREATE"} 1
+nats_jetstream_api_audit{account="a",subject="$JS.API.STREAM.INFO"} 1
+nats_jetstream_api_audit{account="b",subject="$JS.API.STREAM.INFO"} 1
+`
+			err = ptu.CollectAndCompare(metrics.jsAPIAuditCtr, bytes.NewReader([]byte(expected)))
+			if err != nil {
+				t.Fatalf("metrics failed: %s", err)
+			}
+
+			expected = `
+# HELP nats_jetstream_acknowledgement_deliveries How many times messages took to be delivered and Acknowledged
+# TYPE nats_jetstream_acknowledgement_deliveries counter
+nats_jetstream_acknowledgement_deliveries{account="a",consumer="OUT",stream="StreamA"} 1
+`
+			err = ptu.CollectAndCompare(metrics.jsAckMetricDeliveries, bytes.NewReader([]byte(expected)))
+			if err != nil {
+				t.Fatalf("metrics failed: %s", err)
+			}
+
+			expected = `
+	# HELP nats_jetstream_consumer_nak How many times a consumer sent a NAK
+	# TYPE nats_jetstream_consumer_nak counter
+	nats_jetstream_consumer_nak{account="a",consumer="OUT",stream="StreamA"} 1
+	`
+			err = ptu.CollectAndCompare(metrics.jsConsumerDeliveryNAK, bytes.NewReader([]byte(expected)))
+			if err != nil {
+				t.Fatalf("metrics failed: %s", err)
+			}
+		})
 	}
 }
 

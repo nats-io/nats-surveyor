@@ -420,68 +420,86 @@ func limitJSSubject(subj string) string {
 	return subj
 }
 
+const (
+	JSAggregateMetricPrefix   = "$JS.EVENT.METRIC.ACC"
+	JSAggregateAdvisoryPrefix = "$JS.EVENT.ADVISORY.ACC"
+)
+
 func (o *jsAdvisoryListener) advisoryHandler(m *nats.Msg) {
+	accountName := o.config.AccountName
+	if strings.HasPrefix(m.Subject, JSAggregateMetricPrefix) || strings.HasPrefix(m.Subject, JSAggregateAdvisoryPrefix) {
+		accountName = getAccNameFromJSSubject(m.Subject)
+	}
 	schema, event, err := jsm.ParseEvent(m.Data)
 	if err != nil {
-		o.metrics.jsAdvisoryParseErrorCtr.WithLabelValues(o.config.AccountName).Inc()
+		o.metrics.jsAdvisoryParseErrorCtr.WithLabelValues(accountName).Inc()
 		o.logger.Warnf("Could not parse JetStream API Audit Advisory: %s", err)
 		return
 	}
 
-	o.metrics.jsTotalAdvisoryCtr.WithLabelValues(o.config.AccountName).Inc()
+	o.metrics.jsTotalAdvisoryCtr.WithLabelValues(accountName).Inc()
 
 	switch event := event.(type) {
 	case *advisory.JetStreamAPIAuditV1:
-		o.metrics.jsAPIAuditCtr.WithLabelValues(limitJSSubject(event.Subject), o.config.AccountName).Inc()
+		o.metrics.jsAPIAuditCtr.WithLabelValues(limitJSSubject(event.Subject), accountName).Inc()
 
 	case *advisory.ConsumerDeliveryExceededAdvisoryV1:
-		o.metrics.jsDeliveryExceededCtr.WithLabelValues(o.config.AccountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
+		o.metrics.jsDeliveryExceededCtr.WithLabelValues(accountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
 
 	case *metric.ConsumerAckMetricV1:
-		o.metrics.jsAckMetricDelay.WithLabelValues(o.config.AccountName, event.Stream, event.Consumer).Observe(time.Duration(event.Delay).Seconds())
-		o.metrics.jsAckMetricDeliveries.WithLabelValues(o.config.AccountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
+		o.metrics.jsAckMetricDelay.WithLabelValues(accountName, event.Stream, event.Consumer).Observe(time.Duration(event.Delay).Seconds())
+		o.metrics.jsAckMetricDeliveries.WithLabelValues(accountName, event.Stream, event.Consumer).Add(float64(event.Deliveries))
 
 	case *advisory.JSConsumerActionAdvisoryV1:
-		o.metrics.jsConsumerActionCtr.WithLabelValues(o.config.AccountName, event.Stream, event.Action.String()).Inc()
+		o.metrics.jsConsumerActionCtr.WithLabelValues(accountName, event.Stream, event.Action.String()).Inc()
 
 	case *advisory.JSStreamActionAdvisoryV1:
-		o.metrics.jsStreamActionCtr.WithLabelValues(o.config.AccountName, event.Stream, event.Action.String()).Inc()
+		o.metrics.jsStreamActionCtr.WithLabelValues(accountName, event.Stream, event.Action.String()).Inc()
 
 	case *advisory.JSConsumerDeliveryTerminatedAdvisoryV1:
-		o.metrics.jsDeliveryTerminatedCtr.WithLabelValues(o.config.AccountName, event.Stream, event.Consumer).Inc()
+		o.metrics.jsDeliveryTerminatedCtr.WithLabelValues(accountName, event.Stream, event.Consumer).Inc()
 
 	case *advisory.JSRestoreCreateAdvisoryV1:
-		o.metrics.jsRestoreCreatedCtr.WithLabelValues(o.config.AccountName, event.Stream).Inc()
+		o.metrics.jsRestoreCreatedCtr.WithLabelValues(accountName, event.Stream).Inc()
 
 	case *advisory.JSRestoreCompleteAdvisoryV1:
-		o.metrics.jsRestoreSizeCtr.WithLabelValues(o.config.AccountName, event.Stream).Add(float64(event.Bytes))
-		o.metrics.jsRestoreDuration.WithLabelValues(o.config.AccountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
+		o.metrics.jsRestoreSizeCtr.WithLabelValues(accountName, event.Stream).Add(float64(event.Bytes))
+		o.metrics.jsRestoreDuration.WithLabelValues(accountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
 
 	case *advisory.JSSnapshotCreateAdvisoryV1:
-		o.metrics.jsSnapshotSizeCtr.WithLabelValues(o.config.AccountName, event.Stream).Add(float64(event.BlkSize * event.NumBlks))
+		o.metrics.jsSnapshotSizeCtr.WithLabelValues(accountName, event.Stream).Add(float64(event.BlkSize * event.NumBlks))
 
 	case *advisory.JSSnapshotCompleteAdvisoryV1:
-		o.metrics.jsSnapthotDuration.WithLabelValues(o.config.AccountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
+		o.metrics.jsSnapthotDuration.WithLabelValues(accountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
 
 	case *advisory.JSConsumerLeaderElectedV1:
-		o.metrics.jsConsumerLeaderElected.WithLabelValues(o.config.AccountName, event.Stream).Inc()
+		o.metrics.jsConsumerLeaderElected.WithLabelValues(accountName, event.Stream).Inc()
 
 	case *advisory.JSConsumerQuorumLostV1:
-		o.metrics.jsConsumerQuorumLost.WithLabelValues(o.config.AccountName, event.Stream).Inc()
+		o.metrics.jsConsumerQuorumLost.WithLabelValues(accountName, event.Stream).Inc()
 
 	case *advisory.JSStreamLeaderElectedV1:
-		o.metrics.jsStreamLeaderElected.WithLabelValues(o.config.AccountName, event.Stream).Inc()
+		o.metrics.jsStreamLeaderElected.WithLabelValues(accountName, event.Stream).Inc()
 
 	case *advisory.JSStreamQuorumLostV1:
-		o.metrics.jsStreamQuorumLost.WithLabelValues(o.config.AccountName, event.Stream).Inc()
+		o.metrics.jsStreamQuorumLost.WithLabelValues(accountName, event.Stream).Inc()
 
 	case *advisory.JSConsumerDeliveryNakAdvisoryV1:
-		o.metrics.jsConsumerDeliveryNAK.WithLabelValues(o.config.AccountName, event.Stream, event.Consumer).Inc()
+		o.metrics.jsConsumerDeliveryNAK.WithLabelValues(accountName, event.Stream, event.Consumer).Inc()
 
 	default:
-		o.metrics.jsUnknownAdvisoryCtr.WithLabelValues(schema, o.config.AccountName).Inc()
+		o.metrics.jsUnknownAdvisoryCtr.WithLabelValues(schema, accountName).Inc()
 		o.logger.Warnf("Could not handle event as an JetStream Advisory with schema %s", schema)
 	}
+}
+
+func getAccNameFromJSSubject(subj string) string {
+	accNamePosition := 4
+	parts := strings.Split(subj, ".")
+	if len(parts) >= accNamePosition {
+		return parts[accNamePosition]
+	}
+	return ""
 }
 
 // Stop stops listening for JetStream advisories
