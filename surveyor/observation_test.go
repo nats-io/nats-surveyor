@@ -19,11 +19,13 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
 	st "github.com/nats-io/nats-surveyor/test"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nuid"
 	"github.com/prometheus/client_golang/prometheus"
 	ptu "github.com/prometheus/client_golang/prometheus/testutil"
@@ -122,7 +124,7 @@ nats_latency_observations_count 1
 		t.Fatalf("subscribe failed: %s", err)
 	}
 
-	statusses := []int{0, 200, 400, 500}
+	statuses := []int{0, 200, 400, 500}
 
 	// send a bunch of observations
 	for i := 0; i < 10; i++ {
@@ -145,7 +147,7 @@ nats_latency_observations_count 1
 			RequestStart:   time.Now(),
 			ServiceLatency: 333 * time.Microsecond,
 			SystemLatency:  333 * time.Microsecond,
-			Status:         statusses[i%4],
+			Status:         statuses[i%4],
 		}
 		oj, err := json.Marshal(observation)
 		if err != nil {
@@ -176,7 +178,7 @@ nats_latency_observations_count 1
 	expected = `
 # HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
 # TYPE nats_latency_observations_received_count counter
-nats_latency_observations_received_count{app="testing_service",service="testing"} 10
+nats_latency_observations_received_count{app="testing_service",service="testing",source_account=""} 10
 `
 	err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -208,7 +210,7 @@ nats_latency_observations_received_count{app="testing_service",service="testing"
 	expected = `
 # HELP nats_latency_observation_error_count Number of observations received by this surveyor across all services that could not be handled
 # TYPE nats_latency_observation_error_count counter
-nats_latency_observation_error_count{service="testing"} 10
+nats_latency_observation_error_count{service="testing",source_account=""} 10
 `
 	err = ptu.CollectAndCompare(metrics.invalidObservationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -218,7 +220,7 @@ nats_latency_observation_error_count{service="testing"} 10
 	expected = `
 # HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
 # TYPE nats_latency_observations_received_count counter
-nats_latency_observations_received_count{app="testing_service",service="testing"} 10
+nats_latency_observations_received_count{app="testing_service",service="testing",source_account=""} 10
 `
 	err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -228,13 +230,143 @@ nats_latency_observations_received_count{app="testing_service",service="testing"
 	expected = `
 # HELP nats_latency_observation_status_count The status result codes for requests to a service
 # TYPE nats_latency_observation_status_count counter
-nats_latency_observation_status_count{service="testing",status="200"} 3
-nats_latency_observation_status_count{service="testing",status="400"} 2
-nats_latency_observation_status_count{service="testing",status="500"} 5
+nats_latency_observation_status_count{service="testing",source_account="",status="200"} 3
+nats_latency_observation_status_count{service="testing",source_account="",status="400"} 2
+nats_latency_observation_status_count{service="testing",source_account="",status="500"} 5
 `
 	err = ptu.CollectAndCompare(metrics.serviceRequestStatus, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("Status counter: %s", err)
+	}
+}
+
+func TestServiceObservation_Aggregate(t *testing.T) {
+	tests := []struct {
+		name          string
+		obsConfigFile string
+		obsConfig     *ServiceObsConfig
+	}{
+		{
+			name:          "aggregate stream export from file",
+			obsConfigFile: "testdata/aggregate_observations/aggregate_stream.json",
+		},
+		{
+			name:          "aggregate service export from file",
+			obsConfigFile: "testdata/aggregate_observations/aggregate_service.json",
+		},
+		{
+			name: "aggregate service export from config",
+			obsConfig: &ServiceObsConfig{
+				ID:                           "test",
+				ServiceName:                  "aggregate",
+				Topic:                        "test.service.latency.ACC.*.*",
+				ExternalAccountTokenPosition: 5,
+				ExternalServiceNamePosition:  6,
+				Username:                     "agg_service",
+				Password:                     "agg_service",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			srv := st.NewServerFromConfig(t, "../test/services.conf")
+			defer srv.Shutdown()
+
+			opt := GetDefaultOptions()
+			opt.URLs = srv.ClientURL()
+			metrics := NewServiceObservationMetrics(prometheus.NewRegistry(), nil)
+			s, err := NewSurveyor(opt)
+			if err != nil {
+				t.Fatalf("couldn't create surveyor: %v", err)
+			}
+			if err = s.Start(); err != nil {
+				t.Fatalf("start error: %v", err)
+			}
+			defer s.Stop()
+			config := test.obsConfig
+			if test.obsConfigFile != "" {
+				config, err = NewServiceObservationConfigFromFile(test.obsConfigFile)
+				if err != nil {
+					t.Fatalf("advisory config error: %s", err)
+				}
+			}
+			obsManager := s.ServiceObservationManager()
+			obsManager.metrics = metrics
+			err = obsManager.Set(config)
+			if err != nil {
+				t.Fatalf("Error setting advisory config: %s", err)
+			}
+			waitForObsUpdate(t, obsManager, map[string]*ServiceObsConfig{config.ID: config})
+
+			urlAgg := fmt.Sprintf("nats://%s:%s@", config.Username, config.Password) + strings.TrimPrefix(srv.ClientURL(), "nats://")
+			urlA := "nats://a:a@" + strings.TrimPrefix(srv.ClientURL(), "nats://")
+			urlB := "nats://b:b@" + strings.TrimPrefix(srv.ClientURL(), "nats://")
+			ncAgg, err := nats.Connect(urlAgg)
+			if err != nil {
+				t.Fatalf("could not connect nats client: %s", err)
+			}
+			defer ncAgg.Close()
+			ncA, err := nats.Connect(urlA, nats.UseOldRequestStyle(), nats.Name("testing_service"))
+			if err != nil {
+				t.Fatalf("could not connect nats client: %s", err)
+			}
+			defer ncA.Close()
+			ncB, err := nats.Connect(urlB)
+			if err != nil {
+				t.Fatalf("could not connect nats client: %s", err)
+			}
+			defer ncB.Close()
+
+			expected := `
+# HELP nats_latency_observations_count Number of Service Latency listeners that are running
+# TYPE nats_latency_observations_count gauge
+nats_latency_observations_count 1
+`
+			err = ptu.CollectAndCompare(metrics.observationsGauge, bytes.NewReader([]byte(expected)))
+			if err != nil {
+				t.Fatalf("Invalid observations counter: %s", err)
+			}
+
+			sub, err := ncAgg.SubscribeSync("test.service.latency.>")
+			if err != nil {
+				t.Fatalf("subscribe failed: %s", err)
+			}
+
+			replySub, err := ncA.Subscribe("test.service", func(m *nats.Msg) {
+				m.Respond([]byte("hello"))
+			})
+			if err != nil {
+				t.Fatalf("subscribe failed: %s", err)
+			}
+			defer replySub.Unsubscribe()
+			// send a bunch of observations
+			for i := 0; i < 10; i++ {
+				_, err := ncB.Request("test.service", []byte("hello"), time.Second)
+				if err != nil {
+					t.Fatalf("request failed: %s", err)
+				}
+			}
+
+			// wait for all observations to be received in the test subscription
+			for i := 0; i < 10; i++ {
+				_, err = sub.NextMsg(time.Second)
+				if err != nil {
+					t.Fatalf("test subscriber didn't receive all published messages")
+				}
+			}
+
+			// sleep a bit just in case of slower delivery to the observer
+			time.Sleep(time.Second)
+			expected = `
+	# HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
+	# TYPE nats_latency_observations_received_count counter
+	nats_latency_observations_received_count{app="testing_service",service="myservice",source_account="a"} 10
+	`
+			err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
+			if err != nil {
+				t.Fatalf("Invalid observations counter: %s", err)
+			}
+		})
 	}
 }
 

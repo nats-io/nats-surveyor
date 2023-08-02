@@ -421,6 +421,8 @@ func limitJSSubject(subj string) string {
 }
 
 const (
+	// JSAggregateMetricPrefix and JSAggregateAdvisoryPrefix are used to identify aggregate advisories
+	// When configuring exports, account name should be used as suffix to these subjects
 	JSAggregateMetricPrefix   = "$JS.EVENT.METRIC.ACC"
 	JSAggregateAdvisoryPrefix = "$JS.EVENT.ADVISORY.ACC"
 )

@@ -225,34 +225,61 @@ nats_jetstream_acknowledgement_deliveries{account="global",consumer="OUT",stream
 }
 
 func TestJetStream_AggMetrics(t *testing.T) {
-	configFiles := []string{"aggregate_stream", "aggregate_service"}
-	for _, configFile := range configFiles {
-		t.Run(configFile, func(t *testing.T) {
+	tests := []struct {
+		name           string
+		configFile     string
+		advisoryConfig *JSAdvisoryConfig
+	}{
+		{
+			name:       "aggregate stream export from file",
+			configFile: "testdata/aggregate_advisories/aggregate_stream.json",
+		},
+		{
+			name:       "aggregate service export from file",
+			configFile: "testdata/aggregate_advisories/aggregate_service.json",
+		},
+		{
+			name: "aggregate service export from config",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			js := st.NewJetStreamServer(t)
 			defer js.Shutdown()
 
 			opt := GetDefaultOptions()
 			opt.URLs = js.ClientURL()
 			metrics := NewJetStreamAdvisoryMetrics(prometheus.NewRegistry(), nil)
-			reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
-				Help: "Number of times the surveyor reconnected to the NATS cluster",
-			}, []string{"name"})
-			cp := newSurveyorConnPool(opt, reconnectCtr)
 
-			config, err := NewJetStreamAdvisoryConfigFromFile(fmt.Sprintf("testdata/goodjs/%s.json", configFile))
+			s, err := NewSurveyor(opt)
 			if err != nil {
-				t.Fatalf("advisory config error: %s", err)
+				t.Fatalf("couldn't create surveyor: %v", err)
 			}
-			adv, err := newJetStreamAdvisoryListener(config, cp, opt.Logger, metrics)
+			if err = s.Start(); err != nil {
+				t.Fatalf("start error: %v", err)
+			}
+			defer s.Stop()
+			config := test.advisoryConfig
+			if test.configFile != "" {
+				config, err = NewJetStreamAdvisoryConfigFromFile(test.configFile)
+				if err != nil {
+					t.Fatalf("advisory config error: %s", err)
+				}
+			}
+			advManager := s.JetStreamAdvisoryManager()
+			advManager.metrics = metrics
+
+			err = advManager.Set(config)
 			if err != nil {
-				t.Fatalf("advisory listener error: %s", err)
+				t.Fatalf("Error setting advisory config: %s", err)
 			}
-			err = adv.Start()
-			if err != nil {
-				t.Fatalf("advisory start error: %s", err)
-			}
-			defer adv.Stop()
+			waitForAdvUpdate(t, advManager, map[string]*JSAdvisoryConfig{config.ID: config})
 
 			urlA := "nats://a:a@" + strings.TrimPrefix(js.ClientURL(), "nats://")
 			urlB := "nats://b:b@" + strings.TrimPrefix(js.ClientURL(), "nats://")
@@ -260,10 +287,12 @@ func TestJetStream_AggMetrics(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not connect nats client: %s", err)
 			}
+			defer ncA.Close()
 			ncB, err := nats.Connect(urlB)
 			if err != nil {
 				t.Fatalf("could not connect nats client: %s", err)
 			}
+			defer ncB.Close()
 
 			mgrA, err := jsm.New(ncA, jsm.WithTimeout(1100*time.Millisecond))
 			if err != nil {

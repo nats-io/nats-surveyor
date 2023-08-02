@@ -1,0 +1,8 @@
+{
+    "name": "AGG",
+    "topic": "test.service.latency.ACC.*.*",
+    "external_service_name_position": 6,
+    "external_account_token_position": 5,
+    "username": "agg_service",
+    "password": "agg_service"
+}

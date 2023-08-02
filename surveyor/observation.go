@@ -58,49 +58,49 @@ func NewServiceObservationMetrics(registry *prometheus.Registry, constLabels pro
 			Name:        prometheus.BuildFQName("nats", "latency", "observations_received_count"),
 			Help:        "Number of observations received by this surveyor across all services",
 			ConstLabels: constLabels,
-		}, []string{"service", "app"}),
+		}, []string{"service", "app", "source_account"}),
 
 		serviceRequestStatus: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "observation_status_count"),
 			Help:        "The status result codes for requests to a service",
 			ConstLabels: constLabels,
-		}, []string{"service", "status"}),
+		}, []string{"service", "status", "source_account"}),
 
 		invalidObservationsReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "observation_error_count"),
 			Help:        "Number of observations received by this surveyor across all services that could not be handled",
 			ConstLabels: constLabels,
-		}, []string{"service"}),
+		}, []string{"service", "source_account"}),
 
 		serviceLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "service_duration"),
 			Help:        "Time spent serving the request in the service",
 			ConstLabels: constLabels,
-		}, []string{"service", "app"}),
+		}, []string{"service", "app", "source_account"}),
 
 		totalLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "total_duration"),
 			Help:        "Total time spent serving a service including network overheads",
 			ConstLabels: constLabels,
-		}, []string{"service", "app"}),
+		}, []string{"service", "app", "source_account"}),
 
 		requestorRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "requestor_rtt"),
 			Help:        "The RTT to the client making a request",
 			ConstLabels: constLabels,
-		}, []string{"service", "app"}),
+		}, []string{"service", "app", "source_account"}),
 
 		responderRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "responder_rtt"),
 			Help:        "The RTT to the service serving the request",
 			ConstLabels: constLabels,
-		}, []string{"service", "app"}),
+		}, []string{"service", "app", "source_account"}),
 
 		systemRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "system_rtt"),
 			Help:        "The RTT within the NATS system - time traveling clusters, gateways and leaf nodes",
 			ConstLabels: constLabels,
-		}, []string{"service", "app"}),
+		}, []string{"service", "app", "source_account"}),
 	}
 
 	registry.MustRegister(metrics.invalidObservationsReceived)
@@ -124,6 +124,11 @@ type ServiceObsConfig struct {
 	// service settings
 	ServiceName string `json:"name"`
 	Topic       string `json:"topic"`
+
+	// account name position in subject, used when aggregating services across multiple accounts
+	ExternalAccountTokenPosition int `json:"external_account_token_position"`
+	// optional service name position in subject, useful when aggregating services across multiple accounts
+	ExternalServiceNamePosition int `json:"external_service_name_position"`
 
 	// connection options
 	JWT         string `json:"jwt"`
@@ -275,33 +280,60 @@ func (o *serviceObsListener) Start() error {
 }
 
 func (o *serviceObsListener) observationHandler(m *nats.Msg) {
+	serviceName := o.config.ServiceName
+	var accountName string
+	var err error
+	if o.config.ExternalServiceNamePosition != 0 {
+		serviceName, err = getTokenFromSubject(m.Subject, o.config.ExternalServiceNamePosition)
+		if err != nil {
+			o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName, accountName).Inc()
+			o.logger.Warnf("invalid service observation subject received for id: %s, service name: %s, error: %v, subject: %s", o.config.ID, o.config.ServiceName, err, m.Subject)
+			return
+		}
+	}
+	if o.config.ExternalAccountTokenPosition != 0 {
+		accountName, err = getTokenFromSubject(m.Subject, o.config.ExternalAccountTokenPosition)
+		if err != nil {
+			o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName, accountName).Inc()
+			o.logger.Warnf("invalid service observation subject received for id: %s, service name: %s, error: %v, subject: %s", o.config.ID, o.config.ServiceName, err, m.Subject)
+			return
+		}
+	}
 	kind, obs, err := jsm.ParseEvent(m.Data)
 	if err != nil {
-		o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName).Inc()
-		o.logger.Warnf("unparsable service observation received for id: %s, service name: %s, error: %v, data: %q", o.config.ID, o.config.ServiceName, err, m.Data)
+		o.metrics.invalidObservationsReceived.WithLabelValues(serviceName, accountName).Inc()
+		o.logger.Warnf("unparsable service observation received for id: %s, service name: %s, error: %v, data: %q", o.config.ID, serviceName, err, m.Data)
 		return
 	}
 
 	switch obs := obs.(type) {
 	case *metric.ServiceLatencyV1:
-		o.metrics.observationsReceived.WithLabelValues(o.config.ServiceName, obs.Responder.Name).Inc()
-		o.metrics.serviceLatency.WithLabelValues(o.config.ServiceName, obs.Responder.Name).Observe(obs.ServiceLatency.Seconds())
-		o.metrics.totalLatency.WithLabelValues(o.config.ServiceName, obs.Responder.Name).Observe(obs.TotalLatency.Seconds())
-		o.metrics.requestorRTT.WithLabelValues(o.config.ServiceName, obs.Responder.Name).Observe(obs.Requestor.RTT.Seconds())
-		o.metrics.responderRTT.WithLabelValues(o.config.ServiceName, obs.Responder.Name).Observe(obs.Responder.RTT.Seconds())
-		o.metrics.systemRTT.WithLabelValues(o.config.ServiceName, obs.Responder.Name).Observe(obs.SystemLatency.Seconds())
+		o.metrics.observationsReceived.WithLabelValues(serviceName, obs.Responder.Name, accountName).Inc()
+		o.metrics.serviceLatency.WithLabelValues(serviceName, obs.Responder.Name, accountName).Observe(obs.ServiceLatency.Seconds())
+		o.metrics.totalLatency.WithLabelValues(serviceName, obs.Responder.Name, accountName).Observe(obs.TotalLatency.Seconds())
+		o.metrics.requestorRTT.WithLabelValues(serviceName, obs.Responder.Name, accountName).Observe(obs.Requestor.RTT.Seconds())
+		o.metrics.responderRTT.WithLabelValues(serviceName, obs.Responder.Name, accountName).Observe(obs.Responder.RTT.Seconds())
+		o.metrics.systemRTT.WithLabelValues(serviceName, obs.Responder.Name, accountName).Observe(obs.SystemLatency.Seconds())
 
 		if obs.Status == 0 {
-			o.metrics.serviceRequestStatus.WithLabelValues(o.config.ServiceName, "500").Inc()
+			o.metrics.serviceRequestStatus.WithLabelValues(serviceName, "500", accountName).Inc()
 		} else {
-			o.metrics.serviceRequestStatus.WithLabelValues(o.config.ServiceName, strconv.Itoa(obs.Status)).Inc()
+			o.metrics.serviceRequestStatus.WithLabelValues(serviceName, strconv.Itoa(obs.Status), accountName).Inc()
 		}
 
 	default:
-		o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName).Inc()
-		o.logger.Warnf("unsupported service observation received for id: %s, service name: %s, kind: %s", o.config.ID, o.config.ServiceName, kind)
+		o.metrics.invalidObservationsReceived.WithLabelValues(serviceName, accountName).Inc()
+		o.logger.Warnf("unsupported service observation received for id: %s, service name: %s, kind: %s", o.config.ID, serviceName, kind)
 		return
 	}
+}
+
+func getTokenFromSubject(subject string, token int) (string, error) {
+	parts := strings.Split(subject, ".")
+	if token-1 > len(parts) {
+		return "", fmt.Errorf("invalid subject: %q: expected service name on token position %d", subject, token)
+	}
+	return parts[token-1], nil
 }
 
 // Stop stops listening for observations
