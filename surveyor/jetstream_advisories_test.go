@@ -229,6 +229,7 @@ func TestJetStream_AggMetrics(t *testing.T) {
 		name           string
 		configFile     string
 		advisoryConfig *JSAdvisoryConfig
+		configErrors   []string
 	}{
 		{
 			name:       "aggregate stream export from file",
@@ -245,9 +246,92 @@ func TestJetStream_AggMetrics(t *testing.T) {
 				AccountName: "aggregate_service",
 				Username:    "agg_service",
 				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "$JS.EVENT.METRIC.ACC.*.>",
+					MetricsAccountTokenPosition:  5,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 5,
+				},
+			},
+		},
+		{
+			name: "invalid config, empty subject",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "",
+					MetricsAccountTokenPosition:  5,
+					AdvisorySubject:              "",
+					AdvisoryAccountTokenPosition: 5,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.metrics_subject is required when importing metrics from external accounts",
+				"external_account_config.advisory_subject is required when importing advisories from external accounts",
+			},
+		},
+		{
+			name: "invalid config, empty token position",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "JS.EVENT.METRICS.ACC.*.>",
+					MetricsAccountTokenPosition:  0,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 0,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.metrics_account_token_position is required when importing metrics from external accounts",
+				"external_account_config.advisory_account_token_position is required when importing advisories from external accounts",
+			},
+		},
+		{
+			name: "invalid config, account token position out of range",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "JS.EVENT.METRICS.ACC.*.>",
+					MetricsAccountTokenPosition:  7,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 7,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.metrics_account_token_position is greater than the number of tokens in external_account_config.metrics_subject",
+				"external_account_config.advisory_account_token_position is greater than the number of tokens in external_account_config.advisory_subject",
+			},
+		},
+		{
+			name: "invalid config, token position is not a wildcard",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "$JS.EVENT.METRICS.ACC.*.>",
+					MetricsAccountTokenPosition:  2,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 2,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.metrics_subject must have a wildcard token at the position specified by external_account_config.metrics_account_token_position",
+				"external_account_config.advisory_subject must have a wildcard token at the position specified by external_account_config.advisory_account_token_position",
 			},
 		},
 	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			js := st.NewJetStreamServer(t)
@@ -276,6 +360,10 @@ func TestJetStream_AggMetrics(t *testing.T) {
 			advManager.metrics = metrics
 
 			err = advManager.Set(config)
+			if len(test.configErrors) > 0 {
+				errorsMatch(t, err, test.configErrors)
+				return
+			}
 			if err != nil {
 				t.Fatalf("Error setting advisory config: %s", err)
 			}
@@ -410,6 +498,18 @@ nats_jetstream_acknowledgement_deliveries{account="a",consumer="OUT",stream="Str
 				t.Fatalf("metrics failed: %s", err)
 			}
 		})
+	}
+}
+
+func errorsMatch(t *testing.T, err error, expectedErrors []string) {
+	t.Helper()
+	if err == nil && len(expectedErrors) > 0 {
+		t.Fatalf("Expected error; got nil")
+	}
+	for _, expectedError := range expectedErrors {
+		if !strings.Contains(err.Error(), expectedError) {
+			t.Fatalf("Expected error: %s; got: %s", expectedError, err.Error())
+		}
 	}
 }
 

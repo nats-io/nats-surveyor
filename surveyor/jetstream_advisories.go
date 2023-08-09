@@ -235,6 +235,9 @@ type JSAdvisoryConfig struct {
 	// account name
 	AccountName string `json:"name"`
 
+	// optional configuration for importing JS metrics and advisories from other accounts
+	ExternalAccountConfig *JSAdvisoriesExternalAccountConfig `json:"external_account_config"`
+
 	// connection options
 	JWT         string `json:"jwt"`
 	Seed        string `json:"seed"`
@@ -252,6 +255,24 @@ type JSAdvisoryConfig struct {
 	TLSConfig *tls.Config `json:"-"`
 }
 
+// JSAdvisoriesExternalAccountConfig is used to configure external accounts from which
+// JS metrics and advisories will be imported
+type JSAdvisoriesExternalAccountConfig struct {
+	// subject on which JS metrics from external accounts will be received.
+	// if not set, metrics will be gathered from account set in AccountName.
+	MetricsSubject string `json:"metrics_subject"`
+
+	// position of account token in ExternalMetricsSubject
+	MetricsAccountTokenPosition int `json:"metrics_account_token_position"`
+
+	// subject on which JS advisories from external accounts will be received.
+	// if not set, advisories will be gathered from account set in AccountName.
+	AdvisorySubject string `json:"advisory_subject"`
+
+	// position of account token in ExternalAdvisorySubject
+	AdvisoryAccountTokenPosition int `json:"advisory_account_token_position"`
+}
+
 // Validate is used to validate a JSAdvisoryConfig
 func (o *JSAdvisoryConfig) Validate() error {
 	if o == nil {
@@ -267,6 +288,33 @@ func (o *JSAdvisoryConfig) Validate() error {
 		errs = append(errs, "name is required")
 	}
 
+	if o.ExternalAccountConfig != nil {
+		if o.ExternalAccountConfig.MetricsSubject == "" {
+			errs = append(errs, "external_account_config.metrics_subject is required when importing metrics from external accounts")
+		}
+		metricsTokens := strings.Split(o.ExternalAccountConfig.MetricsSubject, ".")
+		switch {
+		case o.ExternalAccountConfig.MetricsAccountTokenPosition <= 0:
+			errs = append(errs, "external_account_config.metrics_account_token_position is required when importing metrics from external accounts")
+		case o.ExternalAccountConfig.MetricsAccountTokenPosition > len(metricsTokens):
+			errs = append(errs, "external_account_config.metrics_account_token_position is greater than the number of tokens in external_account_config.metrics_subject")
+		case metricsTokens[o.ExternalAccountConfig.AdvisoryAccountTokenPosition-1] != "*":
+			errs = append(errs, "external_account_config.metrics_subject must have a wildcard token at the position specified by external_account_config.metrics_account_token_position")
+		}
+
+		if o.ExternalAccountConfig.AdvisorySubject == "" {
+			errs = append(errs, "external_account_config.advisory_subject is required when importing advisories from external accounts")
+		}
+		advisoryTokens := strings.Split(o.ExternalAccountConfig.AdvisorySubject, ".")
+		switch {
+		case o.ExternalAccountConfig.AdvisoryAccountTokenPosition <= 0:
+			errs = append(errs, "external_account_config.advisory_account_token_position is required when importing advisories from external accounts")
+		case o.ExternalAccountConfig.AdvisoryAccountTokenPosition > len(advisoryTokens):
+			errs = append(errs, "external_account_config.advisory_account_token_position is greater than the number of tokens in external_account_config.advisory_subject")
+		case advisoryTokens[o.ExternalAccountConfig.AdvisoryAccountTokenPosition-1] != "*":
+			errs = append(errs, "external_account_config.advisory_subject must have a wildcard token at the position specified by external_account_config.advisory_account_token_position")
+		}
+	}
 	if len(errs) == 0 {
 		return nil
 	}
@@ -362,14 +410,20 @@ func (o *jsAdvisoryListener) Start() error {
 	if err != nil {
 		return fmt.Errorf("nats connection failed for id: %s, account name: %s, error: %v", o.config.ID, o.config.AccountName, err)
 	}
+	metricsSubject := api.JSMetricPrefix + ".>"
+	advisorySubject := api.JSAdvisoryPrefix + ".>"
+	if o.config.ExternalAccountConfig != nil {
+		metricsSubject = o.config.ExternalAccountConfig.MetricsSubject
+		advisorySubject = o.config.ExternalAccountConfig.AdvisorySubject
+	}
 
-	subAdvisory, err := pc.nc.Subscribe(api.JSAdvisoryPrefix+".>", o.advisoryHandler)
+	subAdvisory, err := pc.nc.Subscribe(metricsSubject, o.advisoryHandler)
 	if err != nil {
 		pc.ReturnToPool()
 		return fmt.Errorf("could not subscribe to JetStream advisory for id: %s, account name: %s, topic: %s, error: %v", o.config.ID, o.config.AccountName, api.JSAdvisoryPrefix, err)
 	}
 
-	subMetric, err := pc.nc.Subscribe(api.JSMetricPrefix+".>", o.advisoryHandler)
+	subMetric, err := pc.nc.Subscribe(advisorySubject, o.advisoryHandler)
 	if err != nil {
 		_ = subAdvisory.Unsubscribe()
 		pc.ReturnToPool()
@@ -420,17 +474,25 @@ func limitJSSubject(subj string) string {
 	return subj
 }
 
-const (
-	// JSAggregateMetricPrefix and JSAggregateAdvisoryPrefix are used to identify aggregate advisories
-	// When configuring exports, account name should be used as suffix to these subjects
-	JSAggregateMetricPrefix   = "$JS.EVENT.METRIC.ACC"
-	JSAggregateAdvisoryPrefix = "$JS.EVENT.ADVISORY.ACC"
-)
-
 func (o *jsAdvisoryListener) advisoryHandler(m *nats.Msg) {
 	accountName := o.config.AccountName
-	if strings.HasPrefix(m.Subject, JSAggregateMetricPrefix) || strings.HasPrefix(m.Subject, JSAggregateAdvisoryPrefix) {
-		accountName = getAccNameFromJSSubject(m.Subject)
+	var err error
+	if o.config.ExternalAccountConfig != nil {
+		var tokenPosition int
+		if m.Sub.Subject == o.config.ExternalAccountConfig.MetricsSubject {
+			tokenPosition = o.config.ExternalAccountConfig.MetricsAccountTokenPosition
+		} else if m.Sub.Subject == o.config.ExternalAccountConfig.AdvisorySubject {
+			tokenPosition = o.config.ExternalAccountConfig.AdvisoryAccountTokenPosition
+		}
+		if tokenPosition == 0 {
+			o.logger.Warnf("Could not parse JetStream API Advisory: no configured subject matches subscription subject")
+			return
+		}
+		accountName, err = getTokenFromSubject(m.Subject, tokenPosition)
+		if err != nil {
+			o.logger.Warnf("Could not parse JetStream API Advisory: %s", err)
+			return
+		}
 	}
 	schema, event, err := jsm.ParseEvent(m.Data)
 	if err != nil {
@@ -493,15 +555,6 @@ func (o *jsAdvisoryListener) advisoryHandler(m *nats.Msg) {
 		o.metrics.jsUnknownAdvisoryCtr.WithLabelValues(schema, accountName).Inc()
 		o.logger.Warnf("Could not handle event as an JetStream Advisory with schema %s", schema)
 	}
-}
-
-func getAccNameFromJSSubject(subj string) string {
-	accNamePosition := 4
-	parts := strings.Split(subj, ".")
-	if len(parts) >= accNamePosition {
-		return parts[accNamePosition]
-	}
-	return ""
 }
 
 // Stop stops listening for JetStream advisories

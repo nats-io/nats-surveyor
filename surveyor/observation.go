@@ -58,49 +58,49 @@ func NewServiceObservationMetrics(registry *prometheus.Registry, constLabels pro
 			Name:        prometheus.BuildFQName("nats", "latency", "observations_received_count"),
 			Help:        "Number of observations received by this surveyor across all services",
 			ConstLabels: constLabels,
-		}, []string{"service", "app", "source_account"}),
+		}, []string{"service", "app", "account"}),
 
 		serviceRequestStatus: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "observation_status_count"),
 			Help:        "The status result codes for requests to a service",
 			ConstLabels: constLabels,
-		}, []string{"service", "status", "source_account"}),
+		}, []string{"service", "status", "account"}),
 
 		invalidObservationsReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "observation_error_count"),
 			Help:        "Number of observations received by this surveyor across all services that could not be handled",
 			ConstLabels: constLabels,
-		}, []string{"service", "source_account"}),
+		}, []string{"service", "account"}),
 
 		serviceLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "service_duration"),
 			Help:        "Time spent serving the request in the service",
 			ConstLabels: constLabels,
-		}, []string{"service", "app", "source_account"}),
+		}, []string{"service", "app", "account"}),
 
 		totalLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "total_duration"),
 			Help:        "Total time spent serving a service including network overheads",
 			ConstLabels: constLabels,
-		}, []string{"service", "app", "source_account"}),
+		}, []string{"service", "app", "account"}),
 
 		requestorRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "requestor_rtt"),
 			Help:        "The RTT to the client making a request",
 			ConstLabels: constLabels,
-		}, []string{"service", "app", "source_account"}),
+		}, []string{"service", "app", "account"}),
 
 		responderRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "responder_rtt"),
 			Help:        "The RTT to the service serving the request",
 			ConstLabels: constLabels,
-		}, []string{"service", "app", "source_account"}),
+		}, []string{"service", "app", "account"}),
 
 		systemRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:        prometheus.BuildFQName("nats", "latency", "system_rtt"),
 			Help:        "The RTT within the NATS system - time traveling clusters, gateways and leaf nodes",
 			ConstLabels: constLabels,
-		}, []string{"service", "app", "source_account"}),
+		}, []string{"service", "app", "account"}),
 	}
 
 	registry.MustRegister(metrics.invalidObservationsReceived)
@@ -125,10 +125,8 @@ type ServiceObsConfig struct {
 	ServiceName string `json:"name"`
 	Topic       string `json:"topic"`
 
-	// account name position in subject, used when aggregating services across multiple accounts
-	ExternalAccountTokenPosition int `json:"external_account_token_position"`
-	// optional service name position in subject, useful when aggregating services across multiple accounts
-	ExternalServiceNamePosition int `json:"external_service_name_position"`
+	// optional configuration for importing observations from other accounts
+	ExternalAccountConfig *ServiceObservationExternalAccountConfig `json:"external_account_config"`
 
 	// connection options
 	JWT         string `json:"jwt"`
@@ -145,6 +143,14 @@ type ServiceObsConfig struct {
 	// tls.Config cannot be provided in observation config file,
 	// only programmatically
 	TLSConfig *tls.Config `json:"-"`
+}
+
+type ServiceObservationExternalAccountConfig struct {
+	// account name position in subject, used when aggregating services across multiple accounts
+	AccountTokenPosition int `json:"account_token_position"`
+	// optional service name position in subject, useful when aggregating services across multiple accounts
+	// if not set, account name from account_token_position is used
+	ServiceNamePosition int `json:"service_name_position"`
 }
 
 // Validate is used to validate a ServiceObsConfig
@@ -164,6 +170,25 @@ func (o *ServiceObsConfig) Validate() error {
 
 	if o.Topic == "" {
 		errs = append(errs, "topic is required")
+	}
+	if o.ExternalAccountConfig != nil {
+		topicTokens := strings.Split(o.Topic, ".")
+		switch {
+		case o.ExternalAccountConfig.AccountTokenPosition <= 0:
+			errs = append(errs, "external_account_config.account_token_position is required")
+		case o.ExternalAccountConfig.AccountTokenPosition > len(topicTokens):
+			errs = append(errs, "external_account_config.account_token_position is greater than the number of tokens in the topic")
+		case topicTokens[o.ExternalAccountConfig.AccountTokenPosition-1] != "*":
+			errs = append(errs, "external_account_config.account_token_position must point to a wildcard token in the topic")
+		}
+		switch {
+		case o.ExternalAccountConfig.ServiceNamePosition < 0:
+			errs = append(errs, "external_account_config.service_name_position must be greater than 0")
+		case o.ExternalAccountConfig.ServiceNamePosition > len(topicTokens):
+			errs = append(errs, "external_account_config.service_name_position is greater than the number of tokens in the topic")
+		case topicTokens[o.ExternalAccountConfig.ServiceNamePosition-1] != "*":
+			errs = append(errs, "external_account_config.service_name_position must point to a wildcard token in the topic")
+		}
 	}
 
 	if len(errs) == 0 {
@@ -283,20 +308,24 @@ func (o *serviceObsListener) observationHandler(m *nats.Msg) {
 	serviceName := o.config.ServiceName
 	var accountName string
 	var err error
-	if o.config.ExternalServiceNamePosition != 0 {
-		serviceName, err = getTokenFromSubject(m.Subject, o.config.ExternalServiceNamePosition)
-		if err != nil {
-			o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName, accountName).Inc()
-			o.logger.Warnf("invalid service observation subject received for id: %s, service name: %s, error: %v, subject: %s", o.config.ID, o.config.ServiceName, err, m.Subject)
-			return
+	if o.config.ExternalAccountConfig != nil {
+		if o.config.ExternalAccountConfig.AccountTokenPosition != 0 {
+			accountName, err = getTokenFromSubject(m.Subject, o.config.ExternalAccountConfig.AccountTokenPosition)
+			if err != nil {
+				o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName, accountName).Inc()
+				o.logger.Warnf("invalid service observation subject received for id: %s, service name: %s, error: %v, subject: %s", o.config.ID, o.config.ServiceName, err, m.Subject)
+				return
+			}
 		}
-	}
-	if o.config.ExternalAccountTokenPosition != 0 {
-		accountName, err = getTokenFromSubject(m.Subject, o.config.ExternalAccountTokenPosition)
-		if err != nil {
-			o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName, accountName).Inc()
-			o.logger.Warnf("invalid service observation subject received for id: %s, service name: %s, error: %v, subject: %s", o.config.ID, o.config.ServiceName, err, m.Subject)
-			return
+		if o.config.ExternalAccountConfig.ServiceNamePosition != 0 {
+			serviceName, err = getTokenFromSubject(m.Subject, o.config.ExternalAccountConfig.ServiceNamePosition)
+			if err != nil {
+				o.metrics.invalidObservationsReceived.WithLabelValues(o.config.ServiceName, accountName).Inc()
+				o.logger.Warnf("invalid service observation subject received for id: %s, service name: %s, error: %v, subject: %s", o.config.ID, o.config.ServiceName, err, m.Subject)
+				return
+			}
+		} else {
+			serviceName = accountName
 		}
 	}
 	kind, obs, err := jsm.ParseEvent(m.Data)

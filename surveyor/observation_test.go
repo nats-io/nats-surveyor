@@ -178,7 +178,7 @@ nats_latency_observations_count 1
 	expected = `
 # HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
 # TYPE nats_latency_observations_received_count counter
-nats_latency_observations_received_count{app="testing_service",service="testing",source_account=""} 10
+nats_latency_observations_received_count{account="",app="testing_service",service="testing"} 10
 `
 	err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -210,7 +210,7 @@ nats_latency_observations_received_count{app="testing_service",service="testing"
 	expected = `
 # HELP nats_latency_observation_error_count Number of observations received by this surveyor across all services that could not be handled
 # TYPE nats_latency_observation_error_count counter
-nats_latency_observation_error_count{service="testing",source_account=""} 10
+nats_latency_observation_error_count{account="",service="testing"} 10
 `
 	err = ptu.CollectAndCompare(metrics.invalidObservationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -220,7 +220,7 @@ nats_latency_observation_error_count{service="testing",source_account=""} 10
 	expected = `
 # HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
 # TYPE nats_latency_observations_received_count counter
-nats_latency_observations_received_count{app="testing_service",service="testing",source_account=""} 10
+nats_latency_observations_received_count{account="",app="testing_service",service="testing"} 10
 `
 	err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -230,9 +230,9 @@ nats_latency_observations_received_count{app="testing_service",service="testing"
 	expected = `
 # HELP nats_latency_observation_status_count The status result codes for requests to a service
 # TYPE nats_latency_observation_status_count counter
-nats_latency_observation_status_count{service="testing",source_account="",status="200"} 3
-nats_latency_observation_status_count{service="testing",source_account="",status="400"} 2
-nats_latency_observation_status_count{service="testing",source_account="",status="500"} 5
+nats_latency_observation_status_count{account="",service="testing",status="200"} 3
+nats_latency_observation_status_count{account="",service="testing",status="400"} 2
+nats_latency_observation_status_count{account="",service="testing",status="500"} 5
 `
 	err = ptu.CollectAndCompare(metrics.serviceRequestStatus, bytes.NewReader([]byte(expected)))
 	if err != nil {
@@ -245,6 +245,7 @@ func TestServiceObservation_Aggregate(t *testing.T) {
 		name          string
 		obsConfigFile string
 		obsConfig     *ServiceObsConfig
+		configErrors  []string
 	}{
 		{
 			name:          "aggregate stream export from file",
@@ -257,13 +258,69 @@ func TestServiceObservation_Aggregate(t *testing.T) {
 		{
 			name: "aggregate service export from config",
 			obsConfig: &ServiceObsConfig{
-				ID:                           "test",
-				ServiceName:                  "aggregate",
-				Topic:                        "test.service.latency.ACC.*.*",
-				ExternalAccountTokenPosition: 5,
-				ExternalServiceNamePosition:  6,
-				Username:                     "agg_service",
-				Password:                     "agg_service",
+				ID:          "test",
+				ServiceName: "aggregate",
+				Topic:       "test.service.latency.ACC.*.*",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &ServiceObservationExternalAccountConfig{
+					AccountTokenPosition: 5,
+					ServiceNamePosition:  6,
+				},
+			},
+		},
+		{
+			name: "invalid config, empty account token position",
+			obsConfig: &ServiceObsConfig{
+				ID:          "test",
+				ServiceName: "aggregate",
+				Topic:       "test.service.latency.ACC.*.*",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &ServiceObservationExternalAccountConfig{
+					AccountTokenPosition: 0,
+					ServiceNamePosition:  -1,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.account_token_position is required",
+				"external_account_config.service_name_position must be greater than 0",
+			},
+		},
+		{
+			name: "invalid config, token positions out of range",
+			obsConfig: &ServiceObsConfig{
+				ID:          "test",
+				ServiceName: "aggregate",
+				Topic:       "test.service.latency.ACC.*.*",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &ServiceObservationExternalAccountConfig{
+					AccountTokenPosition: 7,
+					ServiceNamePosition:  7,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.account_token_position is greater than the number of tokens in the topic",
+				"external_account_config.service_name_position is greater than the number of tokens in the topic",
+			},
+		},
+		{
+			name: "token positions do not match to wildcard positions in topic",
+			obsConfig: &ServiceObsConfig{
+				ID:          "test",
+				ServiceName: "aggregate",
+				Topic:       "test.service.latency.ACC.*.*",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &ServiceObservationExternalAccountConfig{
+					AccountTokenPosition: 1,
+					ServiceNamePosition:  2,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.account_token_position must point to a wildcard token in the topic",
+				"external_account_config.service_name_position must point to a wildcard token in the topic",
 			},
 		},
 	}
@@ -293,6 +350,10 @@ func TestServiceObservation_Aggregate(t *testing.T) {
 			obsManager := s.ServiceObservationManager()
 			obsManager.metrics = metrics
 			err = obsManager.Set(config)
+			if len(test.configErrors) > 0 {
+				errorsMatch(t, err, test.configErrors)
+				return
+			}
 			if err != nil {
 				t.Fatalf("Error setting advisory config: %s", err)
 			}
@@ -360,7 +421,7 @@ nats_latency_observations_count 1
 			expected = `
 	# HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
 	# TYPE nats_latency_observations_received_count counter
-	nats_latency_observations_received_count{app="testing_service",service="myservice",source_account="a"} 10
+	nats_latency_observations_received_count{account="a",app="testing_service",service="myservice"} 10
 	`
 			err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
 			if err != nil {
