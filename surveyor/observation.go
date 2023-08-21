@@ -126,7 +126,8 @@ type ServiceObsConfig struct {
 	Topic       string `json:"topic"`
 
 	// optional configuration for importing observations from other accounts
-	ExternalAccountConfig *ServiceObservationExternalAccountConfig `json:"external_account_config"`
+	// it can only be set via ServiceObsConfig directly (not from config file)
+	ExternalAccountConfig *ServiceObservationExternalAccountConfig `json:"-"`
 
 	// connection options
 	JWT         string `json:"jwt"`

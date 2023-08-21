@@ -242,18 +242,23 @@ nats_latency_observation_status_count{account="",service="testing",status="500"}
 
 func TestServiceObservation_Aggregate(t *testing.T) {
 	tests := []struct {
-		name          string
-		obsConfigFile string
-		obsConfig     *ServiceObsConfig
-		configErrors  []string
+		name         string
+		obsConfig    *ServiceObsConfig
+		configErrors []string
 	}{
 		{
-			name:          "aggregate stream export from file",
-			obsConfigFile: "testdata/aggregate_observations/aggregate_stream.json",
-		},
-		{
-			name:          "aggregate service export from file",
-			obsConfigFile: "testdata/aggregate_observations/aggregate_service.json",
+			name: "aggregate stream export from config",
+			obsConfig: &ServiceObsConfig{
+				ID:          "test",
+				ServiceName: "aggregate",
+				Topic:       "test.service.latency.ACC.*.*",
+				Username:    "agg_stream",
+				Password:    "agg_stream",
+				ExternalAccountConfig: &ServiceObservationExternalAccountConfig{
+					AccountTokenPosition: 5,
+					ServiceNamePosition:  6,
+				},
+			},
 		},
 		{
 			name: "aggregate service export from config",
@@ -341,12 +346,6 @@ func TestServiceObservation_Aggregate(t *testing.T) {
 			}
 			defer s.Stop()
 			config := test.obsConfig
-			if test.obsConfigFile != "" {
-				config, err = NewServiceObservationConfigFromFile(test.obsConfigFile)
-				if err != nil {
-					t.Fatalf("advisory config error: %s", err)
-				}
-			}
 			obsManager := s.ServiceObservationManager()
 			obsManager.metrics = metrics
 			err = obsManager.Set(config)

@@ -227,18 +227,9 @@ nats_jetstream_acknowledgement_deliveries{account="global",consumer="OUT",stream
 func TestJetStream_AggMetrics(t *testing.T) {
 	tests := []struct {
 		name           string
-		configFile     string
 		advisoryConfig *JSAdvisoryConfig
 		configErrors   []string
 	}{
-		{
-			name:       "aggregate stream export from file",
-			configFile: "testdata/aggregate_advisories/aggregate_stream.json",
-		},
-		{
-			name:       "aggregate service export from file",
-			configFile: "testdata/aggregate_advisories/aggregate_service.json",
-		},
 		{
 			name: "aggregate service export from config",
 			advisoryConfig: &JSAdvisoryConfig{
@@ -246,6 +237,21 @@ func TestJetStream_AggMetrics(t *testing.T) {
 				AccountName: "aggregate_service",
 				Username:    "agg_service",
 				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "$JS.EVENT.METRIC.ACC.*.>",
+					MetricsAccountTokenPosition:  5,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 5,
+				},
+			},
+		},
+		{
+			name: "aggregate stream export from config",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_stream",
+				Password:    "agg_stream",
 				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
 					MetricsSubject:               "$JS.EVENT.METRIC.ACC.*.>",
 					MetricsAccountTokenPosition:  5,
@@ -350,12 +356,6 @@ func TestJetStream_AggMetrics(t *testing.T) {
 			}
 			defer s.Stop()
 			config := test.advisoryConfig
-			if test.configFile != "" {
-				config, err = NewJetStreamAdvisoryConfigFromFile(test.configFile)
-				if err != nil {
-					t.Fatalf("advisory config error: %s", err)
-				}
-			}
 			advManager := s.JetStreamAdvisoryManager()
 			advManager.metrics = metrics
 

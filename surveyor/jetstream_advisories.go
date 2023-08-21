@@ -236,7 +236,8 @@ type JSAdvisoryConfig struct {
 	AccountName string `json:"name"`
 
 	// optional configuration for importing JS metrics and advisories from other accounts
-	ExternalAccountConfig *JSAdvisoriesExternalAccountConfig `json:"external_account_config"`
+	// it can only be set via JSAdvisoryConfig directly (not from config file)
+	ExternalAccountConfig *JSAdvisoriesExternalAccountConfig `json:"-"`
 
 	// connection options
 	JWT         string `json:"jwt"`
