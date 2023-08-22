@@ -163,6 +163,13 @@ func NewJetStreamServer(t *testing.T) *server.Server {
 	return s
 }
 
+// NewServerFromConfig creates a single NATS server using provided config file
+func NewServerFromConfig(t *testing.T, configFile string) *server.Server {
+	s := StartServer(t, configFile)
+	ConnectAndVerify(t, s.ClientURL())
+	return s
+}
+
 func NewJetStreamCluster(t *testing.T) *SuperCluster {
 	t.Helper()
 	cluster := SuperCluster{

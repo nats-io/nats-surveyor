@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +75,8 @@ func TestJetStream_limitJSSubject(t *testing.T) {
 		{"$JS.API.STREAM.MSG.GET.ORDERS", "$JS.API.STREAM.MSG.GET"},
 		{"$JS.API.STREAM.LIST", "$JS.API.STREAM.LIST"},
 		{"$JS.API.CONSUMER.CREATE.ORDERS", "$JS.API.CONSUMER.CREATE"},
+		{"$JS.API.CONSUMER.CREATE.ORDERS.NEW", "$JS.API.CONSUMER.CREATE"},
+		{"$JS.API.CONSUMER.CREATE.ORDERS.NEW.filter", "$JS.API.CONSUMER.CREATE"},
 		{"$JS.API.CONSUMER.DURABLE.CREATE.ORDERS.NEW", "$JS.API.CONSUMER.DURABLE.CREATE"},
 	}
 
@@ -218,6 +221,295 @@ nats_jetstream_acknowledgement_deliveries{account="global",consumer="OUT",stream
 	err = ptu.CollectAndCompare(metrics.jsConsumerDeliveryNAK, bytes.NewReader([]byte(expected)))
 	if err != nil {
 		t.Fatalf("metrics failed: %s", err)
+	}
+}
+
+func TestJetStream_AggMetrics(t *testing.T) {
+	tests := []struct {
+		name           string
+		advisoryConfig *JSAdvisoryConfig
+		configErrors   []string
+	}{
+		{
+			name: "aggregate service export from config",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "$JS.EVENT.METRIC.ACC.*.>",
+					MetricsAccountTokenPosition:  5,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 5,
+				},
+			},
+		},
+		{
+			name: "aggregate stream export from config",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_stream",
+				Password:    "agg_stream",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "$JS.EVENT.METRIC.ACC.*.>",
+					MetricsAccountTokenPosition:  5,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 5,
+				},
+			},
+		},
+		{
+			name: "invalid config, empty subject",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "",
+					MetricsAccountTokenPosition:  5,
+					AdvisorySubject:              "",
+					AdvisoryAccountTokenPosition: 5,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.metrics_subject is required when importing metrics from external accounts",
+				"external_account_config.advisory_subject is required when importing advisories from external accounts",
+			},
+		},
+		{
+			name: "invalid config, empty token position",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "JS.EVENT.METRICS.ACC.*.>",
+					MetricsAccountTokenPosition:  0,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 0,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.metrics_account_token_position is required when importing metrics from external accounts",
+				"external_account_config.advisory_account_token_position is required when importing advisories from external accounts",
+			},
+		},
+		{
+			name: "invalid config, account token position out of range",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "JS.EVENT.METRICS.ACC.*.>",
+					MetricsAccountTokenPosition:  7,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 7,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.metrics_account_token_position is greater than the number of tokens in external_account_config.metrics_subject",
+				"external_account_config.advisory_account_token_position is greater than the number of tokens in external_account_config.advisory_subject",
+			},
+		},
+		{
+			name: "invalid config, token position is not a wildcard",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "$JS.EVENT.METRICS.ACC.*.>",
+					MetricsAccountTokenPosition:  2,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 2,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.metrics_subject must have a wildcard token at the position specified by external_account_config.metrics_account_token_position",
+				"external_account_config.advisory_subject must have a wildcard token at the position specified by external_account_config.advisory_account_token_position",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			js := st.NewJetStreamServer(t)
+			defer js.Shutdown()
+
+			opt := GetDefaultOptions()
+			opt.URLs = js.ClientURL()
+			metrics := NewJetStreamAdvisoryMetrics(prometheus.NewRegistry(), nil)
+
+			s, err := NewSurveyor(opt)
+			if err != nil {
+				t.Fatalf("couldn't create surveyor: %v", err)
+			}
+			if err = s.Start(); err != nil {
+				t.Fatalf("start error: %v", err)
+			}
+			defer s.Stop()
+			config := test.advisoryConfig
+			advManager := s.JetStreamAdvisoryManager()
+			advManager.metrics = metrics
+
+			err = advManager.Set(config)
+			if len(test.configErrors) > 0 {
+				errorsMatch(t, err, test.configErrors)
+				return
+			}
+			if err != nil {
+				t.Fatalf("Error setting advisory config: %s", err)
+			}
+			waitForAdvUpdate(t, advManager, map[string]*JSAdvisoryConfig{config.ID: config})
+
+			urlA := "nats://a:a@" + strings.TrimPrefix(js.ClientURL(), "nats://")
+			urlB := "nats://b:b@" + strings.TrimPrefix(js.ClientURL(), "nats://")
+			ncA, err := nats.Connect(urlA, nats.UseOldRequestStyle())
+			if err != nil {
+				t.Fatalf("could not connect nats client: %s", err)
+			}
+			defer ncA.Close()
+			ncB, err := nats.Connect(urlB)
+			if err != nil {
+				t.Fatalf("could not connect nats client: %s", err)
+			}
+			defer ncB.Close()
+
+			mgrA, err := jsm.New(ncA, jsm.WithTimeout(1100*time.Millisecond))
+			if err != nil {
+				t.Fatalf("could not get manager: %s", err)
+			}
+			mgrB, err := jsm.New(ncB, jsm.WithTimeout(1100*time.Millisecond))
+			if err != nil {
+				t.Fatalf("could not get manager: %s", err)
+			}
+
+			if known, _ := mgrA.IsKnownStream("StreamA"); known {
+				t.Fatalf("SURVEYOR stream already exist")
+			}
+			if known, _ := mgrB.IsKnownStream("StreamB"); known {
+				t.Fatalf("SURVEYOR stream already exist")
+			}
+
+			strA, err := mgrA.NewStream("StreamA", jsm.Subjects("js.in.streamA"), jsm.MemoryStorage())
+			if err != nil {
+				t.Fatalf("could not create stream: %s", err)
+			}
+			_, err = mgrB.NewStream("StreamB", jsm.Subjects("js.in.streamB"), jsm.MemoryStorage())
+			if err != nil {
+				t.Fatalf("could not create stream: %s", err)
+			}
+
+			msg, err := ncA.Request("js.in.streamA", []byte("1"), time.Second)
+			if err != nil {
+				t.Fatalf("publish failed: %s", err)
+			}
+			if jsm.IsErrorResponse(msg) {
+				t.Fatalf("publish failed: %s", string(msg.Data))
+			}
+
+			consumer, err := strA.NewConsumer(jsm.AckWait(500*time.Millisecond), jsm.DurableName("OUT"), jsm.MaxDeliveryAttempts(1), jsm.SamplePercent(100))
+			if err != nil {
+				t.Fatalf("could not create consumer: %s", err)
+			}
+
+			consumer.NextMsg()
+			consumer.NextMsg()
+
+			msg, err = ncA.Request("js.in.streamA", []byte("2"), time.Second)
+			if err != nil {
+				t.Fatalf("publish failed: %s", err)
+			}
+			if jsm.IsErrorResponse(msg) {
+				t.Fatalf("publish failed: %s", string(msg.Data))
+			}
+
+			msg, err = consumer.NextMsg()
+			if err != nil {
+				t.Fatalf("next failed: %s", err)
+			}
+			msg.Respond(nil)
+
+			msg, err = ncA.Request("js.in.streamA", []byte("3"), time.Second)
+			if err != nil {
+				t.Fatalf("publish failed: %s", err)
+			}
+			if jsm.IsErrorResponse(msg) {
+				t.Fatalf("publish failed: %s", string(msg.Data))
+			}
+
+			msg, err = consumer.NextMsg()
+			if err != nil {
+				t.Fatalf("next failed: %s", err)
+			}
+			msg.Nak()
+
+			// time for advisories to be sent and handled
+			time.Sleep(5 * time.Millisecond)
+
+			expected := `
+# HELP nats_jetstream_delivery_exceeded_count Advisories about JetStream Consumer Delivery Exceeded events
+# TYPE nats_jetstream_delivery_exceeded_count counter
+nats_jetstream_delivery_exceeded_count{account="a",consumer="OUT",stream="StreamA"} 1
+`
+			err = ptu.CollectAndCompare(metrics.jsDeliveryExceededCtr, bytes.NewReader([]byte(expected)))
+			if err != nil {
+				t.Fatalf("metrics failed: %s", err)
+			}
+
+			expected = `
+# HELP nats_jetstream_api_audit JetStream API access audit events
+# TYPE nats_jetstream_api_audit counter
+nats_jetstream_api_audit{account="a",subject="$JS.API.CONSUMER.DURABLE.CREATE"} 1
+nats_jetstream_api_audit{account="a",subject="$JS.API.STREAM.CREATE"} 1
+nats_jetstream_api_audit{account="b",subject="$JS.API.STREAM.CREATE"} 1
+nats_jetstream_api_audit{account="a",subject="$JS.API.STREAM.INFO"} 1
+nats_jetstream_api_audit{account="b",subject="$JS.API.STREAM.INFO"} 1
+`
+			err = ptu.CollectAndCompare(metrics.jsAPIAuditCtr, bytes.NewReader([]byte(expected)))
+			if err != nil {
+				t.Fatalf("metrics failed: %s", err)
+			}
+
+			expected = `
+# HELP nats_jetstream_acknowledgement_deliveries How many times messages took to be delivered and Acknowledged
+# TYPE nats_jetstream_acknowledgement_deliveries counter
+nats_jetstream_acknowledgement_deliveries{account="a",consumer="OUT",stream="StreamA"} 1
+`
+			err = ptu.CollectAndCompare(metrics.jsAckMetricDeliveries, bytes.NewReader([]byte(expected)))
+			if err != nil {
+				t.Fatalf("metrics failed: %s", err)
+			}
+
+			expected = `
+	# HELP nats_jetstream_consumer_nak How many times a consumer sent a NAK
+	# TYPE nats_jetstream_consumer_nak counter
+	nats_jetstream_consumer_nak{account="a",consumer="OUT",stream="StreamA"} 1
+	`
+			err = ptu.CollectAndCompare(metrics.jsConsumerDeliveryNAK, bytes.NewReader([]byte(expected)))
+			if err != nil {
+				t.Fatalf("metrics failed: %s", err)
+			}
+		})
+	}
+}
+
+func errorsMatch(t *testing.T, err error, expectedErrors []string) {
+	t.Helper()
+	if err == nil && len(expectedErrors) > 0 {
+		t.Fatalf("Expected error; got nil")
+	}
+	for _, expectedError := range expectedErrors {
+		if !strings.Contains(err.Error(), expectedError) {
+			t.Fatalf("Expected error: %s; got: %s", expectedError, err.Error())
+		}
 	}
 }
 
