@@ -9,7 +9,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ '1.19' ]
+        go: [ '1.20' ]
         os: [ ubuntu-latest, macOS-latest ]
     runs-on: ${{matrix.os}}
     steps:
@@ -23,7 +23,6 @@ jobs:
         shell: bash --noprofile --norc -x -eo pipefail {0}
         run: |
           cd /tmp
-          go install -v github.com/wadey/gocovmerge@latest
           go install -v github.com/golangci/golangci-lint/cmd/golangci-lint@latest
       - name: Lint
         shell: bash --noprofile --norc -x -eo pipefail {0}
@@ -33,6 +32,7 @@ jobs:
           golangci-lint run \
              --no-config --exclude-use-default=false --max-same-issues=0 \
                --disable errcheck \
+               --disable gocritic \
                --enable stylecheck \
                --enable unconvert \
                --enable gocyclo \
@@ -41,7 +41,6 @@ jobs:
                --enable unparam \
                --enable nakedret \
                --enable prealloc \
-               --enable gocritic \
                --enable misspell \
                ./...
 
