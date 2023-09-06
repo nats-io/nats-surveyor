@@ -82,7 +82,7 @@ func getTestOptions() *Options {
 
 // PollSurveyorEndpoint polls a surveyor endpoint for data
 func PollSurveyorEndpoint(t *testing.T, url string, secure bool, expectedRc int) (string, error) {
-	// t.Helper()
+	t.Helper()
 	var resp *http.Response
 	var err error
 
