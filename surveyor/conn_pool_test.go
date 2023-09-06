@@ -13,6 +13,8 @@ import (
 )
 
 func TestConnPool(t *testing.T) {
+	t.Parallel()
+
 	s := natsservertest.RunRandClientPortServer()
 	defer s.Shutdown()
 	o1 := &natsContext{
