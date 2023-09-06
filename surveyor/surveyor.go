@@ -69,7 +69,6 @@ type Options struct {
 	CertFile             string
 	KeyFile              string
 	CaFile               string
-	TLSConfig            *tls.Config
 	HTTPCertFile         string
 	HTTPKeyFile          string
 	HTTPCaFile           string
@@ -79,7 +78,8 @@ type Options struct {
 	ObservationConfigDir string
 	JetStreamConfigDir   string
 	Accounts             bool
-	Logger               *logrus.Logger
+	Logger               *logrus.Logger    // not exposed by CLI
+	NATSOpts             []nats.Option     // not exposed by CLI
 	ConstLabels          prometheus.Labels // not exposed by CLI
 	DisableHTTPServer    bool              // not exposed by CLI
 }
@@ -156,14 +156,13 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 
 func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *natsConnPool {
 	natsDefaults := &natsContextDefaults{
-		Name:      opts.Name,
-		URL:       opts.URLs,
-		TLSCert:   opts.CertFile,
-		TLSKey:    opts.KeyFile,
-		TLSCA:     opts.CaFile,
-		TLSConfig: opts.TLSConfig,
+		Name:    opts.Name,
+		URL:     opts.URLs,
+		TLSCert: opts.CertFile,
+		TLSKey:  opts.KeyFile,
+		TLSCA:   opts.CaFile,
 	}
-	natsOpts := []nats.Option{
+	natsOpts := append(opts.NATSOpts,
 		nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
 			if err != nil {
 				opts.Logger.Warnf("%q disconnected, will possibly miss replies: %v", c.Opts.Name, err)
@@ -184,7 +183,7 @@ func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *na
 			}
 		}),
 		nats.MaxReconnects(10240),
-	}
+	)
 	return newNatsConnPool(opts.Logger, natsDefaults, natsOpts)
 }
 

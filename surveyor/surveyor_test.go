@@ -435,7 +435,7 @@ func TestSurveyor_ClientTLS(t *testing.T) {
 
 		opts := getTestOptions()
 		opts.URLs = "127.0.0.1:4223"
-		opts.TLSConfig = tlsConfig
+		opts.NATSOpts = []nats.Option{nats.Secure(tlsConfig)}
 
 		s, err := NewSurveyor(opts)
 		if err != nil {
@@ -447,27 +447,6 @@ func TestSurveyor_ClientTLS(t *testing.T) {
 		defer s.Stop()
 
 		pollAndCheckDefault(t, "nats_core_mem_bytes")
-	})
-	t.Run("error passing both tls config and files", func(t *testing.T) {
-		tlsConfig, err := parseTLSConfig(clientCert, clientKey, caCertFile)
-		if err != nil {
-			t.Fatalf("Error parsing TLS config: %s", err)
-		}
-
-		opts := getTestOptions()
-		opts.URLs = "127.0.0.1:4223"
-		opts.CaFile = caCertFile
-		opts.CertFile = clientCert
-		opts.KeyFile = clientKey
-		opts.TLSConfig = tlsConfig
-
-		s, err := NewSurveyor(opts)
-		if err != nil {
-			t.Fatalf("couldn't create surveyor: %v", err)
-		}
-		if err = s.Start(); err == nil || !strings.Contains(err.Error(), "both TLS certificate file and tls.Config cannot be provided") {
-			t.Fatalf("start error: %v", err)
-		}
 	})
 }
 

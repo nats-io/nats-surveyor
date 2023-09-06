@@ -1,7 +1,6 @@
 package surveyor
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
@@ -15,19 +14,18 @@ import (
 )
 
 type natsContext struct {
-	Name        string      `json:"name"`
-	URL         string      `json:"url"`
-	JWT         string      `json:"jwt"`
-	Seed        string      `json:"seed"`
-	Credentials string      `json:"credential"`
-	Nkey        string      `json:"nkey"`
-	Token       string      `json:"token"`
-	Username    string      `json:"username"`
-	Password    string      `json:"password"`
-	TLSCA       string      `json:"tls_ca"`
-	TLSCert     string      `json:"tls_cert"`
-	TLSKey      string      `json:"tls_key"`
-	TLSConfig   *tls.Config `json:"-"`
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	JWT         string `json:"jwt"`
+	Seed        string `json:"seed"`
+	Credentials string `json:"credential"`
+	Nkey        string `json:"nkey"`
+	Token       string `json:"token"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	TLSCA       string `json:"tls_ca"`
+	TLSCert     string `json:"tls_cert"`
+	TLSKey      string `json:"tls_key"`
 }
 
 func (c *natsContext) copy() *natsContext {
@@ -35,7 +33,6 @@ func (c *natsContext) copy() *natsContext {
 		return nil
 	}
 	cp := *c
-	cp.TLSConfig = c.TLSConfig.Clone()
 	return &cp
 }
 
@@ -78,11 +75,6 @@ func (c *natsContext) hash() (string, error) {
 			return "", fmt.Errorf("error opening key file %s: %v", c.TLSKey, err)
 		}
 		b = append(b, fb...)
-	}
-	if c.TLSConfig != nil {
-		for _, cert := range c.TLSConfig.Certificates {
-			b = append(b, bytes.Join(cert.Certificate, []byte(","))...)
-		}
 	}
 	hash := sha256.New()
 	hash.Write(b)
@@ -167,9 +159,6 @@ func (cp *natsConnPool) Get(cfg *natsContext) (*pooledNatsConn, error) {
 	if cfg.TLSKey == "" {
 		cfg.TLSKey = cp.natsDefaults.TLSKey
 	}
-	if cfg.TLSConfig == nil {
-		cfg.TLSConfig = cp.natsDefaults.TLSConfig
-	}
 
 	// get hash
 	key, err := cfg.hash()
@@ -245,13 +234,6 @@ func (cp *natsConnPool) getPooledConn(key string, cfg *natsContext) (*pooledNats
 
 		if cfg.TLSCA != "" {
 			opts = append(opts, nats.RootCAs(cfg.TLSCA))
-		}
-
-		if cfg.TLSConfig != nil {
-			if cfg.TLSCert != "" || cfg.TLSKey != "" || cfg.TLSCA != "" {
-				return nil, fmt.Errorf("both TLS certificate file and tls.Config cannot be provided")
-			}
-			opts = append(opts, nats.Secure(cfg.TLSConfig))
 		}
 
 		if cfg.TLSCert != "" && cfg.TLSKey != "" {

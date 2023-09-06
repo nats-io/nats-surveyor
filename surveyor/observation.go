@@ -14,7 +14,6 @@
 package surveyor
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -140,10 +139,6 @@ type ServiceObsConfig struct {
 	TLSCA       string `json:"tls_ca"`
 	TLSCert     string `json:"tls_cert"`
 	TLSKey      string `json:"tls_key"`
-
-	// tls.Config cannot be provided in observation config file,
-	// only programmatically
-	TLSConfig *tls.Config `json:"-"`
 }
 
 type ServiceObservationExternalAccountConfig struct {
@@ -204,7 +199,6 @@ func (o *ServiceObsConfig) copy() *ServiceObsConfig {
 		return nil
 	}
 	cp := *o
-	cp.TLSConfig = o.TLSConfig.Clone()
 	return &cp
 }
 
@@ -267,7 +261,6 @@ func (o *serviceObsListener) natsContext() *natsContext {
 		TLSCA:       o.config.TLSCA,
 		TLSCert:     o.config.TLSCert,
 		TLSKey:      o.config.TLSKey,
-		TLSConfig:   o.config.TLSConfig,
 	}
 
 	// legacy Credentials field
