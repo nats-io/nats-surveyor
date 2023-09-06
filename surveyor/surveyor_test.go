@@ -45,7 +45,7 @@ func httpGetSecure(url string) (*http.Response, error) {
 		return nil, err
 	}
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	httpClient := &http.Client{Transport: transport, Timeout: 30 * time.Second}
+	httpClient := &http.Client{Transport: transport, Timeout: 3 * time.Second}
 	return httpClient.Get(url)
 }
 
@@ -70,7 +70,7 @@ func parseTLSConfig(certFile, keyFile, caFile string) (*tls.Config, error) {
 }
 
 func httpGet(url string) (*http.Response, error) {
-	httpClient := &http.Client{Timeout: 30 * time.Second}
+	httpClient := &http.Client{Timeout: 3 * time.Second}
 	return httpClient.Get(url)
 }
 

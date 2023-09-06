@@ -497,7 +497,9 @@ func (s *Surveyor) Stop() {
 	}
 
 	if s.httpServer != nil {
-		_ = s.httpServer.Shutdown(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = s.httpServer.Shutdown(ctx)
 		s.httpServer = nil
 	}
 
