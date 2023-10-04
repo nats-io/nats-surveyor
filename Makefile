@@ -1,6 +1,6 @@
 drepo ?= natsio
 
-.PHONY: dockerx
+.PHONY: dockerx test
 dockerx:
 ifneq ($(ver),)
 	# Ensure 'docker buildx ls' shows correct platforms.
@@ -13,3 +13,6 @@ else
 	# make dockerx ver=1.2.3
 	exit 1
 endif
+
+test:
+	go test -v -race -p 1 ./...
