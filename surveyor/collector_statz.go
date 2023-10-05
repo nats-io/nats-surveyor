@@ -637,7 +637,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDe
 	return jsAccInfos
 }
 
-func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*VNextAccountStat, error) {
+func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.AccountStat, error) {
 	req := &server.AccountStatzOptions{
 		IncludeUnused: true,
 	}
@@ -645,7 +645,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*VNextAccountSt
 	if err != nil {
 		return nil, err
 	}
-	res := make([]*VNextAccountStatz, 0)
+	res := make([]*server.AccountStatz, 0)
 	const subj = "$SYS.REQ.ACCOUNT.PING.STATZ"
 
 	msgs, err := requestMany(nc, sc, subj, reqJSON)
@@ -655,7 +655,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*VNextAccountSt
 
 	for _, msg := range msgs {
 		var r server.ServerAPIResponse
-		var d VNextAccountStatz
+		var d server.AccountStatz
 		r.Data = &d
 		if err := json.Unmarshal(msg.Data, &r); err != nil {
 			return nil, err
@@ -678,7 +678,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*VNextAccountSt
 		}
 	}
 
-	accStatz := make(map[string]*VNextAccountStat)
+	accStatz := make(map[string]*server.AccountStat)
 	for _, statz := range res {
 		for _, acc := range statz.Accounts {
 			accInfo, ok := accStatz[acc.Account]
@@ -720,7 +720,7 @@ Outer:
 	}
 }
 
-func mergeAccountStats(from, to *VNextAccountStat) {
+func mergeAccountStats(from, to *server.AccountStat) {
 	to.Conns += from.Conns
 	to.LeafNodes += from.LeafNodes
 	to.TotalConns += from.TotalConns

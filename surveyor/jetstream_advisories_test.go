@@ -194,7 +194,7 @@ nats_jetstream_delivery_exceeded_count{account="global",consumer="OUT",stream="S
 	expected = `
 # HELP nats_jetstream_api_audit JetStream API access audit events
 # TYPE nats_jetstream_api_audit counter
-nats_jetstream_api_audit{account="global",subject="$JS.API.CONSUMER.DURABLE.CREATE"} 1
+nats_jetstream_api_audit{account="global",subject="$JS.API.CONSUMER.CREATE"} 1
 nats_jetstream_api_audit{account="global",subject="$JS.API.STREAM.CREATE"} 1
 nats_jetstream_api_audit{account="global",subject="$JS.API.STREAM.INFO"} 1
 `
@@ -467,7 +467,7 @@ nats_jetstream_delivery_exceeded_count{account="a",consumer="OUT",stream="Stream
 			expected = `
 # HELP nats_jetstream_api_audit JetStream API access audit events
 # TYPE nats_jetstream_api_audit counter
-nats_jetstream_api_audit{account="a",subject="$JS.API.CONSUMER.DURABLE.CREATE"} 1
+nats_jetstream_api_audit{account="a",subject="$JS.API.CONSUMER.CREATE"} 1
 nats_jetstream_api_audit{account="a",subject="$JS.API.STREAM.CREATE"} 1
 nats_jetstream_api_audit{account="b",subject="$JS.API.STREAM.CREATE"} 1
 nats_jetstream_api_audit{account="a",subject="$JS.API.STREAM.INFO"} 1

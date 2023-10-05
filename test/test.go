@@ -243,6 +243,9 @@ func (sc *SuperCluster) Shutdown() {
 	for _, s := range sc.Servers {
 		s.Shutdown()
 	}
+	for _, s := range sc.Servers {
+		s.WaitForShutdown()
+	}
 }
 
 // ConnectAndVerify connects to a server a verifies it is
