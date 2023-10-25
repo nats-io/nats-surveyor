@@ -250,6 +250,8 @@ func TestSurveyor_Account(t *testing.T) {
 		"nats_core_account_msgs_recv",
 		"nats_core_account_msgs_sent",
 		"nats_core_account_sub_count",
+		`nats_core_account_jetstream_tiered_storage_used{account="JS",tier="r1"}`,
+		`nats_core_account_jetstream_tiered_storage_used{account="JS",tier="r3"}`,
 	}
 	for _, m := range want {
 		if !strings.Contains(output, m) {
