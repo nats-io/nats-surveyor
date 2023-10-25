@@ -577,9 +577,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 			})
 
 			// computed tiered storage usage
-			// todo: figure out if we need to multiply size * replicas here
-			// size := float64(stream.State.Bytes * uint64(stream.Config.Replicas))
-			size := float64(stream.State.Bytes)
+			size := float64(stream.State.Bytes * uint64(stream.Config.Replicas))
 			if stream.Config.Storage == server.MemoryStorage {
 				if _, ok = sts.jetstreamTieredMemoryUsed[stream.Config.Replicas]; ok {
 					sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] += size
