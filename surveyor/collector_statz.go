@@ -1019,10 +1019,10 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			ch <- newGaugeMetric(sc.descs.accJetstreamMemoryUsed, stat.jetstreamMemoryUsed, id)
 			ch <- newGaugeMetric(sc.descs.accJetstreamStorageUsed, stat.jetstreamStorageUsed, id)
 			for tier, size := range stat.jetstreamTieredMemoryUsed {
-				ch <- newGaugeMetric(sc.descs.accJetstreamTieredMemoryUsed, size, append(id, fmt.Sprintf("r%d", tier)))
+				ch <- newGaugeMetric(sc.descs.accJetstreamTieredMemoryUsed, size, append(id, fmt.Sprintf("R%d", tier)))
 			}
 			for tier, size := range stat.jetstreamTieredStorageUsed {
-				ch <- newGaugeMetric(sc.descs.accJetstreamTieredStorageUsed, size, append(id, fmt.Sprintf("r%d", tier)))
+				ch <- newGaugeMetric(sc.descs.accJetstreamTieredStorageUsed, size, append(id, fmt.Sprintf("R%d", tier)))
 			}
 			ch <- newGaugeMetric(sc.descs.accJetstreamMemoryReserved, stat.jetstreamMemoryReserved, id)
 			ch <- newGaugeMetric(sc.descs.accJetstreamStorageReserved, stat.jetstreamStorageReserved, id)
