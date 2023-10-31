@@ -89,24 +89,26 @@ type statzDescs struct {
 	JetstreamClusterRaftGroupReplicaOffline *prometheus.Desc
 
 	// Account scope metrics
-	accCount                      *prometheus.Desc
-	accConnCount                  *prometheus.Desc
-	accLeafCount                  *prometheus.Desc
-	accSubCount                   *prometheus.Desc
-	accBytesSent                  *prometheus.Desc
-	accBytesRecv                  *prometheus.Desc
-	accMsgsSent                   *prometheus.Desc
-	accMsgsRecv                   *prometheus.Desc
-	accJetstreamEnabled           *prometheus.Desc
-	accJetstreamMemoryUsed        *prometheus.Desc
-	accJetstreamStorageUsed       *prometheus.Desc
-	accJetstreamTieredMemoryUsed  *prometheus.Desc
-	accJetstreamTieredStorageUsed *prometheus.Desc
-	accJetstreamMemoryReserved    *prometheus.Desc
-	accJetstreamStorageReserved   *prometheus.Desc
-	accJetstreamStreamCount       *prometheus.Desc
-	accJetstreamConsumerCount     *prometheus.Desc
-	accJetstreamReplicaCount      *prometheus.Desc
+	accCount                          *prometheus.Desc
+	accConnCount                      *prometheus.Desc
+	accLeafCount                      *prometheus.Desc
+	accSubCount                       *prometheus.Desc
+	accBytesSent                      *prometheus.Desc
+	accBytesRecv                      *prometheus.Desc
+	accMsgsSent                       *prometheus.Desc
+	accMsgsRecv                       *prometheus.Desc
+	accJetstreamEnabled               *prometheus.Desc
+	accJetstreamMemoryUsed            *prometheus.Desc
+	accJetstreamStorageUsed           *prometheus.Desc
+	accJetstreamMemoryReserved        *prometheus.Desc
+	accJetstreamStorageReserved       *prometheus.Desc
+	accJetstreamTieredMemoryUsed      *prometheus.Desc
+	accJetstreamTieredStorageUsed     *prometheus.Desc
+	accJetstreamTieredMemoryReserved  *prometheus.Desc
+	accJetstreamTieredStorageReserved *prometheus.Desc
+	accJetstreamStreamCount           *prometheus.Desc
+	accJetstreamConsumerCount         *prometheus.Desc
+	accJetstreamReplicaCount          *prometheus.Desc
 }
 
 // StatzCollector collects statz from a server deployment
@@ -159,15 +161,17 @@ type accountStats struct {
 	msgsSent  float64
 	msgsRecv  float64
 
-	jetstreamEnabled           float64
-	jetstreamMemoryUsed        float64
-	jetstreamStorageUsed       float64
-	jetstreamTieredMemoryUsed  map[int]float64
-	jetstreamTieredStorageUsed map[int]float64
-	jetstreamMemoryReserved    float64
-	jetstreamStorageReserved   float64
-	jetstreamStreamCount       float64
-	jetstreamStreams           []streamAccountStats
+	jetstreamEnabled               float64
+	jetstreamMemoryUsed            float64
+	jetstreamStorageUsed           float64
+	jetstreamMemoryReserved        float64
+	jetstreamStorageReserved       float64
+	jetstreamTieredMemoryUsed      map[int]float64
+	jetstreamTieredStorageUsed     map[int]float64
+	jetstreamTieredMemoryReserved  map[int]float64
+	jetstreamTieredStorageReserved map[int]float64
+	jetstreamStreamCount           float64
+	jetstreamStreams               []streamAccountStats
 }
 
 type streamAccountStats struct {
@@ -310,10 +314,12 @@ func (sc *StatzCollector) buildDescs() {
 		sc.descs.accJetstreamEnabled = newPromDesc("account_jetstream_enabled", "Whether JetStream is enabled or not for this account", accLabel)
 		sc.descs.accJetstreamMemoryUsed = newPromDesc("account_jetstream_memory_used", "The number of bytes used by JetStream memory", accLabel)
 		sc.descs.accJetstreamStorageUsed = newPromDesc("account_jetstream_storage_used", "The number of bytes used by JetStream storage", accLabel)
-		sc.descs.accJetstreamTieredMemoryUsed = newPromDesc("account_jetstream_tiered_memory_used", "The number of bytes used by JetStream memory tier", append(accLabel, "tier"))
-		sc.descs.accJetstreamTieredStorageUsed = newPromDesc("account_jetstream_tiered_storage_used", "The number of bytes used by JetStream storage tier", append(accLabel, "tier"))
 		sc.descs.accJetstreamMemoryReserved = newPromDesc("account_jetstream_memory_reserved", "The number of bytes reserved by JetStream memory", accLabel)
 		sc.descs.accJetstreamStorageReserved = newPromDesc("account_jetstream_storage_reserved", "The number of bytes reserved by JetStream storage", accLabel)
+		sc.descs.accJetstreamTieredMemoryUsed = newPromDesc("account_jetstream_tiered_memory_used", "The number of bytes used by JetStream memory tier", append(accLabel, "tier"))
+		sc.descs.accJetstreamTieredStorageUsed = newPromDesc("account_jetstream_tiered_storage_used", "The number of bytes used by JetStream storage tier", append(accLabel, "tier"))
+		sc.descs.accJetstreamTieredMemoryReserved = newPromDesc("account_jetstream_tiered_memory_reserved", "The number of bytes reserved by JetStream memory tier", append(accLabel, "tier"))
+		sc.descs.accJetstreamTieredStorageReserved = newPromDesc("account_jetstream_tiered_storage_reserved", "The number of bytes reserved by JetStream storage tier", append(accLabel, "tier"))
 		sc.descs.accJetstreamStreamCount = newPromDesc("account_jetstream_stream_count", "The number of streams in this account", accLabel)
 		sc.descs.accJetstreamConsumerCount = newPromDesc("account_jetstream_consumer_count", "The number of consumers per stream for this account", append(accLabel, "stream"))
 		sc.descs.accJetstreamReplicaCount = newPromDesc("account_jetstream_replica_count", "The number of replicas per stream for this account", append(accLabel, "stream"))
@@ -563,10 +569,12 @@ func (sc *StatzCollector) pollAccountInfo() error {
 		sts.jetstreamEnabled = 1.0
 		sts.jetstreamMemoryUsed = float64(jsInfo.Memory)
 		sts.jetstreamStorageUsed = float64(jsInfo.Store)
-		sts.jetstreamTieredMemoryUsed = make(map[int]float64)
-		sts.jetstreamTieredStorageUsed = make(map[int]float64)
 		sts.jetstreamMemoryReserved = float64(jsInfo.ReservedMemory)
 		sts.jetstreamStorageReserved = float64(jsInfo.ReservedStore)
+		sts.jetstreamTieredMemoryUsed = make(map[int]float64)
+		sts.jetstreamTieredStorageUsed = make(map[int]float64)
+		sts.jetstreamTieredMemoryReserved = make(map[int]float64)
+		sts.jetstreamTieredStorageReserved = make(map[int]float64)
 
 		sts.jetstreamStreamCount = float64(len(jsInfo.Streams))
 		for _, stream := range jsInfo.Streams {
@@ -577,18 +585,26 @@ func (sc *StatzCollector) pollAccountInfo() error {
 			})
 
 			// computed tiered storage usage
-			size := float64(stream.State.Bytes * uint64(stream.Config.Replicas))
+			used := float64(stream.State.Bytes * uint64(stream.Config.Replicas))
+			var reserved float64
+			if stream.Config.MaxBytes > 0 {
+				reserved = float64(stream.Config.MaxBytes * int64(stream.Config.Replicas))
+			}
 			if stream.Config.Storage == server.MemoryStorage {
 				if _, ok = sts.jetstreamTieredMemoryUsed[stream.Config.Replicas]; ok {
-					sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] += size
+					sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] += used
+					sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] += reserved
 				} else {
-					sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] = size
+					sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] = used
+					sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] = reserved
 				}
 			} else if stream.Config.Storage == server.FileStorage {
 				if _, ok = sts.jetstreamTieredStorageUsed[stream.Config.Replicas]; ok {
-					sts.jetstreamTieredStorageUsed[stream.Config.Replicas] += size
+					sts.jetstreamTieredStorageUsed[stream.Config.Replicas] += used
+					sts.jetstreamTieredStorageReserved[stream.Config.Replicas] += reserved
 				} else {
-					sts.jetstreamTieredStorageUsed[stream.Config.Replicas] = size
+					sts.jetstreamTieredStorageUsed[stream.Config.Replicas] = used
+					sts.jetstreamTieredStorageReserved[stream.Config.Replicas] = reserved
 				}
 			}
 		}
@@ -1016,14 +1032,20 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			ch <- newGaugeMetric(sc.descs.accJetstreamEnabled, stat.jetstreamEnabled, id)
 			ch <- newGaugeMetric(sc.descs.accJetstreamMemoryUsed, stat.jetstreamMemoryUsed, id)
 			ch <- newGaugeMetric(sc.descs.accJetstreamStorageUsed, stat.jetstreamStorageUsed, id)
+			ch <- newGaugeMetric(sc.descs.accJetstreamMemoryReserved, stat.jetstreamMemoryReserved, id)
+			ch <- newGaugeMetric(sc.descs.accJetstreamStorageReserved, stat.jetstreamStorageReserved, id)
 			for tier, size := range stat.jetstreamTieredMemoryUsed {
 				ch <- newGaugeMetric(sc.descs.accJetstreamTieredMemoryUsed, size, append(id, fmt.Sprintf("R%d", tier)))
 			}
 			for tier, size := range stat.jetstreamTieredStorageUsed {
 				ch <- newGaugeMetric(sc.descs.accJetstreamTieredStorageUsed, size, append(id, fmt.Sprintf("R%d", tier)))
 			}
-			ch <- newGaugeMetric(sc.descs.accJetstreamMemoryReserved, stat.jetstreamMemoryReserved, id)
-			ch <- newGaugeMetric(sc.descs.accJetstreamStorageReserved, stat.jetstreamStorageReserved, id)
+			for tier, size := range stat.jetstreamTieredMemoryReserved {
+				ch <- newGaugeMetric(sc.descs.accJetstreamTieredMemoryReserved, size, append(id, fmt.Sprintf("R%d", tier)))
+			}
+			for tier, size := range stat.jetstreamTieredStorageReserved {
+				ch <- newGaugeMetric(sc.descs.accJetstreamTieredStorageReserved, size, append(id, fmt.Sprintf("R%d", tier)))
+			}
 
 			ch <- newGaugeMetric(sc.descs.accJetstreamStreamCount, stat.jetstreamStreamCount, id)
 			for _, streamStat := range stat.jetstreamStreams {

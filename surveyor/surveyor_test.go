@@ -250,8 +250,6 @@ func TestSurveyor_Account(t *testing.T) {
 		"nats_core_account_msgs_recv",
 		"nats_core_account_msgs_sent",
 		"nats_core_account_sub_count",
-		`nats_core_account_jetstream_tiered_storage_used{account="JS",tier="r1"}`,
-		`nats_core_account_jetstream_tiered_storage_used{account="JS",tier="r3"}`,
 	}
 	for _, m := range want {
 		if !strings.Contains(output, m) {
@@ -331,6 +329,10 @@ func TestSurveyor_AccountJetStreamAssets(t *testing.T) {
 		`nats_core_account_jetstream_consumer_count{account="JS",stream="repl1"} 5`,
 		`nats_core_account_jetstream_consumer_count{account="JS",stream="repl2"} 5`,
 		`nats_core_account_jetstream_consumer_count{account="JS",stream="single1"} 5`,
+		`nats_core_account_jetstream_tiered_storage_used{account="JS",tier="R1"}`,
+		`nats_core_account_jetstream_tiered_storage_used{account="JS",tier="R3"}`,
+		`nats_core_account_jetstream_tiered_storage_reserved{account="JS",tier="R1"}`,
+		`nats_core_account_jetstream_tiered_storage_reserved{account="JS",tier="R3"}`,
 	}
 	for _, m := range want {
 		if !strings.Contains(output, m) {
