@@ -32,6 +32,7 @@ import (
 type statzDescs struct {
 	Info             *prometheus.Desc
 	Start            *prometheus.Desc
+	Uptime           *prometheus.Desc
 	Mem              *prometheus.Desc
 	Cores            *prometheus.Desc
 	CPU              *prometheus.Desc
@@ -113,6 +114,7 @@ type StatzCollector struct {
 	nc                  *nats.Conn
 	logger              *logrus.Logger
 	start               time.Time
+	uptime              time.Duration
 	stats               []*server.ServerStatsMsg
 	statsChan           chan *server.ServerStatsMsg
 	accStats            []accountStats
@@ -226,6 +228,7 @@ func (sc *StatzCollector) buildDescs() {
 
 	sc.descs.Info = newPromDesc("info", "General Server information Summary gauge", sc.serverInfoLabels)
 	sc.descs.Start = newPromDesc("start_time", "Server start time gauge", sc.serverLabels)
+	sc.descs.Uptime = newPromDesc("uptime", "Server uptime gauge", sc.serverLabels)
 	sc.descs.Mem = newPromDesc("mem_bytes", "Server memory gauge", sc.serverLabels)
 	sc.descs.Cores = newPromDesc("core_count", "Machine cores gauge", sc.serverLabels)
 	sc.descs.CPU = newPromDesc("cpu_percentage", "Server cpu utilization gauge", sc.serverLabels)
@@ -415,6 +418,7 @@ func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 func (sc *StatzCollector) poll() error {
 	sc.Lock()
 	sc.start = time.Now()
+	sc.uptime = time.Duration(time.Since(sc.start).Seconds())
 	sc.polling = true
 	sc.pollkey = strconv.Itoa(int(sc.start.UnixNano()))
 	sc.stats = nil
@@ -739,6 +743,7 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- sc.natsUp
 	ch <- sc.descs.Info
 	ch <- sc.descs.Start
+	ch <- sc.descs.Uptime
 	ch <- sc.descs.Mem
 	ch <- sc.descs.Cores
 	ch <- sc.descs.CPU
@@ -874,6 +879,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 
 		labels := sc.serverLabelValues(sm)
 		ch <- newGaugeMetric(sc.descs.Start, float64(sm.Stats.Start.UnixNano()), labels)
+		ch <- newGaugeMetric(sc.descs.Uptime, time.Since(sm.Stats.Start).Seconds(), labels)
 		ch <- newGaugeMetric(sc.descs.Mem, float64(sm.Stats.Mem), labels)
 		ch <- newGaugeMetric(sc.descs.Cores, float64(sm.Stats.Cores), labels)
 		ch <- newGaugeMetric(sc.descs.CPU, sm.Stats.CPU, labels)
