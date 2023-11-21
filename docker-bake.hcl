@@ -20,7 +20,7 @@ variable image_base {
 }
 
 variable image_goreleaser {
-  default = "docker-image://goreleaser/goreleaser:v1.14.1"
+  default = "docker-image://goreleaser/goreleaser:v1.22.1"
 }
 
 ###################
