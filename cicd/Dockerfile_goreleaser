@@ -1,17 +1,43 @@
-#syntax=docker/dockerfile-upstream:1.4
-FROM --platform=$BUILDPLATFORM goreleaser
+#syntax=docker/dockerfile-upstream:1.6
+FROM --platform=$BUILDPLATFORM golang:1.21.4-bullseye
 
 ARG CI
 ARG GITHUB_TOKEN
+ARG GORELEASER_KEY
+ENV GORELEASER_KEY=$GORELEASER_KEY
 
 COPY --from=src . /go/src
 
+WORKDIR /go/src
+
 RUN <<EOT
   set -e
-  cd /go/src
-  FLAGS="--rm-dist"
-  if [[ -z ${GITHUB_TOKEN} ]]; then
-    if [[ ${CI} != "true" ]]; then FLAGS="${FLAGS} --skip-validate --single-target"; fi
+
+  echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' > /etc/apt/sources.list.d/goreleaser.list
+  apt-key adv --keyserver keyserver.ubuntu.com --recv-key C99B11DEB97541F0
+
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg > /usr/share/keyrings/githubcli-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list
+
+  GORELEASER_DEB="goreleaser"
+  if [ -n "${GORELEASER_KEY}" ]; then
+      GORELEASER_DEB="goreleaser-pro"
+  fi
+
+  apt-get update
+  apt-get install -y \
+    gh \
+    jq \
+    "${GORELEASER_DEB}"
+  rm -rf /var/lib/apt/lists/*
+EOT
+
+RUN <<EOT
+  set -e
+  FLAGS="--clean"
+
+  if [ -z ${GITHUB_TOKEN} ]; then
+    if [ ${CI} != "true" ]; then FLAGS="${FLAGS} --skip-validate --single-target"; fi
     goreleaser build ${FLAGS}
   else
     goreleaser release ${FLAGS}

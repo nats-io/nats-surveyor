@@ -15,14 +15,6 @@ variable CI {
   default = false
 }
 
-variable image_base {
-  default = "docker-image://alpine:3.17.1"
-}
-
-variable image_goreleaser {
-  default = "docker-image://goreleaser/goreleaser:v1.22.1"
-}
-
 ###################
 ### Functions
 ###################
@@ -58,7 +50,6 @@ group "default" {
 
 target "goreleaser" {
   contexts = {
-    goreleaser = image_goreleaser
     src = "."
   }
   args = {
@@ -70,9 +61,8 @@ target "goreleaser" {
 
 target "nats-surveyor" {
   contexts = {
-    base    = image_base
-    build   = "target:goreleaser"
-    assets  = "cicd/assets"
+    assets     = "cicd/assets"
+    goreleaser = "target:goreleaser"
   }
   args = {
     GO_APP = "nats-surveyor"
