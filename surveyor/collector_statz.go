@@ -26,6 +26,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/singleflight"
 )
 
 // statzDescs holds the metric descriptions
@@ -115,6 +116,7 @@ type statzDescs struct {
 // StatzCollector collects statz from a server deployment
 type StatzCollector struct {
 	sync.Mutex
+	flightGroup         singleflight.Group
 	nc                  *nats.Conn
 	logger              *logrus.Logger
 	start               time.Time
@@ -397,14 +399,6 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 	return sc
 }
 
-// Polling determines if the collector is in a polling cycle
-func (sc *StatzCollector) Polling() bool {
-	sc.Lock()
-	defer sc.Unlock()
-
-	return sc.polling
-}
-
 func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 	m := &server.ServerStatsMsg{}
 	if err := json.Unmarshal(msg.Data, m); err != nil {
@@ -416,7 +410,12 @@ func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 	isCurrent := strings.HasSuffix(msg.Subject, sc.pollkey)
 	rtt := time.Since(sc.start)
 	if sc.polling && isCurrent { //nolint
-		sc.statsChan <- m
+		// Avoid edge-case deadlock if message comes in after poll() receive loop completes
+		// but before lock is re-acquired
+		select {
+		case <-time.After(500 * time.Millisecond):
+		case sc.statsChan <- m:
+		}
 		sc.rtts[m.Server.ID] = rtt
 	} else if !isCurrent {
 		sc.logger.Infof("Late reply for server [%15s : %15s : %s]: %v", m.Server.Cluster, serverName(m), m.Server.ID, rtt)
@@ -868,198 +867,244 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 	sc.noReplies.Describe(ch)
 }
 
-func newGaugeMetric(desc *prometheus.Desc, value float64, labels []string) prometheus.Metric {
-	return prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, value, labels...)
+type metricSlice struct {
+	sync.Mutex
+	metrics []prometheus.Metric
 }
 
-func newCounterMetric(desc *prometheus.Desc, value float64, labels []string) prometheus.Metric {
-	return prometheus.MustNewConstMetric(desc, prometheus.CounterValue, value, labels...)
+func (ms *metricSlice) appendMetric(m prometheus.Metric) {
+	ms.Lock()
+	defer ms.Unlock()
+	ms.metrics = append(ms.metrics, m)
 }
 
-func (sc *StatzCollector) newNatsUpGaugeMetric(value bool) prometheus.Metric {
-	var fval float64
-	if value {
-		fval = 1
-	}
-	return prometheus.MustNewConstMetric(sc.natsUp, prometheus.GaugeValue, fval)
+func (ms *metricSlice) newGaugeMetric(desc *prometheus.Desc, value float64, labels []string) {
+	m := prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, value, labels...)
+
+	ms.appendMetric(m)
+}
+
+func (ms *metricSlice) newCounterMetric(desc *prometheus.Desc, value float64, labels []string) {
+	m := prometheus.MustNewConstMetric(desc, prometheus.CounterValue, value, labels...)
+
+	ms.appendMetric(m)
 }
 
 // Collect gathers the streaming server serverz metrics.
 func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
-	timer := prometheus.NewTimer(sc.pollTime.WithLabelValues())
-	defer func() {
-		timer.ObserveDuration()
-		sc.pollTime.Collect(ch)
-		sc.pollErrCnt.Collect(ch)
-		sc.surveyedCnt.Collect(ch)
-		sc.expectedCnt.Collect(ch)
-		sc.lateReplies.Collect(ch)
-		sc.noReplies.Collect(ch)
-	}()
+	// Run in flightgroup to allow simultaneous query
+	result, err, _ := sc.flightGroup.Do("collect", func() (interface{}, error) {
+		metrics := &metricSlice{
+			metrics: make([]prometheus.Metric, 0),
+			Mutex:   sync.Mutex{},
+		}
 
-	// poll the servers
-	if err := sc.poll(); err != nil {
-		sc.logger.Warnf("Error polling NATS server: %v", err)
-		sc.pollErrCnt.WithLabelValues().Inc()
-		ch <- sc.newNatsUpGaugeMetric(false)
+		timer := prometheus.NewTimer(sc.pollTime.WithLabelValues())
+		bufferChan := make(chan prometheus.Metric)
+
+		// We want to collect these before we exit the flight group
+		// but they should still be sent to every caller
+		go func() {
+			for m := range bufferChan {
+				metrics.appendMetric(m)
+			}
+		}()
+		defer close(bufferChan)
+
+		defer func() {
+			timer.ObserveDuration()
+			sc.pollTime.Collect(bufferChan)
+			sc.pollErrCnt.Collect(bufferChan)
+			sc.surveyedCnt.Collect(bufferChan)
+			sc.expectedCnt.Collect(bufferChan)
+			sc.lateReplies.Collect(bufferChan)
+			sc.noReplies.Collect(bufferChan)
+		}()
+
+		// poll the servers
+		if err := sc.poll(); err != nil {
+			sc.logger.Warnf("Error polling NATS server: %v", err)
+			sc.pollErrCnt.WithLabelValues().Inc()
+			metrics.newCounterMetric(sc.natsUp, 1, nil)
+			return metrics.metrics, nil
+		}
+
+		// lock the stats
+		sc.Lock()
+		defer sc.Unlock()
+
+		metrics.newCounterMetric(sc.natsUp, 0, nil)
+		sc.surveyedCnt.WithLabelValues().Set(0)
+
+		for _, sm := range sc.stats {
+			sc.surveyedCnt.WithLabelValues().Inc()
+
+			metrics.newGaugeMetric(sc.descs.Info, 1, sc.serverInfoLabelValues(sm))
+
+			labels := sc.serverLabelValues(sm)
+			metrics.newGaugeMetric(sc.descs.Start, float64(sm.Stats.Start.UnixNano()), labels)
+			metrics.newGaugeMetric(sc.descs.Uptime, time.Since(sm.Stats.Start).Seconds(), labels)
+			metrics.newGaugeMetric(sc.descs.Mem, float64(sm.Stats.Mem), labels)
+			metrics.newGaugeMetric(sc.descs.Cores, float64(sm.Stats.Cores), labels)
+			metrics.newGaugeMetric(sc.descs.CPU, sm.Stats.CPU, labels)
+			metrics.newGaugeMetric(sc.descs.Connections, float64(sm.Stats.Connections), labels)
+			metrics.newGaugeMetric(sc.descs.TotalConnections, float64(sm.Stats.TotalConnections), labels)
+			metrics.newGaugeMetric(sc.descs.ActiveAccounts, float64(sm.Stats.ActiveAccounts), labels)
+			metrics.newGaugeMetric(sc.descs.NumSubs, float64(sm.Stats.NumSubs), labels)
+			metrics.newGaugeMetric(sc.descs.SentMsgs, float64(sm.Stats.Sent.Msgs), labels)
+			metrics.newGaugeMetric(sc.descs.SentBytes, float64(sm.Stats.Sent.Bytes), labels)
+			metrics.newGaugeMetric(sc.descs.RecvMsgs, float64(sm.Stats.Received.Msgs), labels)
+			metrics.newGaugeMetric(sc.descs.RecvBytes, float64(sm.Stats.Received.Bytes), labels)
+			metrics.newGaugeMetric(sc.descs.SlowConsumers, float64(sm.Stats.SlowConsumers), labels)
+			metrics.newGaugeMetric(sc.descs.RTT, float64(sc.rtts[sm.Server.ID]), labels)
+			metrics.newGaugeMetric(sc.descs.Routes, float64(len(sm.Stats.Routes)), labels)
+			metrics.newGaugeMetric(sc.descs.Gateways, float64(len(sm.Stats.Gateways)), labels)
+
+			metrics.newGaugeMetric(sc.descs.JetstreamInfo, float64(1), jetstreamInfoLabelValues(sm))
+			// Any / All Meta-data in sc.descs.JetstreamInfo can be xrefed by the server_id.
+			// labels define the "uniqueness" of a time series, any associations beyond that should be left to prometheus
+			lblServerID := []string{sm.Server.ID, sm.Server.Name, sm.Server.Cluster}
+			if sm.Stats.JetStream == nil {
+				metrics.newGaugeMetric(sc.descs.JetstreamEnabled, float64(0), lblServerID)
+			} else {
+				metrics.newGaugeMetric(sc.descs.JetstreamEnabled, float64(1), lblServerID)
+				if sm.Stats.JetStream.Config != nil {
+					metrics.newGaugeMetric(sc.descs.JetstreamFilestoreSizeBytes, float64(sm.Stats.JetStream.Config.MaxStore), lblServerID)
+					metrics.newGaugeMetric(sc.descs.JetstreamMemstoreSizeBytes, float64(sm.Stats.JetStream.Config.MaxMemory), lblServerID)
+					// StoreDir  At present, '$SYS.REQ.SERVER.PING', server.sendStatsz() squashes StoreDir to "".
+					// Domain is also at 'sm.Server.Domain'. Unknown if there's a semantic difference at present. See jsDomainLabelValue().
+				}
+				if sm.Stats.JetStream.Stats != nil {
+					metrics.newGaugeMetric(sc.descs.JetstreamFilestoreUsedBytes, float64(sm.Stats.JetStream.Stats.Store), lblServerID)
+					metrics.newGaugeMetric(sc.descs.JetstreamFilestoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedStore), lblServerID)
+					metrics.newGaugeMetric(sc.descs.JetstreamMemstoreUsedBytes, float64(sm.Stats.JetStream.Stats.Memory), lblServerID)
+					metrics.newGaugeMetric(sc.descs.JetstreamMemstoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedMemory), lblServerID)
+					metrics.newGaugeMetric(sc.descs.JetstreamAccounts, float64(sm.Stats.JetStream.Stats.Accounts), lblServerID)
+					metrics.newGaugeMetric(sc.descs.JetstreamHAAssets, float64(sm.Stats.JetStream.Stats.HAAssets), lblServerID)
+					// NIT: Technically these should be Counters, not Gauges.
+					// At present, Total does not include Errors. Keeping them separate
+					metrics.newGaugeMetric(sc.descs.JetstreamAPIRequests, float64(sm.Stats.JetStream.Stats.API.Total), lblServerID)
+					metrics.newGaugeMetric(sc.descs.JetstreamAPIErrors, float64(sm.Stats.JetStream.Stats.API.Errors), lblServerID)
+				}
+
+				if sm.Stats.JetStream.Meta == nil {
+					metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(0), []string{"", "", sm.Server.ID, serverName(sm), "", ""})
+				} else {
+					jsRaftGroupInfoLabelValues := []string{jsDomainLabelValue(sm), "_meta_", sm.Server.ID, serverName(sm), sm.Stats.JetStream.Meta.Name, sm.Stats.JetStream.Meta.Leader}
+					metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(1), jsRaftGroupInfoLabelValues)
+
+					jsRaftGroupLabelValues := []string{sm.Server.ID, serverName(sm), sm.Server.Cluster}
+					// FIXME: add labels needed or remove...
+
+					metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupSize, float64(sm.Stats.JetStream.Meta.Size), jsRaftGroupLabelValues)
+
+					// Could provide false positive if two server have the same server_name in the same or different clusters in the super-cluster...
+					// At present, in this statsz only a peer that thinks it's a Leader will have `sm.Stats.JetStream.Meta.Replicas != nil`.
+					if sm.Stats.JetStream.Meta.Leader != "" && sm.Server.Name != "" && sm.Server.Name == sm.Stats.JetStream.Meta.Leader {
+						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupLeader, float64(1), jsRaftGroupLabelValues)
+					} else {
+						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupLeader, float64(0), jsRaftGroupLabelValues)
+					}
+					metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicas, float64(len(sm.Stats.JetStream.Meta.Replicas)), jsRaftGroupLabelValues)
+					for _, jsr := range sm.Stats.JetStream.Meta.Replicas {
+						if jsr == nil {
+							continue
+						}
+						jsClusterReplicaLabelValues := []string{sm.Server.ID, serverName(sm), jsr.Name, sm.Server.Cluster}
+						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaActive, float64(jsr.Active), jsClusterReplicaLabelValues)
+						if jsr.Current {
+							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(1), jsClusterReplicaLabelValues)
+						} else {
+							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(0), jsClusterReplicaLabelValues)
+						}
+						if jsr.Offline {
+							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(1), jsClusterReplicaLabelValues)
+						} else {
+							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(0), jsClusterReplicaLabelValues)
+						}
+					}
+				}
+			}
+			for _, rs := range sm.Stats.Routes {
+				labels = sc.routeLabelValues(sm, rs)
+				metrics.newGaugeMetric(sc.descs.RouteSentMsgs, float64(rs.Sent.Msgs), labels)
+				metrics.newGaugeMetric(sc.descs.RouteSentBytes, float64(rs.Sent.Bytes), labels)
+				metrics.newGaugeMetric(sc.descs.RouteRecvMsgs, float64(rs.Received.Msgs), labels)
+				metrics.newGaugeMetric(sc.descs.RouteRecvBytes, float64(rs.Received.Bytes), labels)
+				metrics.newGaugeMetric(sc.descs.RoutePending, float64(rs.Pending), labels)
+			}
+
+			for _, gw := range sm.Stats.Gateways {
+				labels = sc.gatewayLabelValues(sm, gw)
+				metrics.newGaugeMetric(sc.descs.GatewaySentMsgs, float64(gw.Sent.Msgs), labels)
+				metrics.newGaugeMetric(sc.descs.GatewaySentBytes, float64(gw.Sent.Bytes), labels)
+				metrics.newGaugeMetric(sc.descs.GatewayRecvMsgs, float64(gw.Received.Msgs), labels)
+				metrics.newGaugeMetric(sc.descs.GatewayRecvBytes, float64(gw.Received.Bytes), labels)
+				metrics.newGaugeMetric(sc.descs.GatewayNumInbound, float64(gw.NumInbound), labels)
+			}
+		}
+
+		// Account scope metrics
+		if sc.collectAccounts {
+			metrics.newGaugeMetric(sc.descs.accCount, float64(len(sc.accStats)), nil)
+			for _, stat := range sc.accStats {
+				id := []string{stat.accountID}
+
+				metrics.newGaugeMetric(sc.descs.accConnCount, stat.connCount, id)
+				metrics.newGaugeMetric(sc.descs.accLeafCount, stat.leafCount, id)
+				metrics.newGaugeMetric(sc.descs.accSubCount, stat.subCount, id)
+
+				metrics.newCounterMetric(sc.descs.accBytesSent, stat.bytesSent, id)
+				metrics.newCounterMetric(sc.descs.accBytesRecv, stat.bytesRecv, id)
+				metrics.newCounterMetric(sc.descs.accMsgsSent, stat.msgsSent, id)
+				metrics.newCounterMetric(sc.descs.accMsgsRecv, stat.msgsRecv, id)
+
+				metrics.newGaugeMetric(sc.descs.accJetstreamEnabled, stat.jetstreamEnabled, id)
+				metrics.newGaugeMetric(sc.descs.accJetstreamMemoryUsed, stat.jetstreamMemoryUsed, id)
+				metrics.newGaugeMetric(sc.descs.accJetstreamStorageUsed, stat.jetstreamStorageUsed, id)
+				metrics.newGaugeMetric(sc.descs.accJetstreamMemoryReserved, stat.jetstreamMemoryReserved, id)
+				metrics.newGaugeMetric(sc.descs.accJetstreamStorageReserved, stat.jetstreamStorageReserved, id)
+				for tier, size := range stat.jetstreamTieredMemoryUsed {
+					metrics.newGaugeMetric(sc.descs.accJetstreamTieredMemoryUsed, size, append(id, fmt.Sprintf("R%d", tier)))
+				}
+				for tier, size := range stat.jetstreamTieredStorageUsed {
+					metrics.newGaugeMetric(sc.descs.accJetstreamTieredStorageUsed, size, append(id, fmt.Sprintf("R%d", tier)))
+				}
+				for tier, size := range stat.jetstreamTieredMemoryReserved {
+					metrics.newGaugeMetric(sc.descs.accJetstreamTieredMemoryReserved, size, append(id, fmt.Sprintf("R%d", tier)))
+				}
+				for tier, size := range stat.jetstreamTieredStorageReserved {
+					metrics.newGaugeMetric(sc.descs.accJetstreamTieredStorageReserved, size, append(id, fmt.Sprintf("R%d", tier)))
+				}
+
+				metrics.newGaugeMetric(sc.descs.accJetstreamStreamCount, stat.jetstreamStreamCount, id)
+				for _, streamStat := range stat.jetstreamStreams {
+					metrics.newGaugeMetric(sc.descs.accJetstreamConsumerCount, streamStat.consumerCount, append(id, streamStat.streamName))
+					metrics.newGaugeMetric(sc.descs.accJetstreamReplicaCount, streamStat.replicaCount, append(id, streamStat.streamName))
+				}
+			}
+		}
+
+		return metrics.metrics, nil
+	})
+	if err != nil {
+		sc.logger.Error(err)
 		return
 	}
 
-	// lock the stats
-	sc.Lock()
-	defer sc.Unlock()
-
-	ch <- sc.newNatsUpGaugeMetric(true)
-	sc.surveyedCnt.WithLabelValues().Set(0)
-
-	for _, sm := range sc.stats {
-		sc.surveyedCnt.WithLabelValues().Inc()
-
-		ch <- newGaugeMetric(sc.descs.Info, 1, sc.serverInfoLabelValues(sm))
-
-		labels := sc.serverLabelValues(sm)
-		ch <- newGaugeMetric(sc.descs.Start, float64(sm.Stats.Start.UnixNano()), labels)
-		ch <- newGaugeMetric(sc.descs.Uptime, time.Since(sm.Stats.Start).Seconds(), labels)
-		ch <- newGaugeMetric(sc.descs.Mem, float64(sm.Stats.Mem), labels)
-		ch <- newGaugeMetric(sc.descs.Cores, float64(sm.Stats.Cores), labels)
-		ch <- newGaugeMetric(sc.descs.CPU, sm.Stats.CPU, labels)
-		ch <- newGaugeMetric(sc.descs.Connections, float64(sm.Stats.Connections), labels)
-		ch <- newGaugeMetric(sc.descs.TotalConnections, float64(sm.Stats.TotalConnections), labels)
-		ch <- newGaugeMetric(sc.descs.ActiveAccounts, float64(sm.Stats.ActiveAccounts), labels)
-		ch <- newGaugeMetric(sc.descs.NumSubs, float64(sm.Stats.NumSubs), labels)
-		ch <- newGaugeMetric(sc.descs.SentMsgs, float64(sm.Stats.Sent.Msgs), labels)
-		ch <- newGaugeMetric(sc.descs.SentBytes, float64(sm.Stats.Sent.Bytes), labels)
-		ch <- newGaugeMetric(sc.descs.RecvMsgs, float64(sm.Stats.Received.Msgs), labels)
-		ch <- newGaugeMetric(sc.descs.RecvBytes, float64(sm.Stats.Received.Bytes), labels)
-		ch <- newGaugeMetric(sc.descs.SlowConsumers, float64(sm.Stats.SlowConsumers), labels)
-		ch <- newGaugeMetric(sc.descs.RTT, float64(sc.rtts[sm.Server.ID]), labels)
-		ch <- newGaugeMetric(sc.descs.Routes, float64(len(sm.Stats.Routes)), labels)
-		ch <- newGaugeMetric(sc.descs.Gateways, float64(len(sm.Stats.Gateways)), labels)
-
-		ch <- newGaugeMetric(sc.descs.JetstreamInfo, float64(1), jetstreamInfoLabelValues(sm))
-		// Any / All Meta-data in sc.descs.JetstreamInfo can be xrefed by the server_id.
-		// labels define the "uniqueness" of a time series, any associations beyond that should be left to prometheus
-		lblServerID := []string{sm.Server.ID, sm.Server.Name, sm.Server.Cluster}
-		if sm.Stats.JetStream == nil {
-			ch <- newGaugeMetric(sc.descs.JetstreamEnabled, float64(0), lblServerID)
+	if m, ok := result.([]prometheus.Metric); !ok || m == nil {
+		if m == nil {
+			sc.logger.Error("no metrics collected")
 		} else {
-			ch <- newGaugeMetric(sc.descs.JetstreamEnabled, float64(1), lblServerID)
-			if sm.Stats.JetStream.Config != nil {
-				ch <- newGaugeMetric(sc.descs.JetstreamFilestoreSizeBytes, float64(sm.Stats.JetStream.Config.MaxStore), lblServerID)
-				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreSizeBytes, float64(sm.Stats.JetStream.Config.MaxMemory), lblServerID)
-				// StoreDir  At present, '$SYS.REQ.SERVER.PING', server.sendStatsz() squashes StoreDir to "".
-				// Domain is also at 'sm.Server.Domain'. Unknown if there's a semantic difference at present. See jsDomainLabelValue().
-			}
-			if sm.Stats.JetStream.Stats != nil {
-				ch <- newGaugeMetric(sc.descs.JetstreamFilestoreUsedBytes, float64(sm.Stats.JetStream.Stats.Store), lblServerID)
-				ch <- newGaugeMetric(sc.descs.JetstreamFilestoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedStore), lblServerID)
-				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreUsedBytes, float64(sm.Stats.JetStream.Stats.Memory), lblServerID)
-				ch <- newGaugeMetric(sc.descs.JetstreamMemstoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedMemory), lblServerID)
-				ch <- newGaugeMetric(sc.descs.JetstreamAccounts, float64(sm.Stats.JetStream.Stats.Accounts), lblServerID)
-				ch <- newGaugeMetric(sc.descs.JetstreamHAAssets, float64(sm.Stats.JetStream.Stats.HAAssets), lblServerID)
-				// NIT: Technically these should be Counters, not Gauges.
-				// At present, Total does not include Errors. Keeping them separate
-				ch <- newGaugeMetric(sc.descs.JetstreamAPIRequests, float64(sm.Stats.JetStream.Stats.API.Total), lblServerID)
-				ch <- newGaugeMetric(sc.descs.JetstreamAPIErrors, float64(sm.Stats.JetStream.Stats.API.Errors), lblServerID)
-			}
-
-			if sm.Stats.JetStream.Meta == nil {
-				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(0), []string{"", "", sm.Server.ID, serverName(sm), "", ""})
-			} else {
-				jsRaftGroupInfoLabelValues := []string{jsDomainLabelValue(sm), "_meta_", sm.Server.ID, serverName(sm), sm.Stats.JetStream.Meta.Name, sm.Stats.JetStream.Meta.Leader}
-				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(1), jsRaftGroupInfoLabelValues)
-
-				jsRaftGroupLabelValues := []string{sm.Server.ID, serverName(sm), sm.Server.Cluster}
-				// FIXME: add labels needed or remove...
-
-				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupSize, float64(sm.Stats.JetStream.Meta.Size), jsRaftGroupLabelValues)
-
-				// Could provide false positive if two server have the same server_name in the same or different clusters in the super-cluster...
-				// At present, in this statsz only a peer that thinks it's a Leader will have `sm.Stats.JetStream.Meta.Replicas != nil`.
-				if sm.Stats.JetStream.Meta.Leader != "" && sm.Server.Name != "" && sm.Server.Name == sm.Stats.JetStream.Meta.Leader {
-					ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupLeader, float64(1), jsRaftGroupLabelValues)
-				} else {
-					ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupLeader, float64(0), jsRaftGroupLabelValues)
-				}
-				ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicas, float64(len(sm.Stats.JetStream.Meta.Replicas)), jsRaftGroupLabelValues)
-				for _, jsr := range sm.Stats.JetStream.Meta.Replicas {
-					if jsr == nil {
-						continue
-					}
-					jsClusterReplicaLabelValues := []string{sm.Server.ID, serverName(sm), jsr.Name, sm.Server.Cluster}
-					ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaActive, float64(jsr.Active), jsClusterReplicaLabelValues)
-					if jsr.Current {
-						ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(1), jsClusterReplicaLabelValues)
-					} else {
-						ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(0), jsClusterReplicaLabelValues)
-					}
-					if jsr.Offline {
-						ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(1), jsClusterReplicaLabelValues)
-					} else {
-						ch <- newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(0), jsClusterReplicaLabelValues)
-					}
-				}
-			}
+			sc.logger.Error("unexpected collect response type")
 		}
-		for _, rs := range sm.Stats.Routes {
-			labels = sc.routeLabelValues(sm, rs)
-			ch <- newGaugeMetric(sc.descs.RouteSentMsgs, float64(rs.Sent.Msgs), labels)
-			ch <- newGaugeMetric(sc.descs.RouteSentBytes, float64(rs.Sent.Bytes), labels)
-			ch <- newGaugeMetric(sc.descs.RouteRecvMsgs, float64(rs.Received.Msgs), labels)
-			ch <- newGaugeMetric(sc.descs.RouteRecvBytes, float64(rs.Received.Bytes), labels)
-			ch <- newGaugeMetric(sc.descs.RoutePending, float64(rs.Pending), labels)
-		}
-
-		for _, gw := range sm.Stats.Gateways {
-			labels = sc.gatewayLabelValues(sm, gw)
-			ch <- newGaugeMetric(sc.descs.GatewaySentMsgs, float64(gw.Sent.Msgs), labels)
-			ch <- newGaugeMetric(sc.descs.GatewaySentBytes, float64(gw.Sent.Bytes), labels)
-			ch <- newGaugeMetric(sc.descs.GatewayRecvMsgs, float64(gw.Received.Msgs), labels)
-			ch <- newGaugeMetric(sc.descs.GatewayRecvBytes, float64(gw.Received.Bytes), labels)
-			ch <- newGaugeMetric(sc.descs.GatewayNumInbound, float64(gw.NumInbound), labels)
-		}
+		return
 	}
 
-	// Account scope metrics
-	if sc.collectAccounts {
-		ch <- newGaugeMetric(sc.descs.accCount, float64(len(sc.accStats)), nil)
-		for _, stat := range sc.accStats {
-			id := []string{stat.accountID}
-
-			ch <- newGaugeMetric(sc.descs.accConnCount, stat.connCount, id)
-			ch <- newGaugeMetric(sc.descs.accLeafCount, stat.leafCount, id)
-			ch <- newGaugeMetric(sc.descs.accSubCount, stat.subCount, id)
-
-			ch <- newCounterMetric(sc.descs.accBytesSent, stat.bytesSent, id)
-			ch <- newCounterMetric(sc.descs.accBytesRecv, stat.bytesRecv, id)
-			ch <- newCounterMetric(sc.descs.accMsgsSent, stat.msgsSent, id)
-			ch <- newCounterMetric(sc.descs.accMsgsRecv, stat.msgsRecv, id)
-
-			ch <- newGaugeMetric(sc.descs.accJetstreamEnabled, stat.jetstreamEnabled, id)
-			ch <- newGaugeMetric(sc.descs.accJetstreamMemoryUsed, stat.jetstreamMemoryUsed, id)
-			ch <- newGaugeMetric(sc.descs.accJetstreamStorageUsed, stat.jetstreamStorageUsed, id)
-			ch <- newGaugeMetric(sc.descs.accJetstreamMemoryReserved, stat.jetstreamMemoryReserved, id)
-			ch <- newGaugeMetric(sc.descs.accJetstreamStorageReserved, stat.jetstreamStorageReserved, id)
-			for tier, size := range stat.jetstreamTieredMemoryUsed {
-				ch <- newGaugeMetric(sc.descs.accJetstreamTieredMemoryUsed, size, append(id, fmt.Sprintf("R%d", tier)))
-			}
-			for tier, size := range stat.jetstreamTieredStorageUsed {
-				ch <- newGaugeMetric(sc.descs.accJetstreamTieredStorageUsed, size, append(id, fmt.Sprintf("R%d", tier)))
-			}
-			for tier, size := range stat.jetstreamTieredMemoryReserved {
-				ch <- newGaugeMetric(sc.descs.accJetstreamTieredMemoryReserved, size, append(id, fmt.Sprintf("R%d", tier)))
-			}
-			for tier, size := range stat.jetstreamTieredStorageReserved {
-				ch <- newGaugeMetric(sc.descs.accJetstreamTieredStorageReserved, size, append(id, fmt.Sprintf("R%d", tier)))
-			}
-
-			ch <- newGaugeMetric(sc.descs.accJetstreamStreamCount, stat.jetstreamStreamCount, id)
-			for _, streamStat := range stat.jetstreamStreams {
-				ch <- newGaugeMetric(sc.descs.accJetstreamConsumerCount, streamStat.consumerCount, append(id, streamStat.streamName))
-				ch <- newGaugeMetric(sc.descs.accJetstreamReplicaCount, streamStat.replicaCount, append(id, streamStat.streamName))
-			}
-		}
+	for _, m := range result.([]prometheus.Metric) {
+		ch <- m
 	}
+
 }
 
 func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte) ([]*nats.Msg, error) {
