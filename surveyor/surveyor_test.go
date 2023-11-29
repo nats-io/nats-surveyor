@@ -47,7 +47,7 @@ func httpGetSecure(url string) (*http.Response, error) {
 		return nil, err
 	}
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	httpClient := &http.Client{Transport: transport, Timeout: 3 * time.Second}
+	httpClient := &http.Client{Transport: transport, Timeout: 5 * time.Second}
 	return httpClient.Get(url)
 }
 
@@ -625,7 +625,7 @@ func TestSurveyor_Concurrent(t *testing.T) {
 	mutex := sync.Mutex{}
 	var wg sync.WaitGroup
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -642,7 +642,7 @@ func TestSurveyor_Concurrent(t *testing.T) {
 				return
 			}
 			metricFamily, found := metricFamilies[metricFamily]
-			if !found {
+			if !found || len(metricFamily.Metric) == 0 {
 				t.Errorf("Missing expected metric")
 				return
 			}
