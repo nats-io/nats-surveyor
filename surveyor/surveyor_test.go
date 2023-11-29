@@ -21,10 +21,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/prometheus/common/expfmt"
 
 	st "github.com/nats-io/nats-surveyor/test"
 )
@@ -604,11 +606,13 @@ func TestSurveyor_MissingResponses(t *testing.T) {
 	})
 }
 
-func TestSurveyor_ConcurrentBlock(t *testing.T) {
+func TestSurveyor_Concurrent(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
 
-	s, err := NewSurveyor(getTestOptions())
+	testOptions := getTestOptions()
+	testOptions.ExpectedServers = 3
+	s, err := NewSurveyor(testOptions)
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
 	}
@@ -616,15 +620,49 @@ func TestSurveyor_ConcurrentBlock(t *testing.T) {
 		t.Fatalf("start error: %v", err)
 	}
 	defer s.Stop()
+	metricFamily := "nats_core_mem_bytes"
+	results := make([]float64, 0)
+	mutex := sync.Mutex{}
+	var wg sync.WaitGroup
 
-	s.statzC.polling = true
-	_, err = PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
-	if err == nil {
-		t.Fatalf("Expected an error but none were encountered")
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			output, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
+			if err != nil {
+				t.Errorf("%v", err)
+				return
+			}
+
+			metricsParser := expfmt.TextParser{}
+			metricFamilies, err := metricsParser.TextToMetricFamilies(strings.NewReader(output))
+			if err != nil {
+				t.Errorf("Error parsing metrics: %s", err)
+				return
+			}
+			metricFamily, found := metricFamilies[metricFamily]
+			if !found {
+				t.Errorf("Missing expected metric")
+				return
+			}
+
+			value := metricFamily.Metric[0].GetGauge().GetValue()
+
+			mutex.Lock()
+			defer mutex.Unlock()
+			results = append(results, value)
+		}()
 	}
 
-	if err.Error() != "expected a 200 response, got 503" {
-		t.Fatalf("Expected 503 error but got: %v", err)
+	wg.Wait()
+
+	baseVal := results[0]
+
+	for _, v := range results {
+		if v != baseVal {
+			t.Fatalf("Expected all values to be the same")
+		}
 	}
 }
 

@@ -900,32 +900,12 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		timer := prometheus.NewTimer(sc.pollTime.WithLabelValues())
-		bufferChan := make(chan prometheus.Metric)
-
-		// We want to collect these before we exit the flight group
-		// but they should still be sent to every caller
-		go func() {
-			for m := range bufferChan {
-				metrics.appendMetric(m)
-			}
-		}()
-		defer close(bufferChan)
-
-		defer func() {
-			timer.ObserveDuration()
-			sc.pollTime.Collect(bufferChan)
-			sc.pollErrCnt.Collect(bufferChan)
-			sc.surveyedCnt.Collect(bufferChan)
-			sc.expectedCnt.Collect(bufferChan)
-			sc.lateReplies.Collect(bufferChan)
-			sc.noReplies.Collect(bufferChan)
-		}()
 
 		// poll the servers
 		if err := sc.poll(); err != nil {
 			sc.logger.Warnf("Error polling NATS server: %v", err)
 			sc.pollErrCnt.WithLabelValues().Inc()
-			metrics.newCounterMetric(sc.natsUp, 1, nil)
+			metrics.newCounterMetric(sc.natsUp, 0, nil)
 			return metrics.metrics, nil
 		}
 
@@ -933,7 +913,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		sc.Lock()
 		defer sc.Unlock()
 
-		metrics.newCounterMetric(sc.natsUp, 0, nil)
+		metrics.newCounterMetric(sc.natsUp, 1, nil)
 		sc.surveyedCnt.WithLabelValues().Set(0)
 
 		for _, sm := range sc.stats {
@@ -1084,6 +1064,32 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				}
 			}
 		}
+
+		bufferChan := make(chan prometheus.Metric)
+
+		// We want to collect these before we exit the flight group
+		// but they should still be sent to every caller
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			for m := range bufferChan {
+				metrics.appendMetric(m)
+			}
+
+			wg.Done()
+		}()
+
+		timer.ObserveDuration()
+		sc.pollTime.Collect(bufferChan)
+		sc.pollErrCnt.Collect(bufferChan)
+		sc.surveyedCnt.Collect(bufferChan)
+		sc.expectedCnt.Collect(bufferChan)
+		sc.lateReplies.Collect(bufferChan)
+		sc.noReplies.Collect(bufferChan)
+
+		close(bufferChan)
+
+		wg.Wait()
 
 		return metrics.metrics, nil
 	})
