@@ -281,32 +281,12 @@ func (s *Surveyor) httpAuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Surveyor) httpConcurrentPollBlockMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		sz := s.statzC
-
-		if sz == nil {
-			next.ServeHTTP(rw, r)
-			return
-		}
-
-		if sz.Polling() {
-			rw.WriteHeader(http.StatusServiceUnavailable)
-			rw.Write([]byte("Concurrent polls are not supported"))
-			s.logger.Warnln("Concurrent access detected and blocked")
-			return
-		}
-
-		next.ServeHTTP(rw, r)
-	})
-}
-
 // getScrapeHandler returns a chain of handlers that handles auth, concurency checks
 // and the prometheus handlers
 func (s *Surveyor) getScrapeHandler() http.Handler {
-	return s.httpAuthMiddleware(s.httpConcurrentPollBlockMiddleware(promhttp.InstrumentMetricHandler(
+	return s.httpAuthMiddleware(promhttp.InstrumentMetricHandler(
 		s.promRegistry, promhttp.HandlerFor(s.promRegistry, promhttp.HandlerOpts{}),
-	)))
+	))
 }
 
 // startHTTP configures and starts the HTTP server for applications to poll data from
