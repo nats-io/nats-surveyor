@@ -588,10 +588,10 @@ func (sc *StatzCollector) pollAccountInfo() error {
 			})
 
 			// computed tiered storage usage
-			used := float64(stream.State.Bytes * uint64(stream.Config.Replicas))
+			used := float64(stream.State.Bytes)
 			var reserved float64
 			if stream.Config.MaxBytes > 0 {
-				reserved = float64(stream.Config.MaxBytes * int64(stream.Config.Replicas))
+				reserved = float64(stream.Config.MaxBytes)
 			}
 			if stream.Config.Storage == server.MemoryStorage {
 				if _, ok = sts.jetstreamTieredMemoryUsed[stream.Config.Replicas]; ok {
