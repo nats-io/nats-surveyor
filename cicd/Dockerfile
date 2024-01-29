@@ -24,7 +24,7 @@ RUN <<EOT
   cp ${BIN_PATH} /go/bin
 EOT
 
-FROM alpine:3.19.0
+FROM alpine:3.19.1
 
 ARG GO_APP
 ENV GO_APP ${GO_APP}
