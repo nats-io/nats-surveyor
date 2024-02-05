@@ -14,14 +14,17 @@
 package surveyor
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/klauspost/compress/s2"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
@@ -401,7 +404,8 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 
 func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 	m := &server.ServerStatsMsg{}
-	if err := json.Unmarshal(msg.Data, m); err != nil {
+
+	if err := processMsg(msg, m); err != nil {
 		sc.logger.Warnf("Error unmarshalling statz json: %v", err)
 	}
 
@@ -451,8 +455,16 @@ func (sc *StatzCollector) poll() error {
 		return fmt.Errorf("no connection to NATS")
 	}
 
+	msg := nats.Msg{
+		Subject: "$SYS.REQ.SERVER.PING",
+		Reply:   sc.reply + "." + sc.pollkey,
+		Header: nats.Header{
+			"Accept-Encoding": []string{"snappy"},
+		},
+	}
+
 	// Send our ping for statusz updates
-	if err := sc.nc.PublishRequest("$SYS.REQ.SERVER.PING", sc.reply+"."+sc.pollkey, nil); err != nil {
+	if err := sc.nc.PublishMsg(&msg); err != nil {
 		return err
 	}
 
@@ -647,7 +659,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDe
 		var r server.ServerAPIResponse
 		var d server.JSInfo
 		r.Data = &d
-		if err := json.Unmarshal(msg.Data, &r); err != nil {
+		if err := processMsg(msg, &r); err != nil {
 			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
 			continue
 		}
@@ -700,11 +712,11 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.Account
 		var r server.ServerAPIResponse
 		var d server.AccountStatz
 		r.Data = &d
-		if err := json.Unmarshal(msg.Data, &r); err != nil {
+		if err := processMsg(msg, &r); err != nil {
 			return nil, err
 		}
 		r.Data = &d
-		if err := json.Unmarshal(msg.Data, &r); err != nil {
+		if err := processMsg(msg, &r); err != nil {
 			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
 			continue
 		}
@@ -1129,7 +1141,16 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte)
 	})
 	defer sub.Unsubscribe()
 
-	if err := nc.PublishRequest(subject, inbox, data); err != nil {
+	msg := &nats.Msg{
+		Subject: subject,
+		Reply:   inbox,
+		Data:    data,
+		Header: nats.Header{
+			"Accept-Encoding": []string{"snappy"},
+		},
+	}
+
+	if err := nc.PublishMsg(msg); err != nil {
 		return nil, err
 	}
 
@@ -1149,4 +1170,18 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte)
 			return res, nil
 		}
 	}
+}
+
+func processMsg(msg *nats.Msg, v any) error {
+	data := msg.Data
+
+	if msg.Header.Get("Content-Encoding") == "snappy" {
+		var err error
+		data, err = io.ReadAll(s2.NewReader(bytes.NewBuffer(data)))
+		if err != nil {
+			return err
+		}
+	}
+
+	return json.Unmarshal(data, v)
 }
