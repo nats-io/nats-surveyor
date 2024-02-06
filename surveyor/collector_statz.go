@@ -705,28 +705,24 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.Account
 
 	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
 	if err != nil {
-		sc.logger.Warnf("Unable to request JetStream info: %s", err)
+		sc.logger.Warnf("Error requesting account stats: %s", err.Error())
 	}
 
 	for _, msg := range msgs {
 		var r server.ServerAPIResponse
 		var d server.AccountStatz
+
 		r.Data = &d
 		if err := unmarshalMsg(msg, &r); err != nil {
-			return nil, err
-		}
-		r.Data = &d
-		if err := unmarshalMsg(msg, &r); err != nil {
-			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
+			sc.logger.Warnf("Error deserializing account stats: %s", err.Error())
 			continue
 		}
+
 		if r.Error != nil {
-			if strings.Contains(r.Error.Description, "jetstream not enabled") {
-				// jetstream is not enabled on server
-				return nil, r.Error
-			}
+			sc.logger.Warnf("Error in Account stats response: %s", r.Error.Error())
 			continue
 		}
+
 		res = append(res, &d)
 		if sc.numServers != -1 && len(res) == sc.numServers {
 			break
