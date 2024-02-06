@@ -14,14 +14,17 @@
 package surveyor
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/klauspost/compress/s2"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
@@ -401,7 +404,8 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 
 func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 	m := &server.ServerStatsMsg{}
-	if err := json.Unmarshal(msg.Data, m); err != nil {
+
+	if err := unmarshalMsg(msg, m); err != nil {
 		sc.logger.Warnf("Error unmarshalling statz json: %v", err)
 	}
 
@@ -451,8 +455,16 @@ func (sc *StatzCollector) poll() error {
 		return fmt.Errorf("no connection to NATS")
 	}
 
+	msg := nats.Msg{
+		Subject: "$SYS.REQ.SERVER.PING",
+		Reply:   sc.reply + "." + sc.pollkey,
+		Header: nats.Header{
+			"Accept-Encoding": []string{"snappy"},
+		},
+	}
+
 	// Send our ping for statusz updates
-	if err := sc.nc.PublishRequest("$SYS.REQ.SERVER.PING", sc.reply+"."+sc.pollkey, nil); err != nil {
+	if err := sc.nc.PublishMsg(&msg); err != nil {
 		return err
 	}
 
@@ -638,7 +650,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDe
 	}
 
 	subj := "$SYS.REQ.SERVER.PING.JSZ"
-	msgs, err := requestMany(nc, sc, subj, req)
+	msgs, err := requestMany(nc, sc, subj, req, true)
 	if err != nil {
 		sc.logger.Warnf("Unable to request JetStream info: %s", err)
 	}
@@ -647,7 +659,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDe
 		var r server.ServerAPIResponse
 		var d server.JSInfo
 		r.Data = &d
-		if err := json.Unmarshal(msg.Data, &r); err != nil {
+		if err := unmarshalMsg(msg, &r); err != nil {
 			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
 			continue
 		}
@@ -691,30 +703,26 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.Account
 	res := make([]*server.AccountStatz, 0)
 	const subj = "$SYS.REQ.ACCOUNT.PING.STATZ"
 
-	msgs, err := requestMany(nc, sc, subj, reqJSON)
+	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
 	if err != nil {
-		sc.logger.Warnf("Unable to request JetStream info: %s", err)
+		sc.logger.Warnf("Error requesting account stats: %s", err.Error())
 	}
 
 	for _, msg := range msgs {
 		var r server.ServerAPIResponse
 		var d server.AccountStatz
+
 		r.Data = &d
-		if err := json.Unmarshal(msg.Data, &r); err != nil {
-			return nil, err
-		}
-		r.Data = &d
-		if err := json.Unmarshal(msg.Data, &r); err != nil {
-			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
+		if err := unmarshalMsg(msg, &r); err != nil {
+			sc.logger.Warnf("Error deserializing account stats: %s", err.Error())
 			continue
 		}
+
 		if r.Error != nil {
-			if strings.Contains(r.Error.Description, "jetstream not enabled") {
-				// jetstream is not enabled on server
-				return nil, r.Error
-			}
+			sc.logger.Warnf("Error in Account stats response: %s", r.Error.Error())
 			continue
 		}
+
 		res = append(res, &d)
 		if sc.numServers != -1 && len(res) == sc.numServers {
 			break
@@ -1113,7 +1121,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 
 }
 
-func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte) ([]*nats.Msg, error) {
+func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte, compression bool) ([]*nats.Msg, error) {
 	if subject == "" {
 		return nil, fmt.Errorf("subject cannot be empty")
 	}
@@ -1129,7 +1137,18 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte)
 	})
 	defer sub.Unsubscribe()
 
-	if err := nc.PublishRequest(subject, inbox, data); err != nil {
+	msg := &nats.Msg{
+		Subject: subject,
+		Reply:   inbox,
+		Data:    data,
+		Header:  nats.Header{},
+	}
+
+	if compression {
+		msg.Header.Set("Accept-Encoding", "snappy")
+	}
+
+	if err := nc.PublishMsg(msg); err != nil {
 		return nil, err
 	}
 
@@ -1149,4 +1168,19 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte)
 			return res, nil
 		}
 	}
+}
+
+// Performs JSON Unmarshal, decompressing snappy encoding if necessary
+func unmarshalMsg(msg *nats.Msg, v any) error {
+	data := msg.Data
+
+	if msg.Header.Get("Content-Encoding") == "snappy" {
+		var err error
+		data, err = io.ReadAll(s2.NewReader(bytes.NewBuffer(data)))
+		if err != nil {
+			return err
+		}
+	}
+
+	return json.Unmarshal(data, v)
 }
