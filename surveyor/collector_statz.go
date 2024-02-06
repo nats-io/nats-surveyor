@@ -405,7 +405,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
 	m := &server.ServerStatsMsg{}
 
-	if err := processMsg(msg, m); err != nil {
+	if err := unmarshalMsg(msg, m); err != nil {
 		sc.logger.Warnf("Error unmarshalling statz json: %v", err)
 	}
 
@@ -650,7 +650,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDe
 	}
 
 	subj := "$SYS.REQ.SERVER.PING.JSZ"
-	msgs, err := requestMany(nc, sc, subj, req)
+	msgs, err := requestMany(nc, sc, subj, req, true)
 	if err != nil {
 		sc.logger.Warnf("Unable to request JetStream info: %s", err)
 	}
@@ -659,7 +659,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) map[string]*server.AccountDe
 		var r server.ServerAPIResponse
 		var d server.JSInfo
 		r.Data = &d
-		if err := processMsg(msg, &r); err != nil {
+		if err := unmarshalMsg(msg, &r); err != nil {
 			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
 			continue
 		}
@@ -703,7 +703,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.Account
 	res := make([]*server.AccountStatz, 0)
 	const subj = "$SYS.REQ.ACCOUNT.PING.STATZ"
 
-	msgs, err := requestMany(nc, sc, subj, reqJSON)
+	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
 	if err != nil {
 		sc.logger.Warnf("Unable to request JetStream info: %s", err)
 	}
@@ -712,11 +712,11 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string]*server.Account
 		var r server.ServerAPIResponse
 		var d server.AccountStatz
 		r.Data = &d
-		if err := processMsg(msg, &r); err != nil {
+		if err := unmarshalMsg(msg, &r); err != nil {
 			return nil, err
 		}
 		r.Data = &d
-		if err := processMsg(msg, &r); err != nil {
+		if err := unmarshalMsg(msg, &r); err != nil {
 			sc.logger.Warnf("Error deserializing JetStream info: %s", err)
 			continue
 		}
@@ -1125,7 +1125,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 
 }
 
-func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte) ([]*nats.Msg, error) {
+func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte, compression bool) ([]*nats.Msg, error) {
 	if subject == "" {
 		return nil, fmt.Errorf("subject cannot be empty")
 	}
@@ -1145,9 +1145,11 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte)
 		Subject: subject,
 		Reply:   inbox,
 		Data:    data,
-		Header: nats.Header{
-			"Accept-Encoding": []string{"snappy"},
-		},
+		Header:  nats.Header{},
+	}
+
+	if compression {
+		msg.Header.Set("Accept-Encoding", "snappy")
 	}
 
 	if err := nc.PublishMsg(msg); err != nil {
@@ -1172,7 +1174,8 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte)
 	}
 }
 
-func processMsg(msg *nats.Msg, v any) error {
+// Performs JSON Unmarshal, decompressing snappy encoding if necessary
+func unmarshalMsg(msg *nats.Msg, v any) error {
 	data := msg.Data
 
 	if msg.Header.Get("Content-Encoding") == "snappy" {
