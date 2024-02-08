@@ -19,6 +19,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -665,7 +666,7 @@ func (am *JSAdvisoryManager) Set(config *JSAdvisoryConfig) error {
 	existingAdv, found := am.listenerMap[config.ID]
 	am.Unlock()
 
-	if found && *config == *existingAdv.config {
+	if found && reflect.DeepEqual(config, existingAdv.config) {
 		return nil
 	}
 

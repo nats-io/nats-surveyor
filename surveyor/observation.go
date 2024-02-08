@@ -20,6 +20,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -468,7 +469,7 @@ func (om *ServiceObsManager) Set(config *ServiceObsConfig) error {
 	existingObs, found := om.listenerMap[config.ID]
 	om.Unlock()
 
-	if found && *config == *existingObs.config {
+	if found && reflect.DeepEqual(config, existingObs.config) {
 		return nil
 	}
 
