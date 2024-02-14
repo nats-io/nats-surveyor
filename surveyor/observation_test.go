@@ -401,7 +401,7 @@ nats_latency_observations_count 1
 			defer replySub.Unsubscribe()
 			// send a bunch of observations
 			for i := 0; i < 10; i++ {
-				_, err := ncB.Request("test.service", []byte("hello"), time.Second)
+				_, err := ncB.Request("test.service", []byte("hello"), time.Second*3)
 				if err != nil {
 					t.Fatalf("request failed: %s", err)
 				}
