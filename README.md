@@ -238,13 +238,6 @@ nats_core_total_connection_count{nats_server_cluster="region1",nats_server_host=
 nats_core_total_connection_count{nats_server_cluster="region2",nats_server_host="localhost",nats_server_id="NCBI75V5ASPJAEAR3VPS2YELXP7K6CUXXWAD5PB2SJ4BOIYQHU6JKV7A"} 0
 ```
 
-We feel Prometheus is the right fit for this project, but it's worth noting
-that this is not the recommended Prometheus archtecture, preferring ease of use
-over installing and configuring a full monitoring infrastructure.  For a more
-robust monitoring architecture the
-[prometheus-nats-exporter](https://github.com/nats-io/prometheus-nats-exporter)
-should be placed and configured alongside every NATS server component.
-
 ## Docker Compose
 
 An easy way to start the NATS Surveyor stack (Grafana, Prometheus, and NATS
