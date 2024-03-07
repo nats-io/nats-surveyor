@@ -254,7 +254,7 @@ func (sc *StatzCollector) buildDescs() {
 
 	// A unlabelled description for the up/down
 	sc.natsUp = prometheus.NewDesc(prometheus.BuildFQName("nats", "core", "nats_up"),
-		"1 if connected to NATS, 0 otherwise.  A counter.", nil, sc.constLabels)
+		"1 if connected to NATS, 0 otherwise.  A gauge.", nil, sc.constLabels)
 
 	sc.descs.Info = newPromDesc("info", "General Server information Summary gauge", sc.serverInfoLabels)
 	sc.descs.Start = newPromDesc("start_time", "Server start time gauge", sc.serverLabels)
@@ -948,7 +948,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		if err := sc.poll(); err != nil {
 			sc.logger.Warnf("Error polling NATS server: %v", err)
 			sc.pollErrCnt.WithLabelValues().Inc()
-			metrics.newCounterMetric(sc.natsUp, 0, nil)
+			metrics.newGaugeMetric(sc.natsUp, 0, nil)
 			return metrics.metrics, nil
 		}
 
@@ -956,7 +956,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		sc.Lock()
 		defer sc.Unlock()
 
-		metrics.newCounterMetric(sc.natsUp, 1, nil)
+		metrics.newGaugeMetric(sc.natsUp, 1, nil)
 		sc.surveyedCnt.WithLabelValues().Set(0)
 
 		for _, sm := range sc.stats {
