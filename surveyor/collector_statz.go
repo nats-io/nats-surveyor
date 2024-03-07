@@ -759,6 +759,11 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 	accStats := make(map[string][]*accStat)
 	for _, statz := range res {
 		for _, acc := range statz.Data.Accounts {
+			// always skip if account has never connected
+			if acc.TotalConns == 0 {
+				continue
+			}
+
 			// optimization to stop reporting a server/account pair
 			// when a server is continuously reporting 0 conns for that account
 			zeroConnKey := statz.Server.ID + ":" + acc.Account
