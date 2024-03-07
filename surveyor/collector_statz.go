@@ -34,6 +34,9 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+// skip reporting account on a server after this many subsequent polls with 0 conns
+const accStatZeroConnSkip = 3
+
 // statzDescs holds the metric descriptions
 type statzDescs struct {
 	Info             *prometheus.Desc
@@ -142,6 +145,7 @@ type StatzCollector struct {
 	doneCh              chan struct{}
 	descs               statzDescs
 	collectAccounts     bool
+	accStatZeroConn     map[string]int
 	natsUp              *prometheus.Desc
 	routeIDRemap        map[string]map[uint64]int
 	gatewayIDRemap      map[string]map[uint64]int
@@ -400,6 +404,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 		servers:             make(map[string]bool),
 		doneCh:              make(chan struct{}, 1),
 		collectAccounts:     accounts,
+		accStatZeroConn:     make(map[string]int),
 		routeIDRemap:        make(map[string]map[uint64]int),
 		gatewayIDRemap:      make(map[string]map[uint64]int),
 
@@ -754,17 +759,22 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 	accStats := make(map[string][]*accStat)
 	for _, statz := range res {
 		for _, acc := range statz.Data.Accounts {
-			accInfo, ok := accStats[acc.Account]
-			if !ok {
-				accStats[acc.Account] = []*accStat{
-					{
-						Server: statz.Server,
-						Data:   acc,
-					},
+			// optimization to stop reporting a server/account pair
+			// when a server is continuously reporting 0 conns for that account
+			zeroConnKey := statz.Server.ID + ":" + acc.Account
+			if acc.Conns == 0 {
+				count := sc.accStatZeroConn[zeroConnKey]
+				if count >= accStatZeroConnSkip {
+					// at limit for continuous polls with 0 conns
+					continue
 				}
-				continue
+
+				sc.accStatZeroConn[zeroConnKey] = count + 1
+			} else {
+				sc.accStatZeroConn[zeroConnKey] = 0
 			}
 
+			accInfo := accStats[acc.Account]
 			accStats[acc.Account] = append(accInfo, &accStat{
 				Server: statz.Server,
 				Data:   acc,
