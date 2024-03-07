@@ -1039,7 +1039,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				pairs[i].id = rs.ID
 				pairs[i].name = rs.Name
 			}
-			sc.routeIDRemap = remapIdToIdx(pairs, sc.routeIDRemap)
+			sc.routeIDRemap = remapIDToIdx(pairs, sc.routeIDRemap)
 
 			for _, rs := range sm.Stats.Routes {
 				labels = sc.routeLabelValues(sm, rs)
@@ -1055,7 +1055,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				pairs[i].id = rs.ID
 				pairs[i].name = rs.Name
 			}
-			sc.gatewayIDRemap = remapIdToIdx(pairs, sc.gatewayIDRemap)
+			sc.gatewayIDRemap = remapIDToIdx(pairs, sc.gatewayIDRemap)
 
 			for _, gw := range sm.Stats.Gateways {
 				labels = sc.gatewayLabelValues(sm, gw)
@@ -1225,7 +1225,7 @@ type nameIDPair struct {
 	id   uint64
 }
 
-func remapIdToIdx(pairs []nameIDPair, existingMapping map[string]map[uint64]int) map[string]map[uint64]int {
+func remapIDToIdx(pairs []nameIDPair, existingMapping map[string]map[uint64]int) map[string]map[uint64]int {
 	newMapping := make(map[string]map[uint64]int)
 
 	// give existing the same idx

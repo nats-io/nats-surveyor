@@ -26,7 +26,7 @@ func TestRemapIdToIdx(t *testing.T) {
 		{name: "c", id: 100},
 	}
 
-	newMapping := remapIdToIdx(pairs, existingMapping)
+	newMapping := remapIDToIdx(pairs, existingMapping)
 	expected := map[string]map[uint64]int{
 		"a": {
 			100: 0,

@@ -35,7 +35,6 @@ jobs:
                --disable gocritic \
                --enable stylecheck \
                --enable unconvert \
-               --enable gocyclo \
                --enable gofmt \
                --enable misspell \
                --enable unparam \

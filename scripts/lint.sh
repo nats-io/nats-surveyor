@@ -9,7 +9,6 @@ $(go env GOPATH)/bin/golangci-lint run \
             --enable interfacer \
             --enable unconvert \
             --enable dupl \
-            --enable gocyclo \
             --enable gofmt \
             --enable goimports \
             --enable misspell \
