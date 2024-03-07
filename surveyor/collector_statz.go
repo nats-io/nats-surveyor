@@ -221,11 +221,11 @@ func (sc *StatzCollector) serverInfoLabelValues(sm *server.ServerStatsMsg) []str
 }
 
 func (sc *StatzCollector) routeLabelValues(sm *server.ServerStatsMsg, rStat *server.RouteStat) []string {
-	return []string{sm.Server.Cluster, serverName(sm), sm.Server.ID, strconv.FormatUint(rStat.ID, 10)}
+	return []string{sm.Server.Cluster, serverName(sm), sm.Server.ID, rStat.Name}
 }
 
 func (sc *StatzCollector) gatewayLabelValues(sm *server.ServerStatsMsg, gStat *server.GatewayStat) []string {
-	return []string{sm.Server.Cluster, serverName(sm), sm.Server.ID, gStat.Name, strconv.FormatUint(gStat.ID, 10)}
+	return []string{sm.Server.Cluster, serverName(sm), sm.Server.ID, gStat.Name}
 }
 
 // Up/Down on servers - look at discovery mechanisms in Prometheus - aging out, how does it work?
@@ -387,8 +387,8 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
 		serverLabels:       []string{"server_cluster", "server_name", "server_id"},
 		serverInfoLabels:   []string{"server_cluster", "server_name", "server_id", "server_version"},
-		routeLabels:        []string{"server_cluster", "server_name", "server_id", "server_route_id"},
-		gatewayLabels:      []string{"server_cluster", "server_name", "server_id", "server_gateway_name", "server_gateway_id"},
+		routeLabels:        []string{"server_cluster", "server_name", "server_id", "server_route_name"},
+		gatewayLabels:      []string{"server_cluster", "server_name", "server_id", "server_gateway_name"},
 		jsServerLabels:     []string{"server_id", "server_name", "cluster_name"},
 		jsServerInfoLabels: []string{"server_name", "server_host", "server_id", "server_cluster", "server_domain", "server_version", "server_jetstream"},
 		constLabels:        constLabels,
