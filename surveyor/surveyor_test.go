@@ -150,8 +150,14 @@ func TestSurveyor_Basic(t *testing.T) {
 		if !strings.Contains(output, "server_gateway_name") {
 			t.Fatalf("invalid output, missing 'server_gateway_name':  %v\n", output)
 		}
+		if !strings.Contains(output, "server_gateway_name_idx") {
+			t.Fatalf("invalid output, missing 'server_gateway_name_idx':  %v\n", output)
+		}
 		if !strings.Contains(output, "server_route_name") {
 			t.Fatalf("invalid output, missing 'server_route_name':  %v\n", output)
+		}
+		if !strings.Contains(output, "server_route_name_idx") {
+			t.Fatalf("invalid output, missing 'server_route_name_idx':  %v\n", output)
 		}
 		if !strings.Contains(output, "nats_survey_surveyed_count 3") {
 			t.Fatalf("invalid output, missing 'nats_survey_surveyed_count 3':  %v\n", output)
