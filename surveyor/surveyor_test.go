@@ -245,16 +245,18 @@ func TestSurveyor_Account(t *testing.T) {
 	}
 
 	want := []string{
-		"nats_core_account_bytes_recv",
-		"nats_core_account_bytes_sent",
-		"nats_core_account_conn_count",
 		"nats_core_account_count",
+		"nats_core_account_conn_count",
+		"nats_core_account_total_conn_count",
+		"nats_core_account_leaf_count",
+		"nats_core_account_sub_count",
+		"nats_core_account_slow_consumer_count",
+		"nats_core_account_bytes_sent",
+		"nats_core_account_bytes_recv",
+		"nats_core_account_msgs_sent",
+		"nats_core_account_msgs_recv",
 		"nats_core_account_jetstream_enabled",
 		"nats_core_account_jetstream_stream_count",
-		"nats_core_account_leaf_count",
-		"nats_core_account_msgs_recv",
-		"nats_core_account_msgs_sent",
-		"nats_core_account_sub_count",
 	}
 	for _, m := range want {
 		if !strings.Contains(output, m) {
