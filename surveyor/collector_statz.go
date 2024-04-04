@@ -1096,7 +1096,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					metrics.newCounterMetric(sc.descs.accBytesSent, float64(as.Data.Sent.Bytes), serverAndAccLabels)
 					metrics.newCounterMetric(sc.descs.accBytesRecv, float64(as.Data.Received.Bytes), serverAndAccLabels)
 					metrics.newCounterMetric(sc.descs.accMsgsSent, float64(as.Data.Sent.Msgs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accMsgsRecv, float64(as.Data.Sent.Bytes), serverAndAccLabels)
+					metrics.newCounterMetric(sc.descs.accMsgsRecv, float64(as.Data.Received.Msgs), serverAndAccLabels)
 				}
 
 				metrics.newGaugeMetric(sc.descs.accJetstreamEnabled, stat.jetstreamEnabled, accLabels)
