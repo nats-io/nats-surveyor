@@ -1,6 +1,12 @@
-FROM golang:1.20-alpine3.18 AS build
-COPY . /go/src/nats-surveyor
+FROM golang:1.21-alpine3.18 AS build
+
 WORKDIR /go/src/nats-surveyor
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . ./
+
 ENV GO111MODULE=on
 ENV CGO_ENABLED=0
 RUN go build

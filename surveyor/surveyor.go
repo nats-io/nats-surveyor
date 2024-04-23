@@ -107,10 +107,13 @@ func GetDefaultOptions() *Options {
 // A Surveyor instance
 type Surveyor struct {
 	sync.Mutex
-	cp                  *natsConnPool
-	httpServer          *http.Server
-	jsAdvisoryManager   *JSAdvisoryManager
-	jsAdvisoryFSWatcher *jsAdvisoryFSWatcher
+	cp                   *natsConnPool
+	httpServer           *http.Server
+	jsAdvisoryManager    *JSAdvisoryManager
+	jsAdvisoryFSWatcher  *jsAdvisoryFSWatcher
+	jsConfigListListener *jsConfigListListener
+	//jsConfigListManager *JSConfigListManager
+	//jsConfigListFSWatcher *jsConfigListFSWatcher
 	listener            net.Listener
 	logger              *logrus.Logger
 	opts                Options
@@ -142,15 +145,19 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 	jsAdvisoryManager := newJetStreamAdvisoryManager(cp, opts.Logger, jsAdvisoryMetrics)
 	jsFsWatcher := newJetStreamAdvisoryFSWatcher(opts.Logger, jsAdvisoryManager)
 
+	jsConfigListMetrics := NewJetStreamConfigListMetrics(promRegistry, opts.ConstLabels)
+	jsConfigListener := NewJetStreamConfigListener(cp, opts.Logger, jsConfigListMetrics)
+
 	return &Surveyor{
-		cp:                  cp,
-		jsAdvisoryManager:   jsAdvisoryManager,
-		jsAdvisoryFSWatcher: jsFsWatcher,
-		logger:              opts.Logger,
-		opts:                *opts,
-		promRegistry:        promRegistry,
-		serviceObsManager:   serviceObsManager,
-		serviceObsFSWatcher: serviceFsWatcher,
+		cp:                   cp,
+		jsAdvisoryManager:    jsAdvisoryManager,
+		jsAdvisoryFSWatcher:  jsFsWatcher,
+		logger:               opts.Logger,
+		opts:                 *opts,
+		promRegistry:         promRegistry,
+		serviceObsManager:    serviceObsManager,
+		serviceObsFSWatcher:  serviceFsWatcher,
+		jsConfigListListener: jsConfigListener,
 	}, nil
 }
 
@@ -383,6 +390,14 @@ func (s *Surveyor) startJetStreamAdvisories() {
 	}
 }
 
+func (s *Surveyor) startJetStreamConfigList() {
+	err := s.jsConfigListListener.Start()
+	if err != nil {
+		s.logger.Errorf("failed to start config list listener. error: %s", err.Error())
+		return
+	}
+}
+
 func (s *Surveyor) startServiceObservations() {
 	if s.serviceObsManager.IsRunning() {
 		return
@@ -454,9 +469,9 @@ func (s *Surveyor) Start() error {
 			return err
 		}
 	}
-
 	s.startServiceObservations()
 	s.startJetStreamAdvisories()
+	s.startJetStreamConfigList()
 
 	if !s.opts.DisableHTTPServer && s.listener == nil && s.httpServer == nil {
 		if err := s.startHTTP(); err != nil {
