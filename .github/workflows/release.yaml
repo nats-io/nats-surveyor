@@ -39,7 +39,7 @@ jobs:
       uses: docker/bake-action@v4
       env:
         TAGS: "${{ steps.tags.outputs.tags }}"
-        REGISTRY: "ghcr.io"
+        REGISTRY: "natsio"
       with:
         push: true
         set:
