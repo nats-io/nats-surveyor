@@ -1,4 +1,4 @@
-drepo ?= natsio
+drepo ?= sinamna
 
 .PHONY: dockerx test
 dockerx:
