@@ -1,4 +1,4 @@
-drepo ?= sinamna
+drepo ?= snappcloud
 
 .PHONY: dockerx test
 dockerx:

@@ -4,7 +4,7 @@ project_name: nats-surveyor
 release:
   draft: true
   github:
-    owner: sinamna
+    owner: snappcloud
     name: nats-surveyor
 
   name_template: 'Release {{.Tag}}'
