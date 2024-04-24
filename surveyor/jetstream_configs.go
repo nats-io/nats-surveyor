@@ -16,11 +16,11 @@ package surveyor
 import (
 	"context"
 	"fmt"
-	"github.com/nats-io/nats.go"
-	_ "github.com/nats-io/nats.go"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/nats-io/nats.go"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
