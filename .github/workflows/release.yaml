@@ -26,21 +26,32 @@ jobs:
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
-        username: sinamna
+        username: ${{ github.repository_owner }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Get Image Tags
-      id: tags
-      run: |
-        version=$(sed 's/^v//' <<< ${{ github.ref_name }})
-        echo tags="latest,${version}" >> $GITHUB_OUTPUT
-
-    - name: Build and Push
-      uses: docker/bake-action@v4
-      env:
-        TAGS: "${{ steps.tags.outputs.tags }}"
-        REGISTRY: "ghcr.io"
+    # - name: Get Image Tags
+    #   id: tags
+    #   run: |
+    #     version=$(sed 's/^v//' <<< ${{ github.ref_name }})
+    #     echo tags="latest,${version}" >> $GITHUB_OUTPUT
+    - uses: docker/metadata-action@v4
+      id: meta
       with:
+        images: ghcr.io/${{ github.repository }}
+    # - name: Build and Push
+    #   uses: docker/bake-action@v4
+    #   env:
+    #     TAGS: "${{ steps.tags.outputs.tags }}"
+    #     REGISTRY: "ghcr.io"
+    #   with:
+    #     push: true
+    #     set:
+    #       goreleaser.args.GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+    - uses: docker/build-push-action@v4
+      with:
+        file: "Dockerfile"
+        context: .
+        platforms: linux/amd64
         push: true
-        set:
-          goreleaser.args.GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
