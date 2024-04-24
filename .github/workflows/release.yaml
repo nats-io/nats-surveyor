@@ -25,7 +25,8 @@ jobs:
     - name: Setup Docker Hub
       uses: docker/login-action@v3
       with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
         password: ${{ secrets.DOCKERHUB_CLI_TOKEN }}
 
     - name: Get Image Tags
@@ -38,7 +39,7 @@ jobs:
       uses: docker/bake-action@v4
       env:
         TAGS: "${{ steps.tags.outputs.tags }}"
-        REGISTRY: "natsio"
+        REGISTRY: "ghcr.io"
       with:
         push: true
         set:
