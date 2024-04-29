@@ -30,11 +30,11 @@ var (
 	//JSStreamList          = `$JS.API.STREAM.LIST`
 	streamConfigLabels         = []string{"discard_policy", "storage_type", "replica_number", "stream_name"}
 	consumerConfigLabels       = []string{"stream_name", "max_pending_ack", "ack_policy", "is_pull", "consumer_name"}
-	streamRaftInfoLabels       = []string{"stream_name", "leader", "cluster_size"}
-	streamRaftPeerInfoLabels   = []string{"stream_name", "peer_name", "offline", "current", "leader"}
-	consumerRaftInfoLabels     = []string{"consumer_name", "leader", "cluster_size", "stream_name"}
+	streamRaftInfoLabels       = []string{"stream_name", "leader", "replica_count"}
+	streamRaftPeerInfoLabels   = []string{"stream_name", "peer_name", "offline", "current", "leader", "lag"}
+	consumerRaftInfoLabels     = []string{"consumer_name", "leader", "replica_count", "stream_name"}
 	consumerStateLabels        = []string{"consumer_name", "stream_name", "last_delivered_message_consumer", "last_delivered_message_stream", "ack_floor_consumer", "ack_floor_stream"}
-	consumerRaftPeerInfoLabels = []string{"stream_name", "consumer_name", "peer_name", "offline", "current", "leader"}
+	consumerRaftPeerInfoLabels = []string{"stream_name", "consumer_name", "peer_name", "offline", "current", "leader", "lag"}
 
 	DefaultScrapeInterval = 10 * time.Second
 	//DefaultListenerID     = "default_listener"
@@ -176,6 +176,7 @@ func (o *jsConfigListListener) StreamHandler(streamInfo *nats.StreamInfo) {
 	o.metrics.jsStreamConfig.DeletePartialMatch(prometheus.Labels{
 		"stream_name": streamInfo.Config.Name,
 	})
+
 	o.metrics.jsStreamConfig.With(
 		prometheus.Labels{
 			"discard_policy": streamInfo.Config.Discard.String(),
@@ -189,9 +190,9 @@ func (o *jsConfigListListener) StreamHandler(streamInfo *nats.StreamInfo) {
 	})
 	o.metrics.jsStreamRaftInfo.With(
 		prometheus.Labels{
-			"stream_name":  streamInfo.Config.Name,
-			"leader":       streamInfo.Cluster.Leader,
-			"cluster_size": strconv.Itoa(len(streamInfo.Cluster.Replicas)),
+			"stream_name":   streamInfo.Config.Name,
+			"leader":        streamInfo.Cluster.Leader,
+			"replica_count": strconv.Itoa(len(streamInfo.Cluster.Replicas)),
 		},
 	).Set(1)
 	o.metrics.jsStreamRaftPeerInfo.DeletePartialMatch(prometheus.Labels{
@@ -205,6 +206,7 @@ func (o *jsConfigListListener) StreamHandler(streamInfo *nats.StreamInfo) {
 				"peer_name":   peer.Name,
 				"offline":     convertBoolToString(peer.Offline),
 				"current":     convertBoolToString(peer.Current),
+				"lag":         strconv.FormatUint(peer.Lag, 10),
 			},
 		).Set(1)
 	}
@@ -258,7 +260,7 @@ func (o *jsConfigListListener) ConsumerHandler(consumerInfo *nats.ConsumerInfo) 
 			"consumer_name": consumerInfo.Name,
 			"stream_name":   consumerInfo.Stream,
 			"leader":        consumerInfo.Cluster.Leader,
-			"cluster_size":  strconv.Itoa(len(consumerInfo.Cluster.Replicas)),
+			"replica_count": strconv.Itoa(len(consumerInfo.Cluster.Replicas)),
 		},
 	).Set(1)
 
@@ -275,6 +277,7 @@ func (o *jsConfigListListener) ConsumerHandler(consumerInfo *nats.ConsumerInfo) 
 				"peer_name":     peer.Name,
 				"offline":       convertBoolToString(peer.Offline),
 				"current":       convertBoolToString(peer.Current),
+				"lag":           strconv.FormatUint(peer.Lag, 10),
 			},
 		).Set(1)
 	}
