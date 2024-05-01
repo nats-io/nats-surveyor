@@ -598,8 +598,11 @@ func (sc *StatzCollector) pollAccountInfo() error {
 	jsInfos := sc.getJSInfos(nc)
 	for accID, jsInfo := range jsInfos {
 		sts, ok := accStats[accID]
+		// If no account stats returned, still report JS metrics
 		if !ok {
-			continue
+			sts = &accountStats{
+				accountID: accID,
+			}
 		}
 		sts.jetstreamEnabled = 1.0
 		sts.jetstreamMemoryUsed = float64(jsInfo.Memory)
@@ -643,7 +646,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 				}
 			}
 		}
-		accStats[jsInfo.Id] = sts
+		accStats[accID] = sts
 	}
 
 	sc.Lock()
