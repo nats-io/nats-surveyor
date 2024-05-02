@@ -330,7 +330,7 @@ func (sc *StatzCollector) buildDescs() {
 
 		// Metrics reported per-server
 		sc.descs.accConnCount = newPromDesc("account_conn_count", "The number of client connections to this account", serverAndAccLabel)
-		sc.descs.accTotalConnCount = newPromDesc("account_total_conn_count", "Total number of client connections serviced for this account", serverAndAccLabel)
+		sc.descs.accTotalConnCount = newPromDesc("account_total_conn_count", "The combined current number of client and leafnode connections to this account", serverAndAccLabel)
 		sc.descs.accLeafCount = newPromDesc("account_leaf_count", "The number of leafnode connections to this account", serverAndAccLabel)
 		sc.descs.accSubCount = newPromDesc("account_sub_count", "The number of subscriptions on this account", serverAndAccLabel)
 		sc.descs.accSlowConsumerCount = newPromDesc("account_slow_consumer_count", "The number of slow consumers detected in this account", serverAndAccLabel)
@@ -598,8 +598,11 @@ func (sc *StatzCollector) pollAccountInfo() error {
 	jsInfos := sc.getJSInfos(nc)
 	for accID, jsInfo := range jsInfos {
 		sts, ok := accStats[accID]
+		// If no account stats returned, still report JS metrics
 		if !ok {
-			continue
+			sts = &accountStats{
+				accountID: accID,
+			}
 		}
 		sts.jetstreamEnabled = 1.0
 		sts.jetstreamMemoryUsed = float64(jsInfo.Memory)
@@ -643,7 +646,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 				}
 			}
 		}
-		accStats[jsInfo.Id] = sts
+		accStats[accID] = sts
 	}
 
 	sc.Lock()
@@ -740,6 +743,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 
 	for _, msg := range msgs {
 		var a accStatz
+
 		if err = unmarshalMsg(msg, &a); err != nil {
 			sc.logger.Warnf("Error deserializing account stats: %s", err.Error())
 			continue
@@ -759,15 +763,10 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 	accStats := make(map[string][]*accStat)
 	for _, statz := range res {
 		for _, acc := range statz.Data.Accounts {
-			// always skip if account has never connected
-			if acc.TotalConns == 0 {
-				continue
-			}
-
 			// optimization to stop reporting a server/account pair
 			// when a server is continuously reporting 0 conns for that account
 			zeroConnKey := statz.Server.ID + ":" + acc.Account
-			if acc.Conns == 0 {
+			if acc.TotalConns == 0 {
 				count := sc.accStatZeroConn[zeroConnKey]
 				if count >= accStatZeroConnSkip {
 					// at limit for continuous polls with 0 conns
@@ -778,7 +777,6 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 			} else {
 				sc.accStatZeroConn[zeroConnKey] = 0
 			}
-
 			accInfo := accStats[acc.Account]
 			accStats[acc.Account] = append(accInfo, &accStat{
 				Server: statz.Server,
@@ -1089,7 +1087,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				for _, as := range stat.stats {
 					serverAndAccLabels := append(sc.serverLabelValues(as.Server), accLabels...)
 					metrics.newGaugeMetric(sc.descs.accConnCount, float64(as.Data.Conns), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accTotalConnCount, float64(as.Data.TotalConns), serverAndAccLabels)
+					metrics.newGaugeMetric(sc.descs.accTotalConnCount, float64(as.Data.TotalConns), serverAndAccLabels)
 					metrics.newGaugeMetric(sc.descs.accLeafCount, float64(as.Data.LeafNodes), serverAndAccLabels)
 					metrics.newGaugeMetric(sc.descs.accSubCount, float64(as.Data.NumSubs), serverAndAccLabels)
 					metrics.newGaugeMetric(sc.descs.accSlowConsumerCount, float64(as.Data.SlowConsumers), serverAndAccLabels)
