@@ -213,6 +213,11 @@ func (o *jsConfigListListener) StreamHandler(streamInfo *nats.StreamInfo) {
 	o.metrics.jsStreamRaftPeerInfo.DeletePartialMatch(prometheus.Labels{
 		"stream_name": streamInfo.Config.Name,
 	})
+	o.metrics.jsStreamReplicationLag.DeletePartialMatch(
+		prometheus.Labels{
+			"stream_name": streamInfo.Config.Name,
+		},
+	)
 	for _, peer := range streamInfo.Cluster.Replicas {
 		o.metrics.jsStreamRaftPeerInfo.With(
 			prometheus.Labels{
@@ -224,11 +229,7 @@ func (o *jsConfigListListener) StreamHandler(streamInfo *nats.StreamInfo) {
 				"lag":         strconv.FormatUint(peer.Lag, 10),
 			},
 		).Set(1)
-		o.metrics.jsStreamReplicationLag.DeletePartialMatch(
-			prometheus.Labels{
-				"stream_name": streamInfo.Config.Name,
-			},
-		)
+
 		o.metrics.jsStreamReplicationLag.With(
 			prometheus.Labels{
 				"stream_name": streamInfo.Config.Name,
@@ -294,6 +295,12 @@ func (o *jsConfigListListener) ConsumerHandler(consumerInfo *nats.ConsumerInfo) 
 		"stream_name":   consumerInfo.Stream,
 		"consumer_name": consumerInfo.Name,
 	})
+	o.metrics.jsConsumerReplicationLag.DeletePartialMatch(
+		prometheus.Labels{
+			"stream_name":   consumerInfo.Stream,
+			"consumer_name": consumerInfo.Name,
+		},
+	)
 	for _, peer := range consumerInfo.Cluster.Replicas {
 		o.metrics.jsConsumerRaftPeerInfo.With(
 			prometheus.Labels{
@@ -306,12 +313,7 @@ func (o *jsConfigListListener) ConsumerHandler(consumerInfo *nats.ConsumerInfo) 
 				"lag":           strconv.FormatUint(peer.Lag, 10),
 			},
 		).Set(1)
-		o.metrics.jsConsumerReplicationLag.DeletePartialMatch(
-			prometheus.Labels{
-				"stream_name":   consumerInfo.Stream,
-				"consumer_name": consumerInfo.Name,
-			},
-		)
+
 		o.metrics.jsConsumerReplicationLag.With(
 			prometheus.Labels{
 				"stream_name":   consumerInfo.Stream,
