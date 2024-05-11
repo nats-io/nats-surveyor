@@ -227,7 +227,6 @@ func (o *jsConfigListListener) StreamHandler(streamInfo *nats.StreamInfo) {
 		o.metrics.jsStreamReplicationLag.DeletePartialMatch(
 			prometheus.Labels{
 				"stream_name": streamInfo.Config.Name,
-				"peer_name":   peer.Name,
 			},
 		)
 		o.metrics.jsStreamReplicationLag.With(
@@ -311,7 +310,6 @@ func (o *jsConfigListListener) ConsumerHandler(consumerInfo *nats.ConsumerInfo) 
 			prometheus.Labels{
 				"stream_name":   consumerInfo.Stream,
 				"consumer_name": consumerInfo.Name,
-				"peer_name":     peer.Name,
 			},
 		)
 		o.metrics.jsConsumerReplicationLag.With(
@@ -343,116 +341,3 @@ func (o *jsConfigListListener) Stop() {
 	o.pc.ReturnToPool()
 	o.pc = nil
 }
-
-//
-//// JSConfigListManager exposes methods to operate on JetStream advisories
-//type JSConfigListManager struct {
-//	sync.Mutex
-//	cp          *natsConnPool
-//	natsCtx     *natsContext
-//	listenerMap map[string]*jsConfigListListener
-//	logger      *logrus.Logger
-//	metrics     *JSStreamConfigMetrics
-//}
-//
-//// newJetStreamAdvisoryManager creates a JSAdvisoryManager for managing JetStream advisories
-//func newJetStreamConfigListManager(cp *natsConnPool, logger *logrus.Logger, metrics *JSStreamConfigMetrics) *JSConfigListManager {
-//	return &JSConfigListManager{
-//		cp:      cp,
-//		logger:  logger,
-//		metrics: metrics,
-//	}
-//}
-//func (am *JSConfigListManager) addNatsContext(natsCtx *natsContext) {
-//	am.natsCtx = natsCtx
-//}
-//func (am *JSConfigListManager) Init() {
-//	am.Lock()
-//	defer am.Unlock()
-//	if am.listenerMap != nil {
-//		// already started
-//		return
-//	}
-//
-//	am.listenerMap = map[string]*jsConfigListListener{}
-//}
-//
-//// IsRunning returns true if the advisory manager is running or false if it is stopped
-//func (am *JSConfigListManager) IsRunning() bool {
-//	am.Lock()
-//	defer am.Unlock()
-//	return am.listenerMap != nil
-//}
-//
-//func (am *JSConfigListManager) stop() {
-//	am.Lock()
-//	defer am.Unlock()
-//	if am.listenerMap == nil {
-//		// already stopped
-//		return
-//	}
-//
-//	for _, listener := range am.listenerMap {
-//		listener.Stop()
-//	}
-//	am.listenerMap = nil
-//}
-//
-//// Start creates or updates an JSConfigListManager
-//// if a listener exists with the same ID, it is updated
-//// otherwise, a new advisory is created
-//func (am *JSConfigListManager) Start() error {
-//	am.Lock()
-//	if am.listenerMap == nil {
-//		am.Unlock()
-//		return fmt.Errorf("config list manager is stopped; could not set config list")
-//	}
-//
-//	existingConfMan, found := am.listenerMap[DefaultListenerID]
-//	am.Unlock()
-//
-//	strListMan, err := newJetStreamConfigListener(am.natsCtx, am.cp, am.logger, am.metrics)
-//	if err != nil {
-//		return fmt.Errorf("could not set config list. error: %v", err)
-//	}
-//
-//	if err := strListMan.Start(); err != nil {
-//		return fmt.Errorf("could not start config list manager. error: %v", err)
-//	}
-//
-//	am.Lock()
-//	if am.listenerMap == nil {
-//		am.Unlock()
-//		strListMan.Stop()
-//		return fmt.Errorf("config list manager is stopped; could not set config list manager")
-//	}
-//
-//	am.listenerMap[DefaultListenerID] = strListMan
-//	am.Unlock()
-//
-//	if found {
-//		existingConfMan.Stop()
-//	}
-//	return nil
-//}
-//
-//// Delete deletes existing advisory with provided ID
-//func (am *JSConfigListManager) Delete(id string) error {
-//	am.Lock()
-//	if am.listenerMap == nil {
-//		am.Unlock()
-//		return fmt.Errorf("stream list manager is stopped; could not delete advisory id: %s", id)
-//	}
-//
-//	strListMan, found := am.listenerMap[id]
-//	if !found {
-//		am.Unlock()
-//		return fmt.Errorf("stream list manager with given ID does not exist: %s", id)
-//	}
-//
-//	delete(am.listenerMap, id)
-//	am.Unlock()
-//
-//	strListMan.Stop()
-//	return nil
-//}
