@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +29,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -147,8 +145,6 @@ type StatzCollector struct {
 	collectAccounts     bool
 	accStatZeroConn     map[string]int
 	natsUp              *prometheus.Desc
-	routeIDRemap        map[string]map[uint64]int
-	gatewayIDRemap      map[string]map[uint64]int
 
 	serverLabels       []string
 	serverInfoLabels   []string
@@ -224,25 +220,11 @@ func (sc *StatzCollector) serverInfoLabelValues(sm *server.ServerInfo) []string 
 }
 
 func (sc *StatzCollector) routeLabelValues(sm *server.ServerInfo, rStat *server.RouteStat) []string {
-	idxS := strconv.FormatUint(rStat.ID, 10)
-	if byName, ok := sc.routeIDRemap[rStat.Name]; ok {
-		if idx, ok := byName[rStat.ID]; ok {
-			idxS = strconv.Itoa(idx)
-		}
-	}
-
-	return []string{sm.Cluster, serverName(sm), sm.ID, rStat.Name, idxS}
+	return []string{sm.Cluster, serverName(sm), sm.ID, rStat.Name, strconv.FormatUint(rStat.ID, 10)}
 }
 
 func (sc *StatzCollector) gatewayLabelValues(sm *server.ServerInfo, gStat *server.GatewayStat) []string {
-	idxS := strconv.FormatUint(gStat.ID, 10)
-	if byName, ok := sc.gatewayIDRemap[gStat.Name]; ok {
-		if idx, ok := byName[gStat.ID]; ok {
-			idxS = strconv.Itoa(idx)
-		}
-	}
-
-	return []string{sm.Cluster, serverName(sm), sm.ID, gStat.Name, idxS}
+	return []string{sm.Cluster, serverName(sm), sm.ID, gStat.Name, strconv.FormatUint(gStat.ID, 10)}
 }
 
 // Up/Down on servers - look at discovery mechanisms in Prometheus - aging out, how does it work?
@@ -405,14 +387,12 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 		doneCh:              make(chan struct{}, 1),
 		collectAccounts:     accounts,
 		accStatZeroConn:     make(map[string]int),
-		routeIDRemap:        make(map[string]map[uint64]int),
-		gatewayIDRemap:      make(map[string]map[uint64]int),
 
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
 		serverLabels:       []string{"server_cluster", "server_name", "server_id"},
 		serverInfoLabels:   []string{"server_cluster", "server_name", "server_id", "server_version"},
-		routeLabels:        []string{"server_cluster", "server_name", "server_id", "server_route_name", "server_route_name_idx"},
-		gatewayLabels:      []string{"server_cluster", "server_name", "server_id", "server_gateway_name", "server_gateway_name_idx"},
+		routeLabels:        []string{"server_cluster", "server_name", "server_id", "server_route_name", "server_route_name_id"},
+		gatewayLabels:      []string{"server_cluster", "server_name", "server_id", "server_gateway_name", "server_gateway_name_id"},
 		jsServerLabels:     []string{"server_id", "server_name", "cluster_name"},
 		jsServerInfoLabels: []string{"server_name", "server_host", "server_id", "server_cluster", "server_domain", "server_version", "server_jetstream"},
 		constLabels:        constLabels,
@@ -1046,13 +1026,6 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				}
 			}
 
-			pairs := make([]nameIDPair, len(sm.Stats.Routes))
-			for i, rs := range sm.Stats.Routes {
-				pairs[i].id = rs.ID
-				pairs[i].name = rs.Name
-			}
-			sc.routeIDRemap = remapIDToIdx(pairs, sc.routeIDRemap)
-
 			for _, rs := range sm.Stats.Routes {
 				labels = sc.routeLabelValues(&sm.Server, rs)
 				metrics.newCounterMetric(sc.descs.RouteSentMsgs, float64(rs.Sent.Msgs), labels)
@@ -1061,13 +1034,6 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				metrics.newCounterMetric(sc.descs.RouteRecvBytes, float64(rs.Received.Bytes), labels)
 				metrics.newGaugeMetric(sc.descs.RoutePending, float64(rs.Pending), labels)
 			}
-
-			pairs = make([]nameIDPair, len(sm.Stats.Gateways))
-			for i, rs := range sm.Stats.Gateways {
-				pairs[i].id = rs.ID
-				pairs[i].name = rs.Name
-			}
-			sc.gatewayIDRemap = remapIDToIdx(pairs, sc.gatewayIDRemap)
 
 			for _, gw := range sm.Stats.Gateways {
 				labels = sc.gatewayLabelValues(&sm.Server, gw)
@@ -1233,53 +1199,4 @@ func unmarshalMsg(msg *nats.Msg, v any) error {
 	}
 
 	return json.Unmarshal(data, v)
-}
-
-type nameIDPair struct {
-	name string
-	id   uint64
-}
-
-func remapIDToIdx(pairs []nameIDPair, existingMapping map[string]map[uint64]int) map[string]map[uint64]int {
-	newMapping := make(map[string]map[uint64]int)
-
-	// give existing the same idx
-	for _, rs := range pairs {
-		newByName, ok := newMapping[rs.name]
-		if !ok {
-			newByName = make(map[uint64]int)
-			newMapping[rs.name] = newByName
-		}
-
-		existingByName, ok := existingMapping[rs.name]
-		if !ok {
-			continue
-		}
-
-		idx, ok := existingByName[rs.id]
-		if !ok {
-			continue
-		}
-
-		newByName[rs.id] = idx
-	}
-
-	// assign new ones new idx
-	for _, path := range pairs {
-		newByName := newMapping[path.name]
-		_, ok := newByName[path.id]
-		if ok {
-			continue
-		}
-
-		vals := maps.Values(newByName)
-		for i := 0; i <= len(vals); i++ {
-			if !slices.Contains(vals, i) {
-				newByName[path.id] = i
-				break
-			}
-		}
-	}
-
-	return newMapping
 }
