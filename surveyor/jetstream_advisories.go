@@ -176,13 +176,13 @@ func NewJetStreamAdvisoryMetrics(registry *prometheus.Registry, constLabels prom
 			Name:        prometheus.BuildFQName("nats", "jetstream", "consumer_leader_elected"),
 			Help:        "How many times leader elections were done for consumers",
 			ConstLabels: constLabels,
-		}, []string{"account", "stream"}),
+		}, []string{"account", "stream", "consumer"}),
 
 		jsConsumerQuorumLost: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name:        prometheus.BuildFQName("nats", "jetstream", "consumer_quorum_lost"),
 			Help:        "How many times a consumer lost quorum leading to new leader elections",
 			ConstLabels: constLabels,
-		}, []string{"account", "stream"}),
+		}, []string{"account", "stream", "consumer"}),
 
 		jsStreamLeaderElected: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name:        prometheus.BuildFQName("nats", "jetstream", "stream_leader_elected"),
@@ -532,10 +532,10 @@ func (o *jsAdvisoryListener) advisoryHandler(m *nats.Msg) {
 		o.metrics.jsSnapthotDuration.WithLabelValues(accountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
 
 	case *advisory.JSConsumerLeaderElectedV1:
-		o.metrics.jsConsumerLeaderElected.WithLabelValues(accountName, event.Stream).Inc()
+		o.metrics.jsConsumerLeaderElected.WithLabelValues(accountName, event.Stream, event.Consumer).Inc()
 
 	case *advisory.JSConsumerQuorumLostV1:
-		o.metrics.jsConsumerQuorumLost.WithLabelValues(accountName, event.Stream).Inc()
+		o.metrics.jsConsumerQuorumLost.WithLabelValues(accountName, event.Stream, event.Consumer).Inc()
 
 	case *advisory.JSStreamLeaderElectedV1:
 		o.metrics.jsStreamLeaderElected.WithLabelValues(accountName, event.Stream).Inc()
