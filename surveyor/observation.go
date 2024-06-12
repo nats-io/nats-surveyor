@@ -125,10 +125,6 @@ type ServiceObsConfig struct {
 	ServiceName string `json:"name"`
 	Topic       string `json:"topic"`
 
-	// optional configuration for importing observations from other accounts
-	// it can only be set via ServiceObsConfig directly (not from config file)
-	ExternalAccountConfig *ServiceObservationExternalAccountConfig `json:"-"`
-
 	// connection options
 	JWT         string `json:"jwt"`
 	Seed        string `json:"seed"`
@@ -140,6 +136,14 @@ type ServiceObsConfig struct {
 	TLSCA       string `json:"tls_ca"`
 	TLSCert     string `json:"tls_cert"`
 	TLSKey      string `json:"tls_key"`
+
+	// additional opts available via ServiceObsConfig directly (not from config file)
+
+	// optional configuration for importing observations from other accounts
+	ExternalAccountConfig *ServiceObservationExternalAccountConfig `json:"-"`
+
+	// nats options appended to base surveyor options
+	NatsOpts []nats.Option `json:"-"`
 }
 
 type ServiceObservationExternalAccountConfig struct {
@@ -262,6 +266,7 @@ func (o *serviceObsListener) natsContext() *natsContext {
 		TLSCA:       o.config.TLSCA,
 		TLSCert:     o.config.TLSCert,
 		TLSKey:      o.config.TLSKey,
+		NatsOpts:    o.config.NatsOpts,
 	}
 
 	// legacy Credentials field
