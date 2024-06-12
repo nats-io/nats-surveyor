@@ -235,10 +235,6 @@ type JSAdvisoryConfig struct {
 	// account name
 	AccountName string `json:"name"`
 
-	// optional configuration for importing JS metrics and advisories from other accounts
-	// it can only be set via JSAdvisoryConfig directly (not from config file)
-	ExternalAccountConfig *JSAdvisoriesExternalAccountConfig `json:"-"`
-
 	// connection options
 	JWT         string `json:"jwt"`
 	Seed        string `json:"seed"`
@@ -250,6 +246,14 @@ type JSAdvisoryConfig struct {
 	TLSCA       string `json:"tls_ca"`
 	TLSCert     string `json:"tls_cert"`
 	TLSKey      string `json:"tls_key"`
+
+	// additional opts available via JSAdvisoryConfig directly (not from config file)
+
+	// optional configuration for importing JS metrics and advisories from other accounts
+	ExternalAccountConfig *JSAdvisoriesExternalAccountConfig `json:"-"`
+
+	// nats options appended to base surveyor options
+	NatsOpts []nats.Option `json:"-"`
 }
 
 // JSAdvisoriesExternalAccountConfig is used to configure external accounts from which
@@ -387,6 +391,7 @@ func (o *jsAdvisoryListener) natsContext() *natsContext {
 		TLSCA:       o.config.TLSCA,
 		TLSCert:     o.config.TLSCert,
 		TLSKey:      o.config.TLSKey,
+		NatsOpts:    o.config.NatsOpts,
 	}
 
 	return natsCtx

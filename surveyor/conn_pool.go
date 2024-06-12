@@ -26,6 +26,9 @@ type natsContext struct {
 	TLSCA       string `json:"tls_ca"`
 	TLSCert     string `json:"tls_cert"`
 	TLSKey      string `json:"tls_key"`
+
+	// only passed programmatically
+	NatsOpts []nats.Option `json:"-"`
 }
 
 func (c *natsContext) copy() *natsContext {
@@ -199,7 +202,7 @@ func (cp *natsConnPool) getPooledConn(key string, cfg *natsContext) (*pooledNats
 		}
 		cp.Unlock()
 
-		opts := cp.natsOpts
+		opts := append(cp.natsOpts, cfg.NatsOpts...)
 		opts = append(opts, func(options *nats.Options) error {
 			if cfg.Name != "" {
 				options.Name = cfg.Name
