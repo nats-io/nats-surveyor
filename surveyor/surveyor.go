@@ -229,8 +229,7 @@ func (s *Surveyor) createStatszCollector() error {
 	}
 
 	s.statzC = NewStatzCollector(s.sysAcctPC.nc, s.logger, s.opts.ExpectedServers, s.opts.ServerResponseWait, s.opts.PollTimeout, s.opts.Accounts, s.opts.ConstLabels)
-	s.promRegistry.Register(s.statzC)
-	return nil
+	return s.promRegistry.Register(s.statzC)
 }
 
 // generates the TLS config for https

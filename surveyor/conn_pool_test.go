@@ -52,15 +52,15 @@ func TestConnPool(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
 	go func() {
-		c1, c1e = cp.Get(o1)
+		c1, c1e = cp.Get(append(natsDefaults, append(natsOptions, o1...)...))
 		wg.Done()
 	}()
 	go func() {
-		c2, c2e = cp.Get(o2)
+		c2, c2e = cp.Get(append(natsDefaults, append(natsOptions, o2...)...))
 		wg.Done()
 	}()
 	go func() {
-		c3, c3e = cp.Get(o3)
+		c3, c3e = cp.Get(append(natsDefaults, append(natsOptions, o3...)...))
 		wg.Done()
 	}()
 	wg.Wait()
@@ -81,7 +81,7 @@ func TestConnPool(t *testing.T) {
 	assert.False(c2.nc.IsClosed())
 	assert.True(c3.nc.IsClosed())
 
-	c4, c4e := cp.Get(o1)
+	c4, c4e := cp.Get(append(natsDefaults, append(natsOptions, o1...)...))
 	if assert.NoError(c4e) {
 		assert.Same(c2, c4)
 	}
@@ -93,7 +93,7 @@ func TestConnPool(t *testing.T) {
 	assert.True(c2.nc.IsClosed())
 	assert.True(c4.nc.IsClosed())
 
-	c5, c5e := cp.Get(o1)
+	c5, c5e := cp.Get(append(natsDefaults, append(natsOptions, o1...)...))
 	if assert.NoError(c5e) {
 		assert.NotSame(c1, c5)
 	}
