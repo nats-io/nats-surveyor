@@ -199,6 +199,56 @@ func (o *ServiceObsConfig) Validate() error {
 	return errors.New(strings.Join(errs, ", "))
 }
 
+func (o *ServiceObsConfig) Equal(c *ServiceObsConfig) bool {
+	if o == nil || c == nil {
+		return o == c
+	}
+
+	oBytes, err := json.Marshal(o)
+	if err != nil {
+		return false
+	}
+
+	cBytes, err := json.Marshal(c)
+	if err != nil {
+		return false
+	}
+
+	var oMap, cMap map[string]interface{}
+
+	if err := json.Unmarshal([]byte(oBytes), &oMap); err != nil {
+		return false
+	}
+
+	if err := json.Unmarshal([]byte(cBytes), &cMap); err != nil {
+		return false
+	}
+
+	if !reflect.DeepEqual(oMap, cMap) {
+		return false
+	}
+
+	if o.ExternalAccountConfig == nil || c.ExternalAccountConfig == nil {
+		if o.ExternalAccountConfig != c.ExternalAccountConfig {
+			return false
+		}
+	}
+
+	if o.ExternalAccountConfig != nil {
+		if *o.ExternalAccountConfig != *c.ExternalAccountConfig {
+			return false
+		}
+	}
+
+	for i, opt := range o.NatsOpts {
+		if fmt.Sprintf("%p", opt) != fmt.Sprintf("%p", c.NatsOpts[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (o *ServiceObsConfig) copy() *ServiceObsConfig {
 	if o == nil {
 		return nil
