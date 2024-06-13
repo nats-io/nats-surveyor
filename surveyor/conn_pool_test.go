@@ -17,18 +17,30 @@ func TestConnPool(t *testing.T) {
 
 	s := natsservertest.RunRandClientPortServer()
 	defer s.Shutdown()
-	o1 := &natsContext{
-		Name: "Client 1",
-	}
-	o2 := &natsContext{
-		Name: "Client 1",
-	}
-	o3 := &natsContext{
-		Name: "Client 2",
+
+	clientOne := func(o *nats.Options) error {
+		o.Name = "Client 1"
+		return nil
 	}
 
-	natsDefaults := &natsContextDefaults{
-		URL: s.ClientURL(),
+	o1 := []nats.Option{
+		clientOne,
+	}
+	o2 := []nats.Option{
+		clientOne,
+	}
+	o3 := []nats.Option{
+		func(o *nats.Options) error {
+			o.Name = "Client 2"
+			return nil
+		},
+	}
+
+	natsDefaults := []nats.Option{
+		func(o *nats.Options) error {
+			o.Url = s.ClientURL()
+			return nil
+		},
 	}
 	natsOptions := []nats.Option{
 		nats.MaxReconnects(10240),

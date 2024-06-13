@@ -254,27 +254,29 @@ func newServiceObservationListener(config *ServiceObsConfig, cp *natsConnPool, l
 	}, nil
 }
 
-func (o *serviceObsListener) natsContext() *natsContext {
-	natsCtx := &natsContext{
-		JWT:         o.config.JWT,
-		Seed:        o.config.Seed,
-		Credentials: o.config.Credentials,
-		Nkey:        o.config.Nkey,
-		Token:       o.config.Token,
-		Username:    o.config.Username,
-		Password:    o.config.Password,
-		TLSCA:       o.config.TLSCA,
-		TLSCert:     o.config.TLSCert,
-		TLSKey:      o.config.TLSKey,
-		NatsOpts:    o.config.NatsOpts,
+func (o *serviceObsListener) connOpts() []nats.Option {
+	opts := append(make([]nats.Option, 0), o.cp.natsDefaults...)
+
+	if o.config.Username != "" && o.config.Password != "" {
+		opts = append(opts, nats.UserInfo(o.config.Username, o.config.Password))
+	}
+	if o.config.Token != "" {
+		opts = append(opts, nats.Token(o.config.Token))
+	}
+	if o.config.Credentials != "" {
+		opts = append(opts, nats.UserCredentials(o.config.Credentials))
+	}
+	if o.config.JWT != "" && o.config.Seed != "" {
+		opts = append(opts, nats.UserJWTAndSeed(o.config.JWT, o.config.Seed))
+	}
+	if o.config.TLSCert != "" && o.config.TLSKey != "" {
+		opts = append(opts, nats.ClientCert(o.config.TLSCert, o.config.TLSKey))
+	}
+	if o.config.TLSCA != "" {
+		opts = append(opts, nats.RootCAs(o.config.TLSCA))
 	}
 
-	// legacy Credentials field
-	if natsCtx.Credentials == "" && o.config.Credentials != "" {
-		natsCtx.Credentials = o.config.Credentials
-		o.logger.Warnf("deprecated service observation config field 'credential', use 'creds' instead for id: %s, service name: %s", o.config.ID, o.config.ServiceName)
-	}
-	return natsCtx
+	return append(opts, o.config.NatsOpts...)
 }
 
 // Start starts listening for observations
@@ -286,7 +288,7 @@ func (o *serviceObsListener) Start() error {
 		return nil
 	}
 
-	pc, err := o.cp.Get(o.natsContext())
+	pc, err := o.cp.Get(o.connOpts())
 	if err != nil {
 		return fmt.Errorf("nats connection failed for id: %s, service name: %s, error: %v", o.config.ID, o.config.ServiceName, err)
 	}

@@ -155,13 +155,44 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 }
 
 func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *natsConnPool {
-	natsDefaults := &natsContextDefaults{
-		Name:    opts.Name,
-		URL:     opts.URLs,
-		TLSCert: opts.CertFile,
-		TLSKey:  opts.KeyFile,
-		TLSCA:   opts.CaFile,
+	natsDefaults := make([]nats.Option, 0)
+	if opts.Name != "" {
+		natsDefaults = append(natsDefaults, func(o *nats.Options) error {
+			o.Name = opts.Name
+			return nil
+		})
 	}
+	if opts.URLs != "" {
+		natsDefaults = append(natsDefaults, func(o *nats.Options) error {
+			o.Url = opts.URLs
+			return nil
+		})
+	}
+	if opts.CertFile != "" && opts.KeyFile != "" {
+		natsDefaults = append(natsDefaults, nats.ClientCert(opts.CertFile, opts.KeyFile))
+	}
+	if opts.CaFile != "" {
+		natsDefaults = append(natsDefaults, nats.RootCAs(opts.CaFile))
+	}
+	if opts.NATSUser != "" && opts.NATSPassword != "" {
+		natsDefaults = append(natsDefaults, nats.UserInfo(opts.NATSUser, opts.NATSPassword))
+	}
+	if opts.Credentials != "" {
+		natsDefaults = append(natsDefaults, nats.UserCredentials(opts.Credentials))
+	}
+	if opts.JWT != "" && opts.Seed != "" {
+		natsDefaults = append(natsDefaults, nats.UserJWTAndSeed(opts.JWT, opts.Seed))
+	}
+	if opts.Nkey != "" {
+		natsDefaults = append(natsDefaults, func(o *nats.Options) error {
+			opt, err := nats.NkeyOptionFromSeed(opts.Nkey)
+			if err != nil {
+				return err
+			}
+			return opt(o)
+		})
+	}
+
 	natsOpts := append(opts.NATSOpts,
 		nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
 			if err != nil {
@@ -184,6 +215,7 @@ func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *na
 		}),
 		nats.MaxReconnects(10240),
 	)
+
 	return newNatsConnPool(opts.Logger, natsDefaults, natsOpts)
 }
 
@@ -197,7 +229,8 @@ func (s *Surveyor) createStatszCollector() error {
 	}
 
 	s.statzC = NewStatzCollector(s.sysAcctPC.nc, s.logger, s.opts.ExpectedServers, s.opts.ServerResponseWait, s.opts.PollTimeout, s.opts.Accounts, s.opts.ConstLabels)
-	return s.promRegistry.Register(s.statzC)
+	s.promRegistry.Register(s.statzC)
+	return nil
 }
 
 // generates the TLS config for https
@@ -434,16 +467,10 @@ func (s *Surveyor) Start() error {
 	}
 
 	var err error
-	natsCtx := &natsContext{
-		Credentials: s.opts.Credentials,
-		Nkey:        s.opts.Nkey,
-		JWT:         s.opts.JWT,
-		Seed:        s.opts.Seed,
-		Username:    s.opts.NATSUser,
-		Password:    s.opts.NATSPassword,
-	}
+	opts := append(make([]nats.Option, 0), s.cp.natsDefaults...)
+	opts = append(opts, s.cp.natsOpts...)
 
-	s.sysAcctPC, err = s.cp.Get(natsCtx)
+	s.sysAcctPC, err = s.cp.Get(opts)
 	if err != nil {
 		return err
 	}
