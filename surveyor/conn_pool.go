@@ -28,7 +28,8 @@ type natsContext struct {
 	TLSKey      string `json:"tls_key"`
 
 	// only passed programmatically
-	NatsOpts []nats.Option `json:"-"`
+	NatsOptsID string        `json:"nats_opts_id"`
+	NatsOpts   []nats.Option `json:"-"`
 }
 
 func (c *natsContext) copy() *natsContext {

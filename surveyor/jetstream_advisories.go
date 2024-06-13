@@ -252,6 +252,8 @@ type JSAdvisoryConfig struct {
 	// optional configuration for importing JS metrics and advisories from other accounts
 	ExternalAccountConfig *JSAdvisoriesExternalAccountConfig `json:"-"`
 
+	// unique identifier for set of NATS options, to permit reload on change
+	NatsOptsID string `json:"nats_opts_id"`
 	// nats options appended to base surveyor options
 	NatsOpts []nats.Option `json:"-"`
 }
@@ -391,6 +393,7 @@ func (o *jsAdvisoryListener) natsContext() *natsContext {
 		TLSCA:       o.config.TLSCA,
 		TLSCert:     o.config.TLSCert,
 		TLSKey:      o.config.TLSKey,
+		NatsOptsID:  o.config.NatsOptsID,
 		NatsOpts:    o.config.NatsOpts,
 	}
 
