@@ -142,6 +142,8 @@ type ServiceObsConfig struct {
 	// optional configuration for importing observations from other accounts
 	ExternalAccountConfig *ServiceObservationExternalAccountConfig `json:"-"`
 
+	// unique identifier for set of NATS options, to permit reload on change
+	NatsOptsID string `json:"nats_opts_id"`
 	// nats options appended to base surveyor options
 	NatsOpts []nats.Option `json:"-"`
 }
@@ -266,6 +268,7 @@ func (o *serviceObsListener) natsContext() *natsContext {
 		TLSCA:       o.config.TLSCA,
 		TLSCert:     o.config.TLSCert,
 		TLSKey:      o.config.TLSKey,
+		NatsOptsID:  o.config.NatsOptsID,
 		NatsOpts:    o.config.NatsOpts,
 	}
 
