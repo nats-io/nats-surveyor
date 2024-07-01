@@ -45,6 +45,7 @@ Flags:
       --tlscacert string                    Client certificate CA on NATS connections.
       --tlscert string                      Client certificate file for NATS connections.
       --tlskey string                       Client private key for NATS connections.
+      --tlsfirst bool                       Whether to use TLS First connections.
       --user string                         NATS user name or token
   -v, --version                             version for nats-surveyor
 ```
