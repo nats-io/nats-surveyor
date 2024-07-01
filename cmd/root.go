@@ -196,6 +196,10 @@ func init() {
 	rootCmd.Flags().String("tlscacert", "", "Client certificate CA on NATS connections.")
 	_ = viper.BindPFlag("tlscacert", rootCmd.Flags().Lookup("tlscacert"))
 
+	// tlsfirst
+	rootCmd.Flags().Bool("tlsfirst", false, "Whether to use TLS First connections.")
+	_ = viper.BindPFlag("tlsfirst", rootCmd.Flags().Lookup("tlsfirst"))
+
 	// http-tlscert
 	rootCmd.Flags().String("http-tlscert", "", "Server certificate file (Enables HTTPS).")
 	_ = viper.BindPFlag("http-tlscert", rootCmd.Flags().Lookup("http-tlscert"))
@@ -255,6 +259,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.CertFile = viper.GetString("tlscert")
 	opts.KeyFile = viper.GetString("tlskey")
 	opts.CaFile = viper.GetString("tlscacert")
+	opts.TLSFirst = viper.GetBool("tlsfirst")
 	opts.HTTPCertFile = viper.GetString("http-tlscert")
 	opts.HTTPKeyFile = viper.GetString("http-tlskey")
 	opts.HTTPCaFile = viper.GetString("http-tlscacert")

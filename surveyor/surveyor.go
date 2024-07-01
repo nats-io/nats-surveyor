@@ -69,6 +69,7 @@ type Options struct {
 	CertFile             string
 	KeyFile              string
 	CaFile               string
+	TLSFirst             bool
 	HTTPCertFile         string
 	HTTPKeyFile          string
 	HTTPCaFile           string
@@ -184,6 +185,9 @@ func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *na
 		}),
 		nats.MaxReconnects(10240),
 	)
+	if opts.TLSFirst {
+		natsOpts = append(natsOpts, nats.TLSHandshakeFirst())
+	}
 	return newNatsConnPool(opts.Logger, natsDefaults, natsOpts)
 }
 
