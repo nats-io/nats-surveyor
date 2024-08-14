@@ -283,47 +283,47 @@ func (o *JSAdvisoryConfig) Validate() error {
 		return fmt.Errorf("js advisory config cannot be nil")
 	}
 
-	var errs []string
+	var errs []error
 	if o.ID == "" {
-		errs = append(errs, "id is required")
+		errs = append(errs, fmt.Errorf("id is required"))
 	}
 
 	if o.AccountName == "" {
-		errs = append(errs, "name is required")
+		errs = append(errs, fmt.Errorf("name is required"))
 	}
 
 	if o.ExternalAccountConfig != nil {
 		if o.ExternalAccountConfig.MetricsSubject == "" {
-			errs = append(errs, "external_account_config.metrics_subject is required when importing metrics from external accounts")
+			errs = append(errs, fmt.Errorf("external_account_config.metrics_subject is required when importing metrics from external accounts"))
 		}
 		metricsTokens := strings.Split(o.ExternalAccountConfig.MetricsSubject, ".")
 		switch {
 		case o.ExternalAccountConfig.MetricsAccountTokenPosition <= 0:
-			errs = append(errs, "external_account_config.metrics_account_token_position is required when importing metrics from external accounts")
+			errs = append(errs, fmt.Errorf("external_account_config.metrics_account_token_position is required when importing metrics from external accounts"))
 		case o.ExternalAccountConfig.MetricsAccountTokenPosition > len(metricsTokens):
-			errs = append(errs, "external_account_config.metrics_account_token_position is greater than the number of tokens in external_account_config.metrics_subject")
+			errs = append(errs, fmt.Errorf("external_account_config.metrics_account_token_position is greater than the number of tokens in external_account_config.metrics_subject"))
 		case metricsTokens[o.ExternalAccountConfig.AdvisoryAccountTokenPosition-1] != "*":
-			errs = append(errs, "external_account_config.metrics_subject must have a wildcard token at the position specified by external_account_config.metrics_account_token_position")
+			errs = append(errs, fmt.Errorf("external_account_config.metrics_subject must have a wildcard token at the position specified by external_account_config.metrics_account_token_position"))
 		}
 
 		if o.ExternalAccountConfig.AdvisorySubject == "" {
-			errs = append(errs, "external_account_config.advisory_subject is required when importing advisories from external accounts")
+			errs = append(errs, fmt.Errorf("external_account_config.advisory_subject is required when importing advisories from external accounts"))
 		}
 		advisoryTokens := strings.Split(o.ExternalAccountConfig.AdvisorySubject, ".")
 		switch {
 		case o.ExternalAccountConfig.AdvisoryAccountTokenPosition <= 0:
-			errs = append(errs, "external_account_config.advisory_account_token_position is required when importing advisories from external accounts")
+			errs = append(errs, fmt.Errorf("external_account_config.advisory_account_token_position is required when importing advisories from external accounts"))
 		case o.ExternalAccountConfig.AdvisoryAccountTokenPosition > len(advisoryTokens):
-			errs = append(errs, "external_account_config.advisory_account_token_position is greater than the number of tokens in external_account_config.advisory_subject")
+			errs = append(errs, fmt.Errorf("external_account_config.advisory_account_token_position is greater than the number of tokens in external_account_config.advisory_subject"))
 		case advisoryTokens[o.ExternalAccountConfig.AdvisoryAccountTokenPosition-1] != "*":
-			errs = append(errs, "external_account_config.advisory_subject must have a wildcard token at the position specified by external_account_config.advisory_account_token_position")
+			errs = append(errs, fmt.Errorf("external_account_config.advisory_subject must have a wildcard token at the position specified by external_account_config.advisory_account_token_position"))
 		}
 	}
 	if len(errs) == 0 {
 		return nil
 	}
 
-	return errors.New(strings.Join(errs, ", "))
+	return errors.Join(errs...)
 }
 
 func (o *JSAdvisoryConfig) copy() *JSAdvisoryConfig {
