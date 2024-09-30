@@ -15,6 +15,7 @@ package surveyor
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -322,7 +323,7 @@ func (o *JSAdvisoryConfig) Validate() error {
 		return nil
 	}
 
-	return fmt.Errorf(strings.Join(errs, ", "))
+	return errors.New(strings.Join(errs, ", "))
 }
 
 func (o *JSAdvisoryConfig) copy() *JSAdvisoryConfig {

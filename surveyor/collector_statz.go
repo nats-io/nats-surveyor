@@ -85,6 +85,7 @@ type statzDescs struct {
 	JetstreamAccounts                   *prometheus.Desc
 	JetstreamHAAssets                   *prometheus.Desc
 	JetstreamAPIRequests                *prometheus.Desc
+	JetstreamAPIPending                 *prometheus.Desc
 	JetstreamAPIErrors                  *prometheus.Desc
 	// Jetstream Cluster
 	JetstreamClusterRaftGroupInfo     *prometheus.Desc
@@ -287,6 +288,7 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.JetstreamAccounts = newPromDesc("jetstream_accounts", "Number of NATS Accounts present on a Jetstream server", sc.jsServerLabels)
 	sc.descs.JetstreamHAAssets = newPromDesc("jetstream_ha_assets", "Number of HA (R>1) assets used by NATS", sc.jsServerLabels)
 	sc.descs.JetstreamAPIRequests = newPromDesc("jetstream_api_requests", "Number of Jetstream API Requests processed. Value is 0 when server starts", sc.jsServerLabels)
+	sc.descs.JetstreamAPIPending = newPromDesc("jetstream_api_pending", "Number of Jetstream API in the queue waiting to be processed", sc.jsServerLabels)
 	sc.descs.JetstreamAPIErrors = newPromDesc("jetstream_api_errors", "Number of Jetstream API Errors. Value is 0 when server starts", sc.jsServerLabels)
 
 	// Jetstream Raft Groups
@@ -846,6 +848,7 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- sc.descs.JetstreamMemstoreReservedUsedBytes
 	ch <- sc.descs.JetstreamAccounts
 	ch <- sc.descs.JetstreamAPIRequests
+	ch <- sc.descs.JetstreamAPIPending
 	ch <- sc.descs.JetstreamAPIErrors
 	// Jetstream Cluster
 	ch <- sc.descs.JetstreamClusterRaftGroupInfo
@@ -984,6 +987,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					metrics.newGaugeMetric(sc.descs.JetstreamHAAssets, float64(sm.Stats.JetStream.Stats.HAAssets), lblServerID)
 					// At present, Total does not include Errors. Keeping them separate
 					metrics.newCounterMetric(sc.descs.JetstreamAPIRequests, float64(sm.Stats.JetStream.Stats.API.Total), lblServerID)
+					metrics.newCounterMetric(sc.descs.JetstreamAPIPending, float64(sm.Stats.JetStream.Meta.Pending), lblServerID)
 					metrics.newCounterMetric(sc.descs.JetstreamAPIErrors, float64(sm.Stats.JetStream.Stats.API.Errors), lblServerID)
 				}
 
