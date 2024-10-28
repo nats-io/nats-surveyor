@@ -999,7 +999,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					jsRaftGroupLabelValues := []string{sm.Server.ID, serverName(&sm.Server), sm.Server.Cluster}
 					// FIXME: add labels needed or remove...
 
-					metrics.newCounterMetric(sc.descs.JetstreamAPIPending, float64(sm.Stats.JetStream.Meta.Pending), jsRaftGroupLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamAPIPending, float64(sm.Stats.JetStream.Meta.Pending), jsRaftGroupLabelValues)
 					metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupSize, float64(sm.Stats.JetStream.Meta.Size), jsRaftGroupLabelValues)
 
 					// Could provide false positive if two server have the same server_name in the same or different clusters in the super-cluster...
