@@ -987,7 +987,6 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					metrics.newGaugeMetric(sc.descs.JetstreamHAAssets, float64(sm.Stats.JetStream.Stats.HAAssets), lblServerID)
 					// At present, Total does not include Errors. Keeping them separate
 					metrics.newCounterMetric(sc.descs.JetstreamAPIRequests, float64(sm.Stats.JetStream.Stats.API.Total), lblServerID)
-					metrics.newCounterMetric(sc.descs.JetstreamAPIPending, float64(sm.Stats.JetStream.Meta.Pending), lblServerID)
 					metrics.newCounterMetric(sc.descs.JetstreamAPIErrors, float64(sm.Stats.JetStream.Stats.API.Errors), lblServerID)
 				}
 
@@ -1000,6 +999,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					jsRaftGroupLabelValues := []string{sm.Server.ID, serverName(&sm.Server), sm.Server.Cluster}
 					// FIXME: add labels needed or remove...
 
+					metrics.newCounterMetric(sc.descs.JetstreamAPIPending, float64(sm.Stats.JetStream.Meta.Pending), jsRaftGroupLabelValues)
 					metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupSize, float64(sm.Stats.JetStream.Meta.Size), jsRaftGroupLabelValues)
 
 					// Could provide false positive if two server have the same server_name in the same or different clusters in the super-cluster...
