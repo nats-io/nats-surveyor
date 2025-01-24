@@ -69,6 +69,8 @@ type statzDescs struct {
 	GatewayRecvMsgs   *prometheus.Desc
 	GatewayRecvBytes  *prometheus.Desc
 	GatewayNumInbound *prometheus.Desc
+	OutboundGateways  *gatewayzDescs
+	InboundGateways   *gatewayzDescs
 
 	// Jetstream Info
 	JetstreamInfo *prometheus.Desc
@@ -130,6 +132,22 @@ type statzDescs struct {
 	accJetstreamReplicaCount          *prometheus.Desc
 }
 
+// gatewayzDescs holds the gateway metric descriptions
+type gatewayzDescs struct {
+	configured        *prometheus.Desc
+	connStart         *prometheus.Desc
+	connLastActivity  *prometheus.Desc
+	connUptime        *prometheus.Desc
+	connIdle          *prometheus.Desc
+	connRtt           *prometheus.Desc
+	connPendingBytes  *prometheus.Desc
+	connInMsgs        *prometheus.Desc
+	connOutMsgs       *prometheus.Desc
+	connInBytes       *prometheus.Desc
+	connOutBytes      *prometheus.Desc
+	connSubscriptions *prometheus.Desc
+}
+
 // StatzCollector collects statz from a server deployment
 type StatzCollector struct {
 	sync.Mutex
@@ -142,6 +160,7 @@ type StatzCollector struct {
 	statsChan           chan *server.ServerStatsMsg
 	jsStats             []*jsStat
 	accStats            []*accountStats
+	gatewayStatz        []*gatewayStatz
 	rtts                map[string]time.Duration
 	pollTimeout         time.Duration
 	reply               string
@@ -153,6 +172,7 @@ type StatzCollector struct {
 	doneCh              chan struct{}
 	descs               statzDescs
 	collectAccounts     bool
+	collectGatewayz     bool
 	accStatZeroConn     map[string]int
 	natsUp              *prometheus.Desc
 
@@ -160,6 +180,7 @@ type StatzCollector struct {
 	serverInfoLabels   []string
 	routeLabels        []string
 	gatewayLabels      []string
+	gatewayzLabels     []string
 	jsServerLabels     []string
 	jsServerInfoLabels []string
 	constLabels        prometheus.Labels
@@ -282,6 +303,12 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.GatewayRecvBytes = newPromDesc("gateway_recv_bytes", "Number of messages sent over the gateway counter", sc.gatewayLabels)
 	sc.descs.GatewayNumInbound = newPromDesc("gateway_inbound_msg_count", "Number inbound messages through the gateway gauge", sc.gatewayLabels)
 
+	// Gatewayz
+	if sc.collectGatewayz {
+		sc.descs.OutboundGateways = sc.newGatewayzDescs("gatewayz_outbound_gateway", newPromDesc)
+		sc.descs.InboundGateways = sc.newGatewayzDescs("gatewayz_inbound_gateway", newPromDesc)
+	}
+
 	// Jetstream Info
 	sc.descs.JetstreamInfo = newPromDesc("jetstream_info", " Always 1. Contains metadata for cross-reference from other time-series", sc.jsServerInfoLabels)
 
@@ -396,7 +423,7 @@ func (sc *StatzCollector) buildDescs() {
 }
 
 // NewStatzCollector creates a NATS Statz Collector
-func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, serverDiscoveryWait, pollTimeout time.Duration, accounts bool, constLabels prometheus.Labels) *StatzCollector {
+func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, serverDiscoveryWait, pollTimeout time.Duration, accounts bool, gatewayz bool, constLabels prometheus.Labels) *StatzCollector {
 	sc := &StatzCollector{
 		nc:                  nc,
 		logger:              logger,
@@ -407,6 +434,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 		servers:             make(map[string]bool),
 		doneCh:              make(chan struct{}, 1),
 		collectAccounts:     accounts,
+		collectGatewayz:     gatewayz,
 		accStatZeroConn:     make(map[string]int),
 
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
@@ -414,6 +442,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 		serverInfoLabels:   []string{"server_cluster", "server_name", "server_id", "server_version"},
 		routeLabels:        []string{"server_cluster", "server_name", "server_id", "server_route_name", "server_route_name_id"},
 		gatewayLabels:      []string{"server_cluster", "server_name", "server_id", "server_gateway_name", "server_gateway_name_id"},
+		gatewayzLabels:     []string{"server_id", "server_name", "gateway_name", "remote_gateway_name", "gateway_id", "cid"},
 		jsServerLabels:     []string{"server_id", "server_name", "cluster_name"},
 		jsServerInfoLabels: []string{"server_name", "server_host", "server_id", "server_cluster", "server_domain", "server_version", "server_jetstream"},
 		constLabels:        constLabels,
@@ -425,6 +454,23 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 
 	nc.Subscribe(sc.reply+".*", sc.handleResponse)
 	return sc
+}
+
+func (sc *StatzCollector) newGatewayzDescs(gwType string, newPromDesc func(name, help string, labels []string) *prometheus.Desc) *gatewayzDescs {
+	return &gatewayzDescs{
+		configured:        newPromDesc(gwType+"_configured", "configured", sc.gatewayzLabels),
+		connStart:         newPromDesc(gwType+"_conn_start_time_seconds", "conn_start_time_seconds", sc.gatewayzLabels),
+		connLastActivity:  newPromDesc(gwType+"_conn_last_activity_seconds", "conn_last_activity_seconds", sc.gatewayzLabels),
+		connUptime:        newPromDesc(gwType+"_conn_uptime_seconds", "conn_uptime_seconds", sc.gatewayzLabels),
+		connIdle:          newPromDesc(gwType+"_conn_idle_seconds", "conn_idle_seconds", sc.gatewayzLabels),
+		connRtt:           newPromDesc(gwType+"_conn_rtt", "rtt", sc.gatewayzLabels),
+		connPendingBytes:  newPromDesc(gwType+"_conn_pending_bytes", "pending_bytes", sc.gatewayzLabels),
+		connInMsgs:        newPromDesc(gwType+"_conn_in_msgs", "in_msgs", sc.gatewayzLabels),
+		connOutMsgs:       newPromDesc(gwType+"_conn_out_msgs", "out_msgs", sc.gatewayzLabels),
+		connInBytes:       newPromDesc(gwType+"_conn_in_bytes", "in_bytes", sc.gatewayzLabels),
+		connOutBytes:      newPromDesc(gwType+"_conn_out_bytes", "out_bytes", sc.gatewayzLabels),
+		connSubscriptions: newPromDesc(gwType+"_conn_subscriptions", "subscriptions", sc.gatewayzLabels),
+	}
 }
 
 func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
@@ -573,6 +619,13 @@ func (sc *StatzCollector) poll() error {
 		}
 	}
 
+	if sc.collectGatewayz {
+		err := sc.pollGatewayInfo()
+		if err != nil {
+			return err
+		}
+	}
+
 	if sc.collectAccounts {
 		return sc.pollAccountInfo()
 	}
@@ -662,6 +715,19 @@ func (sc *StatzCollector) pollAccountInfo() error {
 	return nil
 }
 
+func (sc *StatzCollector) pollGatewayInfo() error {
+	gatewayz, err := sc.getGatewayz(sc.nc)
+	if err != nil {
+		return err
+	}
+
+	sc.Lock()
+	sc.gatewayStatz = gatewayz
+	sc.Unlock()
+
+	return nil
+}
+
 func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountDetail, []*jsStat) {
 	opts := server.JSzOptions{
 		Accounts:   true,
@@ -727,6 +793,11 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 type accStatz struct {
 	server.ServerAPIResponse
 	Data server.AccountStatz `json:"data,omitempty"`
+}
+
+type gatewayStatz struct {
+	server.ServerAPIResponse
+	Data *server.Gatewayz `json:"data,omitempty"`
 }
 
 type jsStat struct {
@@ -800,6 +871,46 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 	}
 
 	return accStats, nil
+}
+
+func (sc *StatzCollector) getGatewayz(nc *nats.Conn) ([]*gatewayStatz, error) {
+	req := &server.GatewayzEventOptions{
+		GatewayzOptions: server.GatewayzOptions{
+			Accounts: false,
+		},
+	}
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]*gatewayStatz, 0)
+	const subj = "$SYS.REQ.SERVER.PING.GATEWAYZ"
+
+	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
+	if err != nil {
+		sc.logger.Warnf("Error requesting gatewayz stats: %s", err.Error())
+	}
+
+	for _, msg := range msgs {
+		var g gatewayStatz
+
+		if err = unmarshalMsg(msg, &g); err != nil {
+			sc.logger.Warnf("Error deserializing gatewayz stats: %s", err.Error())
+			continue
+		}
+
+		if g.Error != nil {
+			sc.logger.Warnf("Error in Gatewayz stats response: %s", g.Error.Error())
+			continue
+		}
+
+		res = append(res, &g)
+		if sc.numServers != -1 && len(res) == sc.numServers {
+			break
+		}
+	}
+
+	return res, nil
 }
 
 func mergeStreamDetails(from, to *server.AccountDetail) {
@@ -1140,6 +1251,25 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			}
 		}
 
+		// Gatewayz metrics
+		if sc.collectGatewayz {
+			for _, gwStat := range sc.gatewayStatz {
+				if gwStat == nil || gwStat.Data == nil {
+					continue
+				}
+
+				for rgwName, gw := range gwStat.Data.OutboundGateways {
+					collectGatewayzMetrics(metrics, sc.descs.OutboundGateways, rgwName, gwStat, gw)
+				}
+
+				for rgwName, gws := range gwStat.Data.InboundGateways {
+					for _, gw := range gws {
+						collectGatewayzMetrics(metrics, sc.descs.InboundGateways, rgwName, gwStat, gw)
+					}
+				}
+			}
+		}
+
 		collectCh := make(chan prometheus.Metric)
 
 		// We want to collect these before we exit the flight group
@@ -1186,6 +1316,40 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- m
 	}
 
+}
+
+func collectGatewayzMetrics(metrics *metricSlice, gwDescs *gatewayzDescs, rgwName string, gwStat *gatewayStatz, gw *server.RemoteGatewayz) {
+	if gw == nil || gw.Connection == nil || gwStat == nil || gwStat.Server == nil || gwStat.Data == nil {
+		return
+	}
+
+	var isConfigured float64
+	if gw.IsConfigured {
+		isConfigured = 1
+	}
+	serverId := gwStat.Server.ID
+	serverName := gwStat.Server.Name
+	gwName := gwStat.Data.Name
+	gwId := gw.Connection.Name
+	cid := strconv.FormatUint(gw.Connection.Cid, 10)
+
+	// server_id, server_name, gateway_name, remote_gateway_name, gateway_id, cid
+	labels := []string{serverId, serverName, gwName, rgwName, gwId, cid}
+	uptime, _ := time.ParseDuration(gw.Connection.Uptime)
+	idle, _ := time.ParseDuration(gw.Connection.Idle)
+	rtt, _ := time.ParseDuration(gw.Connection.RTT)
+
+	metrics.newGaugeMetric(gwDescs.configured, isConfigured, labels)
+	metrics.newGaugeMetric(gwDescs.connLastActivity, float64(gw.Connection.LastActivity.Unix()), labels)
+	metrics.newGaugeMetric(gwDescs.connUptime, uptime.Seconds(), labels)
+	metrics.newGaugeMetric(gwDescs.connIdle, idle.Seconds(), labels)
+	metrics.newGaugeMetric(gwDescs.connRtt, rtt.Seconds(), labels)
+	metrics.newGaugeMetric(gwDescs.connPendingBytes, float64(gw.Connection.Pending), labels)
+	metrics.newGaugeMetric(gwDescs.connInMsgs, float64(gw.Connection.InMsgs), labels)
+	metrics.newGaugeMetric(gwDescs.connOutMsgs, float64(gw.Connection.OutMsgs), labels)
+	metrics.newGaugeMetric(gwDescs.connInBytes, float64(gw.Connection.InBytes), labels)
+	metrics.newGaugeMetric(gwDescs.connOutBytes, float64(gw.Connection.OutBytes), labels)
+	metrics.newGaugeMetric(gwDescs.connSubscriptions, float64(gw.Connection.NumSubs), labels)
 }
 
 func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte, compression bool) ([]*nats.Msg, error) {

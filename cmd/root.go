@@ -73,6 +73,7 @@ func rootCmdArgs(args []string) []string {
 		"-prefix":          "--prefix",
 		"-observe":         "--observe",
 		"-jetstream":       "--jetstream",
+		"-gatewayz":        "--gatewayz",
 	}
 	newArgs := make([]string, 0)
 
@@ -236,6 +237,10 @@ func init() {
 	rootCmd.Flags().Bool("accounts", false, "Export per account metrics")
 	_ = viper.BindPFlag("accounts", rootCmd.Flags().Lookup("accounts"))
 
+	// gaewayz
+	rootCmd.Flags().Bool("gatewayz", false, "Export gateway metrics")
+	_ = viper.BindPFlag("gatewayz", rootCmd.Flags().Lookup("gatewayz"))
+
 	// log-level
 	rootCmd.Flags().String("log-level", "info", "Log level, one of: trace|debug|info|warn|error|fatal|panic")
 	_ = viper.BindPFlag("log-level", rootCmd.Flags().Lookup("log-level"))
@@ -269,6 +274,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.ObservationConfigDir = viper.GetString("observe")
 	opts.JetStreamConfigDir = viper.GetString("jetstream")
 	opts.Accounts = viper.GetBool("accounts")
+	opts.Gatewayz = viper.GetBool("gatewayz")
 	opts.ServerResponseWait = viper.GetDuration("server-discovery-timeout")
 
 	logLevel, err := logrus.ParseLevel(viper.GetString("log-level"))
