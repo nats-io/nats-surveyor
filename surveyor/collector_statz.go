@@ -1327,14 +1327,14 @@ func collectGatewayzMetrics(metrics *metricSlice, gwDescs *gatewayzDescs, rgwNam
 	if gw.IsConfigured {
 		isConfigured = 1
 	}
-	serverId := gwStat.Server.ID
+	serverID := gwStat.Server.ID
 	serverName := gwStat.Server.Name
 	gwName := gwStat.Data.Name
-	gwId := gw.Connection.Name
+	gwID := gw.Connection.Name
 	cid := strconv.FormatUint(gw.Connection.Cid, 10)
 
 	// server_id, server_name, gateway_name, remote_gateway_name, gateway_id, cid
-	labels := []string{serverId, serverName, gwName, rgwName, gwId, cid}
+	labels := []string{serverID, serverName, gwName, rgwName, gwID, cid}
 	uptime, _ := time.ParseDuration(gw.Connection.Uptime)
 	idle, _ := time.ParseDuration(gw.Connection.Idle)
 	rtt, _ := time.ParseDuration(gw.Connection.RTT)
