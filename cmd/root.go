@@ -237,7 +237,7 @@ func init() {
 	rootCmd.Flags().Bool("accounts", false, "Export per account metrics")
 	_ = viper.BindPFlag("accounts", rootCmd.Flags().Lookup("accounts"))
 
-	// gaewayz
+	// gatewayz
 	rootCmd.Flags().Bool("gatewayz", false, "Export gateway metrics")
 	_ = viper.BindPFlag("gatewayz", rootCmd.Flags().Lookup("gatewayz"))
 
