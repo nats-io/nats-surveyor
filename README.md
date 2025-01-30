@@ -20,6 +20,7 @@ Usage:
 
 Flags:
       --accounts                            Export per account metrics
+      --gatewayz                            Export gateway metrics
   -a, --addr string                         Network host to listen on. (default "0.0.0.0")
       --config string                       config file (default is ./nats-surveyor.yaml)
   -c, --count int                           Expected number of servers (-1 for undefined). (default 1)

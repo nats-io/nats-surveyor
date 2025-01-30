@@ -267,6 +267,60 @@ func TestSurveyor_Account(t *testing.T) {
 	}
 }
 
+func TestSurveyor_Gatewayz(t *testing.T) {
+	sc := st.NewSuperCluster(t)
+	defer sc.Shutdown()
+
+	opt := getTestOptions()
+	opt.Gatewayz = true
+	opt.ExpectedServers = 3
+	s, err := NewSurveyor(opt)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+
+	defer s.Stop()
+
+	output, err := PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{
+		"nats_core_gatewayz_inbound_gateway_configured",
+		"nats_core_gatewayz_inbound_gateway_conn_idle_seconds",
+		"nats_core_gatewayz_inbound_gateway_conn_in_bytes",
+		"nats_core_gatewayz_inbound_gateway_conn_in_msgs",
+		"nats_core_gatewayz_inbound_gateway_conn_last_activity_seconds",
+		"nats_core_gatewayz_inbound_gateway_conn_out_bytes",
+		"nats_core_gatewayz_inbound_gateway_conn_out_msgs",
+		"nats_core_gatewayz_inbound_gateway_conn_pending_bytes",
+		"nats_core_gatewayz_inbound_gateway_conn_rtt",
+		"nats_core_gatewayz_inbound_gateway_conn_subscriptions",
+		"nats_core_gatewayz_inbound_gateway_conn_uptime_seconds",
+		"nats_core_gatewayz_outbound_gateway_configured",
+		"nats_core_gatewayz_outbound_gateway_conn_idle_seconds",
+		"nats_core_gatewayz_outbound_gateway_conn_in_bytes",
+		"nats_core_gatewayz_outbound_gateway_conn_in_msgs",
+		"nats_core_gatewayz_outbound_gateway_conn_last_activity_seconds",
+		"nats_core_gatewayz_outbound_gateway_conn_out_bytes",
+		"nats_core_gatewayz_outbound_gateway_conn_out_msgs",
+		"nats_core_gatewayz_outbound_gateway_conn_pending_bytes",
+		"nats_core_gatewayz_outbound_gateway_conn_rtt",
+		"nats_core_gatewayz_outbound_gateway_conn_subscriptions",
+		"nats_core_gatewayz_outbound_gateway_conn_uptime_seconds",
+	}
+	for _, m := range want {
+		if !strings.Contains(output, m) {
+			t.Logf("output: %s", output)
+			t.Fatalf("missing: %s", m)
+		}
+	}
+}
+
 func TestSurveyor_AccountJetStreamAssets(t *testing.T) {
 	sc := st.NewJetStreamCluster(t)
 	defer sc.Shutdown()

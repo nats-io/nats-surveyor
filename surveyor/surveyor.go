@@ -79,6 +79,7 @@ type Options struct {
 	ObservationConfigDir string
 	JetStreamConfigDir   string
 	Accounts             bool
+	Gatewayz             bool
 	Logger               *logrus.Logger    // not exposed by CLI
 	NATSOpts             []nats.Option     // not exposed by CLI
 	ConstLabels          prometheus.Labels // not exposed by CLI
@@ -200,7 +201,7 @@ func (s *Surveyor) createStatszCollector() error {
 		s.logger.Debugln("Skipping per-account exports")
 	}
 
-	s.statzC = NewStatzCollector(s.sysAcctPC.nc, s.logger, s.opts.ExpectedServers, s.opts.ServerResponseWait, s.opts.PollTimeout, s.opts.Accounts, s.opts.ConstLabels)
+	s.statzC = NewStatzCollector(s.sysAcctPC.nc, s.logger, s.opts.ExpectedServers, s.opts.ServerResponseWait, s.opts.PollTimeout, s.opts.Accounts, s.opts.Gatewayz, s.opts.ConstLabels)
 	return s.promRegistry.Register(s.statzC)
 }
 
