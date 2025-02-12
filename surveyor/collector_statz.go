@@ -538,8 +538,8 @@ func (sc *StatzCollector) poll() error {
 	msg := nats.Msg{
 		Subject: sc.sysReqPrefix + ".SERVER.PING",
 		Reply:   sc.reply + "." + sc.pollkey,
-		Header:  nats.Header{
-			//"Accept-Encoding": []string{"snappy"},
+		Header: nats.Header{
+			"Accept-Encoding": []string{"snappy"},
 		},
 	}
 
@@ -829,6 +829,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 	}
 	res := make([]*accStatz, 0)
 	subj := sc.sysReqPrefix + ".ACCOUNT.PING.STATZ"
+
 	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
 	if err != nil {
 		sc.logger.Warnf("Error requesting account stats: %s", err.Error())
@@ -1384,7 +1385,7 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte,
 	}
 
 	if compression {
-		// msg.Header.Set("Accept-Encoding", "snappy")
+		msg.Header.Set("Accept-Encoding", "snappy")
 	}
 
 	if err := nc.PublishMsg(msg); err != nil {
