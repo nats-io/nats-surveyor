@@ -428,9 +428,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 
 	// Remove the potential wildcard users might place
 	// since we are simply prepending the string
-	if strings.HasSuffix(sysReqPrefix, ".>") {
-		sysReqPrefix = strings.TrimSuffix(sysReqPrefix, ".>")
-	}
+	sysReqPrefix = strings.TrimSuffix(sysReqPrefix, ".>")
 
 	sc := &StatzCollector{
 		nc:                  nc,
