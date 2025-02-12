@@ -543,8 +543,6 @@ func (sc *StatzCollector) poll() error {
 		},
 	}
 
-	println(">>> REQ:", msg.Subject)
-
 	// Send our ping for statusz updates
 	if err := sc.nc.PublishMsg(&msg); err != nil {
 		return err
@@ -755,9 +753,6 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 	}
 
 	subj := sc.sysReqPrefix + ".SERVER.PING.JSZ"
-
-	println(">>> REQ:", subj)
-
 	msgs, err := requestMany(nc, sc, subj, req, true)
 	if err != nil {
 		sc.logger.Warnf("Unable to request JetStream info: %s", err)
@@ -834,9 +829,6 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 	}
 	res := make([]*accStatz, 0)
 	subj := sc.sysReqPrefix + ".ACCOUNT.PING.STATZ"
-
-	println(">>> REQ:", subj)
-
 	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
 	if err != nil {
 		sc.logger.Warnf("Error requesting account stats: %s", err.Error())
@@ -901,8 +893,6 @@ func (sc *StatzCollector) getGatewayz(nc *nats.Conn) ([]*gatewayStatz, error) {
 	}
 	res := make([]*gatewayStatz, 0)
 	subj := sc.sysReqPrefix + ".SERVER.PING.GATEWAYZ"
-
-	println(">>> REQ:", subj)
 
 	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
 	if err != nil {
