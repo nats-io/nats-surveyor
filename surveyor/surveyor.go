@@ -46,6 +46,7 @@ var (
 	DefaultExpectedServers    = 1
 	DefaultPollTimeout        = time.Second * 3
 	DefaultServerResponseWait = 500 * time.Millisecond
+	DefaultSysReqPrefix       = "$SYS.REQ"
 
 	// bcryptPrefix from nats-server
 	bcryptPrefix = "$2a$"
@@ -80,6 +81,7 @@ type Options struct {
 	JetStreamConfigDir   string
 	Accounts             bool
 	Gatewayz             bool
+	SysReqPrefix         string
 	Logger               *logrus.Logger    // not exposed by CLI
 	NATSOpts             []nats.Option     // not exposed by CLI
 	ConstLabels          prometheus.Labels // not exposed by CLI
@@ -102,6 +104,7 @@ func GetDefaultOptions() *Options {
 		ExpectedServers:    DefaultExpectedServers,
 		ServerResponseWait: DefaultServerResponseWait,
 		Logger:             logrus.New(),
+		SysReqPrefix:       DefaultSysReqPrefix,
 	}
 	return opts
 }
@@ -201,7 +204,7 @@ func (s *Surveyor) createStatszCollector() error {
 		s.logger.Debugln("Skipping per-account exports")
 	}
 
-	s.statzC = NewStatzCollector(s.sysAcctPC.nc, s.logger, s.opts.ExpectedServers, s.opts.ServerResponseWait, s.opts.PollTimeout, s.opts.Accounts, s.opts.Gatewayz, s.opts.ConstLabels)
+	s.statzC = NewStatzCollector(s.sysAcctPC.nc, s.logger, s.opts.ExpectedServers, s.opts.ServerResponseWait, s.opts.PollTimeout, s.opts.Accounts, s.opts.Gatewayz, s.opts.SysReqPrefix, s.opts.ConstLabels)
 	return s.promRegistry.Register(s.statzC)
 }
 
