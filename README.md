@@ -48,6 +48,7 @@ Flags:
       --tlskey string                       Client private key for NATS connections.
       --tlsfirst bool                       Whether to use TLS First connections.
       --user string                         NATS user name or token
+      --sys-req-prefix                      Subject prefix for system requests (default "$SYS.REQ")
   -v, --version                             version for nats-surveyor
 ```
 

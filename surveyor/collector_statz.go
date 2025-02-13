@@ -173,6 +173,7 @@ type StatzCollector struct {
 	descs               statzDescs
 	collectAccounts     bool
 	collectGatewayz     bool
+	sysReqPrefix        string
 	accStatZeroConn     map[string]int
 	natsUp              *prometheus.Desc
 
@@ -423,7 +424,12 @@ func (sc *StatzCollector) buildDescs() {
 }
 
 // NewStatzCollector creates a NATS Statz Collector
-func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, serverDiscoveryWait, pollTimeout time.Duration, accounts bool, gatewayz bool, constLabels prometheus.Labels) *StatzCollector {
+func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, serverDiscoveryWait, pollTimeout time.Duration, accounts bool, gatewayz bool, sysReqPrefix string, constLabels prometheus.Labels) *StatzCollector {
+
+	// Remove the potential wildcard users might place
+	// since we are simply prepending the string
+	sysReqPrefix = strings.TrimSuffix(sysReqPrefix, ".>")
+
 	sc := &StatzCollector{
 		nc:                  nc,
 		logger:              logger,
@@ -435,6 +441,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 		doneCh:              make(chan struct{}, 1),
 		collectAccounts:     accounts,
 		collectGatewayz:     gatewayz,
+		sysReqPrefix:        sysReqPrefix,
 		accStatZeroConn:     make(map[string]int),
 
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
@@ -527,7 +534,7 @@ func (sc *StatzCollector) poll() error {
 	}
 
 	msg := nats.Msg{
-		Subject: "$SYS.REQ.SERVER.PING",
+		Subject: sc.sysReqPrefix + ".SERVER.PING",
 		Reply:   sc.reply + "." + sc.pollkey,
 		Header: nats.Header{
 			"Accept-Encoding": []string{"snappy"},
@@ -743,7 +750,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 		sc.logger.Warnf("Error marshaling request: %s", err)
 	}
 
-	subj := "$SYS.REQ.SERVER.PING.JSZ"
+	subj := sc.sysReqPrefix + ".SERVER.PING.JSZ"
 	msgs, err := requestMany(nc, sc, subj, req, true)
 	if err != nil {
 		sc.logger.Warnf("Unable to request JetStream info: %s", err)
@@ -819,7 +826,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 		return nil, err
 	}
 	res := make([]*accStatz, 0)
-	const subj = "$SYS.REQ.ACCOUNT.PING.STATZ"
+	subj := sc.sysReqPrefix + ".ACCOUNT.PING.STATZ"
 
 	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
 	if err != nil {
@@ -884,7 +891,7 @@ func (sc *StatzCollector) getGatewayz(nc *nats.Conn) ([]*gatewayStatz, error) {
 		return nil, err
 	}
 	res := make([]*gatewayStatz, 0)
-	const subj = "$SYS.REQ.SERVER.PING.GATEWAYZ"
+	subj := sc.sysReqPrefix + ".SERVER.PING.GATEWAYZ"
 
 	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
 	if err != nil {
