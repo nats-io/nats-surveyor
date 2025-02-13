@@ -1,4 +1,4 @@
-#syntax=docker/dockerfile-upstream:1.6
+#syntax=docker/dockerfile:1.13
 FROM --platform=$BUILDPLATFORM golang:1.24.0-bullseye
 
 ARG CI
@@ -37,7 +37,7 @@ RUN <<EOT
   FLAGS="--clean"
 
   if [ -z ${GITHUB_TOKEN} ]; then
-    if [ ${CI} != "true" ]; then FLAGS="${FLAGS} --skip-validate --single-target"; fi
+    if [ ${CI} != "true" ]; then FLAGS="${FLAGS} --skip=validate --single-target"; fi
     goreleaser build ${FLAGS}
   else
     goreleaser release ${FLAGS}
