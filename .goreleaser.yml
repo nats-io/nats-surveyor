@@ -1,4 +1,4 @@
----
+version: 2
 project_name: nats-surveyor
 
 release:
@@ -39,7 +39,8 @@ archives:
     wrap_in_directory: true
     name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
       }}v{{ .Arm }}{{ end }}'
-    format: zip
+    formats:
+    - 'zip'
     files:
     - LICENSE
     - README.md
@@ -58,7 +59,7 @@ nfpms:
     license: Apache 2.0
 
 snapshot:
-  name_template: SNAPSHOT-{{ .Commit }}
+  version_template: SNAPSHOT-{{ .Commit }}
 
 checksum:
   name_template: '{{ .ProjectName }}-v{{ .Version }}-checksums.txt'
