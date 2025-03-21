@@ -9,7 +9,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ '1.23' ]
+        go: [ '1.24' ]
         os: [ ubuntu-latest, macOS-latest ]
     runs-on: ${{matrix.os}}
     steps:
@@ -27,7 +27,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.60
+          version: v1.64.8
 
       - name: Run tests
         shell: bash --noprofile --norc -x -eo pipefail {0}
