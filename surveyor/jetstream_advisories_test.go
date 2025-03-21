@@ -663,7 +663,6 @@ func TestSurveyor_AdvisoriesError(t *testing.T) {
 			AccountName: "global",
 		},
 	)
-
 	if err != nil {
 		t.Errorf("Expected no error; got: %s", err)
 	}
