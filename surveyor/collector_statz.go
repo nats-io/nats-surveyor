@@ -425,10 +425,12 @@ func (sc *StatzCollector) buildDescs() {
 
 // NewStatzCollector creates a NATS Statz Collector
 func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, serverDiscoveryWait, pollTimeout time.Duration, accounts bool, gatewayz bool, sysReqPrefix string, constLabels prometheus.Labels) *StatzCollector {
-
 	// Remove the potential wildcard users might place
 	// since we are simply prepending the string
 	sysReqPrefix = strings.TrimSuffix(sysReqPrefix, ".>")
+	if sysReqPrefix == "" {
+		sysReqPrefix = DefaultSysReqPrefix
+	}
 
 	sc := &StatzCollector{
 		nc:                  nc,
@@ -1322,7 +1324,6 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 	for _, m := range result.([]prometheus.Metric) {
 		ch <- m
 	}
-
 }
 
 func collectGatewayzMetrics(metrics *metricSlice, gwDescs *gatewayzDescs, rgwName string, gwStat *gatewayStatz, gw *server.RemoteGatewayz) {

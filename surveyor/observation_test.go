@@ -584,7 +584,6 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 			Credentials: "../test/myuser.creds",
 		},
 	)
-
 	if err != nil {
 		t.Errorf("Expected no error; got: %s", err)
 	}

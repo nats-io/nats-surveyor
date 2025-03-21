@@ -136,8 +136,10 @@ type SuperCluster struct {
 	Clients []*nats.Conn
 }
 
-var configFiles = []string{"../test/r1s1.conf", "../test/r1s2.conf", "../test/r2s1.conf"}
-var jetStreamConfigFiles = []string{"../test/js1.conf", "../test/js2.conf", "../test/js3.conf"}
+var (
+	configFiles          = []string{"../test/r1s1.conf", "../test/r1s2.conf", "../test/r2s1.conf"}
+	jetStreamConfigFiles = []string{"../test/js1.conf", "../test/js2.conf", "../test/js3.conf"}
+)
 
 // NewSuperCluster creates a small supercluster for testing, with one client per server.
 func NewSuperCluster(t *testing.T) *SuperCluster {
@@ -210,7 +212,6 @@ func NewJetStreamCluster(t *testing.T) *SuperCluster {
 // StoreDir from config will not be used - instead, a tmp directory will be created for the test
 func StartJetStreamServerFromConfig(t *testing.T, confFile string) *server.Server {
 	opts, err := server.ProcessConfigFile(confFile)
-
 	if err != nil {
 		t.Fatalf("Error processing config file: %v", err)
 	}
