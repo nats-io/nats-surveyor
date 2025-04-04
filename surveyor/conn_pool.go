@@ -15,12 +15,14 @@ import (
 
 type ConnProvider interface {
 	Get(*NatsContext) (Conn, error)
+	Close(bool)
 }
 
 type Conn interface {
 	Conn() *nats.Conn
 	Close()
 	IsConnected() bool
+	IsClosed() bool
 }
 
 type NatsContext struct {
@@ -124,6 +126,10 @@ func (pc *pooledNatsConn) IsConnected() bool {
 	return pc.nc.IsConnected()
 }
 
+func (pc *pooledNatsConn) IsClosed() bool {
+	return pc.nc.IsClosed()
+}
+
 func (pc *pooledNatsConn) ReturnToPool() {
 	pc.cp.Lock()
 	pc.count--
@@ -142,6 +148,7 @@ func (pc *pooledNatsConn) ReturnToPool() {
 type natsConnPool struct {
 	sync.Mutex
 	cache        map[string]*pooledNatsConn
+	openConns    []*pooledNatsConn
 	logger       *logrus.Logger
 	group        *singleflight.Group
 	natsDefaults *natsContextDefaults
@@ -159,6 +166,19 @@ func newNatsConnPool(logger *logrus.Logger, natsDefaults *natsContextDefaults, n
 }
 
 const getPooledConnMaxTries = 10
+
+func (cp *natsConnPool) Close(force bool) {
+	cp.Mutex.Lock()
+	defer cp.Mutex.Lock()
+
+	for _, c := range cp.openConns {
+		if force {
+			c.nc.Close()
+		} else {
+			c.Close()
+		}
+	}
+}
 
 // Get returns a *pooledNatsConn
 func (cp *natsConnPool) Get(cfg *NatsContext) (Conn, error) {
@@ -219,9 +239,20 @@ func (cp *natsConnPool) getPooledConn(key string, cfg *NatsContext) (*pooledNats
 	conn, err, _ := cp.group.Do(key, func() (interface{}, error) {
 		cp.Lock()
 		pooledConn, ok := cp.cache[key]
-		if ok && pooledConn.nc.IsConnected() {
-			cp.Unlock()
-			return pooledConn, nil
+		if ok {
+			if pooledConn.IsConnected() {
+				cp.Unlock()
+				return pooledConn, nil
+			}
+			if !pooledConn.IsClosed() {
+				openConnections := []*pooledNatsConn{pooledConn}
+				for _, c := range cp.openConns {
+					if !c.IsClosed() {
+						openConnections = append(openConnections, c)
+					}
+					cp.openConns = openConnections
+				}
+			}
 		}
 		cp.Unlock()
 

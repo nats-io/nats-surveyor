@@ -124,6 +124,7 @@ type Surveyor struct {
 	serviceObsFSWatcher *serviceObsFSWatcher
 	connProvider        ConnProvider
 	conn                Conn
+	openConnections     []Conn
 	running             bool
 }
 
@@ -148,6 +149,7 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 
 	return &Surveyor{
 		connProvider:        opts.Provider,
+		openConnections:     make([]Conn, 0),
 		jsAdvisoryManager:   jsAdvisoryManager,
 		jsAdvisoryFSWatcher: jsFsWatcher,
 		logger:              opts.Logger,
@@ -460,7 +462,7 @@ func (s *Surveyor) Start() error {
 	defer s.Unlock()
 
 	if s.running {
-		if s.conn != nil && !s.conn.IsConnected() {
+		if s.conn != nil && s.conn.IsConnected() {
 			// already running
 			return nil
 		}
@@ -539,6 +541,7 @@ func (s *Surveyor) Stop() {
 	s.jsAdvisoryManager.stop()
 
 	s.conn.Close()
+	s.connProvider.Close(true)
 	s.running = false
 }
 
