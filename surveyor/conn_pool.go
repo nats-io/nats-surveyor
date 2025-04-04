@@ -13,7 +13,17 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-type natsContext struct {
+type ConnProvider interface {
+	Get(*NatsContext) (Conn, error)
+}
+
+type Conn interface {
+	Conn() *nats.Conn
+	Close()
+	IsConnected() bool
+}
+
+type NatsContext struct {
 	Name        string `json:"name"`
 	URL         string `json:"url"`
 	JWT         string `json:"jwt"`
@@ -32,7 +42,7 @@ type natsContext struct {
 	NatsOpts   []nats.Option `json:"-"`
 }
 
-func (c *natsContext) copy() *natsContext {
+func (c *NatsContext) copy() *NatsContext {
 	if c == nil {
 		return nil
 	}
@@ -40,7 +50,7 @@ func (c *natsContext) copy() *natsContext {
 	return &cp
 }
 
-func (c *natsContext) hash() (string, error) {
+func (c *NatsContext) hash() (string, error) {
 	b, err := json.Marshal(c)
 	if err != nil {
 		return "", fmt.Errorf("error marshaling context to json: %v", err)
@@ -102,6 +112,18 @@ type pooledNatsConn struct {
 	closed bool
 }
 
+func (pc *pooledNatsConn) Conn() *nats.Conn {
+	return pc.nc
+}
+
+func (pc *pooledNatsConn) Close() {
+	pc.ReturnToPool()
+}
+
+func (pc *pooledNatsConn) IsConnected() bool {
+	return pc.nc.IsConnected()
+}
+
 func (pc *pooledNatsConn) ReturnToPool() {
 	pc.cp.Lock()
 	pc.count--
@@ -139,7 +161,7 @@ func newNatsConnPool(logger *logrus.Logger, natsDefaults *natsContextDefaults, n
 const getPooledConnMaxTries = 10
 
 // Get returns a *pooledNatsConn
-func (cp *natsConnPool) Get(cfg *natsContext) (*pooledNatsConn, error) {
+func (cp *natsConnPool) Get(cfg *NatsContext) (Conn, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("nats context must not be nil")
 	}
@@ -170,7 +192,7 @@ func (cp *natsConnPool) Get(cfg *natsContext) (*pooledNatsConn, error) {
 		return nil, err
 	}
 
-	for i := 0; i < getPooledConnMaxTries; i++ {
+	for range getPooledConnMaxTries {
 		connection, err := cp.getPooledConn(key, cfg)
 		if err != nil {
 			return nil, err
@@ -193,7 +215,7 @@ func (cp *natsConnPool) Get(cfg *natsContext) (*pooledNatsConn, error) {
 }
 
 // getPooledConn gets or establishes a *pooledNatsConn in a singleflight group, but does not increment its count
-func (cp *natsConnPool) getPooledConn(key string, cfg *natsContext) (*pooledNatsConn, error) {
+func (cp *natsConnPool) getPooledConn(key string, cfg *NatsContext) (*pooledNatsConn, error) {
 	conn, err, _ := cp.group.Do(key, func() (interface{}, error) {
 		cp.Lock()
 		pooledConn, ok := cp.cache[key]

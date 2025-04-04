@@ -83,6 +83,7 @@ type Options struct {
 	Gatewayz             bool
 	SysReqPrefix         string
 	Logger               *logrus.Logger    // not exposed by CLI
+	Provider             ConnProvider      // not exposed by CLI
 	NATSOpts             []nats.Option     // not exposed by CLI
 	ConstLabels          prometheus.Labels // not exposed by CLI
 	DisableHTTPServer    bool              // not exposed by CLI
@@ -111,7 +112,6 @@ func GetDefaultOptions() *Options {
 // A Surveyor instance
 type Surveyor struct {
 	sync.Mutex
-	cp                  *natsConnPool
 	httpServer          *http.Server
 	jsAdvisoryManager   *JSAdvisoryManager
 	jsAdvisoryFSWatcher *jsAdvisoryFSWatcher
@@ -122,7 +122,9 @@ type Surveyor struct {
 	statzC              *StatzCollector
 	serviceObsManager   *ServiceObsManager
 	serviceObsFSWatcher *serviceObsFSWatcher
-	sysAcctPC           *pooledNatsConn
+	connProvider        ConnProvider
+	conn                Conn
+	running             bool
 }
 
 // NewSurveyor creates a surveyor
@@ -132,22 +134,20 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 	}
 
 	promRegistry := prometheus.NewRegistry()
-	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name:        prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
-		Help:        "Number of times the surveyor reconnected to the NATS cluster",
-		ConstLabels: opts.ConstLabels,
-	}, []string{"name"})
-	promRegistry.MustRegister(reconnectCtr)
-	cp := newSurveyorConnPool(opts, reconnectCtr)
+
+	if opts.Provider == nil {
+		opts.Provider = newSurveyorConnPool(opts, promRegistry)
+	}
+
 	serviceObsMetrics := NewServiceObservationMetrics(promRegistry, opts.ConstLabels)
-	serviceObsManager := newServiceObservationManager(cp, opts.Logger, serviceObsMetrics)
+	serviceObsManager := newServiceObservationManager(opts.Provider, opts.Logger, serviceObsMetrics)
 	serviceFsWatcher := newServiceObservationFSWatcher(opts.Logger, serviceObsManager)
 	jsAdvisoryMetrics := NewJetStreamAdvisoryMetrics(promRegistry, opts.ConstLabels)
-	jsAdvisoryManager := newJetStreamAdvisoryManager(cp, opts.Logger, jsAdvisoryMetrics)
+	jsAdvisoryManager := newJetStreamAdvisoryManager(opts.Provider, opts.Logger, jsAdvisoryMetrics)
 	jsFsWatcher := newJetStreamAdvisoryFSWatcher(opts.Logger, jsAdvisoryManager)
 
 	return &Surveyor{
-		cp:                  cp,
+		connProvider:        opts.Provider,
 		jsAdvisoryManager:   jsAdvisoryManager,
 		jsAdvisoryFSWatcher: jsFsWatcher,
 		logger:              opts.Logger,
@@ -158,7 +158,7 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 	}, nil
 }
 
-func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *natsConnPool {
+func newSurveyorConnPool(opts *Options, registry *prometheus.Registry) *natsConnPool {
 	natsDefaults := &natsContextDefaults{
 		Name:    opts.Name,
 		URL:     opts.URLs,
@@ -166,15 +166,23 @@ func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *na
 		TLSKey:  opts.KeyFile,
 		TLSCA:   opts.CaFile,
 	}
-	natsOpts := append(opts.NATSOpts,
+
+	reconnectCtr := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name:        prometheus.BuildFQName("nats", "survey", "nats_reconnects"),
+		Help:        "Number of times the surveyor reconnected to the NATS cluster",
+		ConstLabels: opts.ConstLabels,
+	}, []string{"name"})
+	registry.MustRegister(reconnectCtr)
+
+	natsOpts := append([]nats.Option{},
+		nats.ReconnectHandler(func(c *nats.Conn) {
+			reconnectCtr.WithLabelValues(c.Opts.Name).Inc()
+			opts.Logger.Infof("%q reconnected to %v", c.Opts.Name, c.ConnectedAddr())
+		}),
 		nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
 			if err != nil {
 				opts.Logger.Warnf("%q disconnected, will possibly miss replies: %v", c.Opts.Name, err)
 			}
-		}),
-		nats.ReconnectHandler(func(c *nats.Conn) {
-			reconnectCtr.WithLabelValues(c.Opts.Name).Inc()
-			opts.Logger.Infof("%q reconnected to %v", c.Opts.Name, c.ConnectedAddr())
 		}),
 		nats.ClosedHandler(func(c *nats.Conn) {
 			opts.Logger.Infof("%q connection closing", c.Opts.Name)
@@ -188,9 +196,13 @@ func newSurveyorConnPool(opts *Options, reconnectCtr *prometheus.CounterVec) *na
 		}),
 		nats.MaxReconnects(10240),
 	)
+
 	if opts.TLSFirst {
 		natsOpts = append(natsOpts, nats.TLSHandshakeFirst())
 	}
+
+	natsOpts = append(natsOpts, opts.NATSOpts...)
+
 	return newNatsConnPool(opts.Logger, natsDefaults, natsOpts)
 }
 
@@ -204,7 +216,7 @@ func (s *Surveyor) createStatszCollector() error {
 	}
 
 	s.statzC = NewStatzCollector(
-		s.sysAcctPC.nc,
+		s.conn.Conn(),
 		s.logger,
 		s.opts.ExpectedServers,
 		s.opts.ServerResponseWait,
@@ -446,13 +458,20 @@ func (s *Surveyor) JetStreamAdvisoryManager() *JSAdvisoryManager {
 func (s *Surveyor) Start() error {
 	s.Lock()
 	defer s.Unlock()
-	if s.sysAcctPC != nil {
-		// already running
-		return nil
+
+	if s.running {
+		if s.conn != nil && !s.conn.IsConnected() {
+			// already running
+			return nil
+		}
+
+		s.Unlock()
+		s.Stop()
+		s.Lock()
 	}
 
 	var err error
-	natsCtx := &natsContext{
+	natsCtx := &NatsContext{
 		Credentials: s.opts.Credentials,
 		Nkey:        s.opts.Nkey,
 		JWT:         s.opts.JWT,
@@ -461,10 +480,12 @@ func (s *Surveyor) Start() error {
 		Password:    s.opts.NATSPassword,
 	}
 
-	s.sysAcctPC, err = s.cp.Get(natsCtx)
+	s.conn, err = s.connProvider.Get(natsCtx)
 	if err != nil {
 		return err
 	}
+
+	s.running = true
 
 	if s.statzC == nil {
 		if err := s.createStatszCollector(); err != nil {
@@ -488,7 +509,8 @@ func (s *Surveyor) Start() error {
 func (s *Surveyor) Stop() {
 	s.Lock()
 	defer s.Unlock()
-	if s.sysAcctPC == nil {
+
+	if !s.running {
 		// already stopped
 		return
 	}
@@ -516,8 +538,8 @@ func (s *Surveyor) Stop() {
 	s.jsAdvisoryFSWatcher.stop()
 	s.jsAdvisoryManager.stop()
 
-	s.sysAcctPC.ReturnToPool()
-	s.sysAcctPC = nil
+	s.conn.Close()
+	s.running = false
 }
 
 // Gather implements the prometheus.Gatherer interface

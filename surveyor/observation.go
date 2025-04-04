@@ -142,6 +142,8 @@ type ServiceObsConfig struct {
 	// optional configuration for importing observations from other accounts
 	ExternalAccountConfig *ServiceObservationExternalAccountConfig `json:"-"`
 
+	// optional provided interface for obtaining NATS connection
+	Conn Conn `json:"-"`
 	// unique identifier for set of NATS options, to permit reload on change
 	NatsOptsID string `json:"nats_opts_id"`
 	// nats options appended to base surveyor options
@@ -234,30 +236,31 @@ func NewServiceObservationConfigFromFile(f string) (*ServiceObsConfig, error) {
 // serviceObsListener listens for observations from nats service latency checks
 type serviceObsListener struct {
 	sync.Mutex
-	config  *ServiceObsConfig
-	cp      *natsConnPool
-	logger  *logrus.Logger
-	metrics *ServiceObsMetrics
-	pc      *pooledNatsConn
-	sub     *nats.Subscription
+	config   *ServiceObsConfig
+	provider ConnProvider
+	logger   *logrus.Logger
+	metrics  *ServiceObsMetrics
+	conn     Conn
+	sub      *nats.Subscription
+	running  bool
 }
 
-func newServiceObservationListener(config *ServiceObsConfig, cp *natsConnPool, logger *logrus.Logger, metrics *ServiceObsMetrics) (*serviceObsListener, error) {
+func newServiceObservationListener(config *ServiceObsConfig, provider ConnProvider, logger *logrus.Logger, metrics *ServiceObsMetrics) (*serviceObsListener, error) {
 	err := config.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("invalid service observation config for id: %s, service name: %s, error: %v", config.ID, config.ServiceName, err)
 	}
 
 	return &serviceObsListener{
-		config:  config,
-		cp:      cp,
-		logger:  logger,
-		metrics: metrics,
+		config:   config,
+		provider: provider,
+		logger:   logger,
+		metrics:  metrics,
 	}, nil
 }
 
-func (o *serviceObsListener) natsContext() *natsContext {
-	natsCtx := &natsContext{
+func (o *serviceObsListener) natsContext() *NatsContext {
+	natsCtx := &NatsContext{
 		JWT:         o.config.JWT,
 		Seed:        o.config.Seed,
 		Credentials: o.config.Credentials,
@@ -284,23 +287,29 @@ func (o *serviceObsListener) natsContext() *natsContext {
 func (o *serviceObsListener) Start() error {
 	o.Lock()
 	defer o.Unlock()
-	if o.pc != nil {
-		// already started
-		return nil
+
+	if o.running {
+		if o.conn != nil && o.conn.IsConnected() {
+			// already started
+			return nil
+		}
+		o.Unlock()
+		o.Stop()
+		o.Lock()
 	}
 
-	pc, err := o.cp.Get(o.natsContext())
+	var err error
+	o.conn, err = o.provider.Get(o.natsContext())
 	if err != nil {
 		return fmt.Errorf("nats connection failed for id: %s, service name: %s, error: %v", o.config.ID, o.config.ServiceName, err)
 	}
 
-	sub, err := pc.nc.Subscribe(o.config.Topic, o.observationHandler)
+	sub, err := o.conn.Conn().Subscribe(o.config.Topic, o.observationHandler)
 	if err != nil {
-		pc.ReturnToPool()
+		o.conn.Close()
 		return fmt.Errorf("could not subscribe to service observation topic for id: %s, service name: %s, topic: %s, error: %v", o.config.ID, o.config.ServiceName, o.config.Topic, err)
 	}
 
-	o.pc = pc
 	o.sub = sub
 	o.metrics.observationsGauge.Inc()
 	o.logger.Infof("started service observation for id: %s, service name: %s, topic: %s", o.config.ID, o.config.ServiceName, o.config.Topic)
@@ -372,7 +381,7 @@ func getTokenFromSubject(subject string, token int) (string, error) {
 func (o *serviceObsListener) Stop() {
 	o.Lock()
 	defer o.Unlock()
-	if o.pc == nil {
+	if !o.running {
 		// already stopped
 		return
 	}
@@ -383,25 +392,26 @@ func (o *serviceObsListener) Stop() {
 	}
 
 	o.metrics.observationsGauge.Dec()
-	o.pc.ReturnToPool()
-	o.pc = nil
+	o.conn.Close()
+	o.conn = nil
+	o.running = false
 }
 
 // ServiceObsManager exposes methods to operate on service observations
 type ServiceObsManager struct {
 	sync.Mutex
-	cp          *natsConnPool
+	provider    ConnProvider
 	listenerMap map[string]*serviceObsListener
 	logger      *logrus.Logger
 	metrics     *ServiceObsMetrics
 }
 
 // newServiceObservationManager creates a ServiceObsManager for managing Service Observations
-func newServiceObservationManager(cp *natsConnPool, logger *logrus.Logger, metrics *ServiceObsMetrics) *ServiceObsManager {
+func newServiceObservationManager(provider ConnProvider, logger *logrus.Logger, metrics *ServiceObsMetrics) *ServiceObsManager {
 	return &ServiceObsManager{
-		cp:      cp,
-		logger:  logger,
-		metrics: metrics,
+		provider: provider,
+		logger:   logger,
+		metrics:  metrics,
 	}
 }
 
@@ -481,7 +491,7 @@ func (om *ServiceObsManager) Set(config *ServiceObsConfig) error {
 		return nil
 	}
 
-	obs, err := newServiceObservationListener(config, om.cp, om.logger, om.metrics)
+	obs, err := newServiceObservationListener(config, om.provider, om.logger, om.metrics)
 	if err != nil {
 		return fmt.Errorf("could not set observation for id: %s, service name: %s, error: %v", config.ID, config.ServiceName, err)
 	}
