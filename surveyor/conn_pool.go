@@ -131,24 +131,25 @@ func (pc *pooledNatsConn) IsClosed() bool {
 }
 
 func (pc *pooledNatsConn) ReturnToPool() {
-	pc.cp.Lock()
+	pc.cp.cacheMu.Lock()
 	pc.count--
 	if pc.count == 0 {
 		if pooledConn, ok := pc.cp.cache[pc.key]; ok && pc == pooledConn {
 			delete(pc.cp.cache, pc.key)
 		}
 		pc.closed = true
-		pc.cp.Unlock()
+		pc.cp.cacheMu.Unlock()
 		pc.nc.Close()
 		return
 	}
-	pc.cp.Unlock()
+	pc.cp.cacheMu.Unlock()
 }
 
 type natsConnPool struct {
-	sync.Mutex
 	cache        map[string]*pooledNatsConn
+	cacheMu      sync.Mutex
 	openConns    []*pooledNatsConn
+	openMu       sync.Mutex
 	logger       *logrus.Logger
 	group        *singleflight.Group
 	natsDefaults *natsContextDefaults
@@ -157,7 +158,8 @@ type natsConnPool struct {
 
 func newNatsConnPool(logger *logrus.Logger, natsDefaults *natsContextDefaults, natsOpts []nats.Option) *natsConnPool {
 	return &natsConnPool{
-		cache:        map[string]*pooledNatsConn{},
+		cache:        make(map[string]*pooledNatsConn, 0),
+		openConns:    make([]*pooledNatsConn, 0),
 		group:        &singleflight.Group{},
 		logger:       logger,
 		natsDefaults: natsDefaults,
@@ -168,8 +170,8 @@ func newNatsConnPool(logger *logrus.Logger, natsDefaults *natsContextDefaults, n
 const getPooledConnMaxTries = 10
 
 func (cp *natsConnPool) Close(force bool) {
-	cp.Mutex.Lock()
-	defer cp.Mutex.Lock()
+	cp.openMu.Lock()
+	defer cp.openMu.Unlock()
 
 	for _, c := range cp.openConns {
 		if force {
@@ -218,16 +220,16 @@ func (cp *natsConnPool) Get(cfg *NatsContext) (Conn, error) {
 			return nil, err
 		}
 
-		cp.Lock()
+		cp.cacheMu.Lock()
 		if connection.closed {
 			// ReturnToPool closed this while lock not held, try again
-			cp.Unlock()
+			cp.cacheMu.Unlock()
 			continue
 		}
 
 		// increment count out of the pool
 		connection.count++
-		cp.Unlock()
+		cp.cacheMu.Unlock()
 		return connection, nil
 	}
 
@@ -236,25 +238,27 @@ func (cp *natsConnPool) Get(cfg *NatsContext) (Conn, error) {
 
 // getPooledConn gets or establishes a *pooledNatsConn in a singleflight group, but does not increment its count
 func (cp *natsConnPool) getPooledConn(key string, cfg *NatsContext) (*pooledNatsConn, error) {
-	conn, err, _ := cp.group.Do(key, func() (interface{}, error) {
-		cp.Lock()
+	conn, err, _ := cp.group.Do(key, func() (any, error) {
+		cp.cacheMu.Lock()
 		pooledConn, ok := cp.cache[key]
 		if ok {
 			if pooledConn.IsConnected() {
-				cp.Unlock()
+				cp.cacheMu.Unlock()
 				return pooledConn, nil
 			}
 			if !pooledConn.IsClosed() {
+				cp.openMu.Lock()
 				openConnections := []*pooledNatsConn{pooledConn}
 				for _, c := range cp.openConns {
 					if !c.IsClosed() {
 						openConnections = append(openConnections, c)
 					}
-					cp.openConns = openConnections
 				}
+				cp.openConns = openConnections
+				cp.openMu.Unlock()
 			}
 		}
-		cp.Unlock()
+		cp.cacheMu.Unlock()
 
 		opts := append(cp.natsOpts, cfg.NatsOpts...)
 		opts = append(opts, func(options *nats.Options) error {
@@ -309,9 +313,9 @@ func (cp *natsConnPool) getPooledConn(key string, cfg *NatsContext) (*pooledNats
 			key: key,
 		}
 
-		cp.Lock()
+		cp.cacheMu.Lock()
 		cp.cache[key] = connection
-		cp.Unlock()
+		cp.cacheMu.Unlock()
 
 		return connection, err
 	})
