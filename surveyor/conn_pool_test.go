@@ -17,13 +17,13 @@ func TestConnPool(t *testing.T) {
 
 	s := natsservertest.RunRandClientPortServer()
 	defer s.Shutdown()
-	o1 := &natsContext{
+	o1 := &NatsContext{
 		Name: "Client 1",
 	}
-	o2 := &natsContext{
+	o2 := &NatsContext{
 		Name: "Client 1",
 	}
-	o3 := &natsContext{
+	o3 := &NatsContext{
 		Name: "Client 2",
 	}
 
@@ -35,7 +35,7 @@ func TestConnPool(t *testing.T) {
 	}
 	cp := newNatsConnPool(logrus.New(), natsDefaults, natsOptions)
 
-	var c1, c2, c3 *pooledNatsConn
+	var c1, c2, c3 Conn
 	var c1e, c2e, c3e error
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
@@ -62,31 +62,31 @@ func TestConnPool(t *testing.T) {
 		assert.NotSame(c2, c3)
 	}
 
-	c1.ReturnToPool()
-	c3.ReturnToPool()
+	c1.Close()
+	c3.Close()
 	time.Sleep(1 * time.Second)
-	assert.False(c1.nc.IsClosed())
-	assert.False(c2.nc.IsClosed())
-	assert.True(c3.nc.IsClosed())
+	assert.False(c1.Conn().IsClosed())
+	assert.False(c2.Conn().IsClosed())
+	assert.True(c3.Conn().IsClosed())
 
 	c4, c4e := cp.Get(o1)
 	if assert.NoError(c4e) {
 		assert.Same(c2, c4)
 	}
 
-	c2.ReturnToPool()
-	c4.ReturnToPool()
+	c2.Close()
+	c4.Close()
 	time.Sleep(1 * time.Second)
-	assert.True(c1.nc.IsClosed())
-	assert.True(c2.nc.IsClosed())
-	assert.True(c4.nc.IsClosed())
+	assert.True(c1.Conn().IsClosed())
+	assert.True(c2.Conn().IsClosed())
+	assert.True(c4.Conn().IsClosed())
 
 	c5, c5e := cp.Get(o1)
 	if assert.NoError(c5e) {
 		assert.NotSame(c1, c5)
 	}
 
-	c5.ReturnToPool()
+	c5.Close()
 	time.Sleep(1 * time.Second)
-	assert.True(c5.nc.IsClosed())
+	assert.True(c5.Conn().IsClosed())
 }
