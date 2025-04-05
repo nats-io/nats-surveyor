@@ -254,7 +254,7 @@ type JSAdvisoryConfig struct {
 	ExternalAccountConfig *JSAdvisoriesExternalAccountConfig `json:"-"`
 
 	// optional provided interface for obtaining NATS connection
-	Conn Conn `json:"-"`
+	ConnProvider ConnProvider `json:"-"`
 	// unique identifier for set of NATS options, to permit reload on change
 	NatsOptsID string `json:"nats_opts_id"`
 	// nats options appended to base surveyor options
@@ -691,7 +691,12 @@ func (am *JSAdvisoryManager) Set(config *JSAdvisoryConfig) error {
 		return nil
 	}
 
-	adv, err := newJetStreamAdvisoryListener(config, am.provider, am.logger, am.metrics)
+	provider := am.provider
+	if config.ConnProvider != nil {
+		provider = config.ConnProvider
+	}
+
+	adv, err := newJetStreamAdvisoryListener(config, provider, am.logger, am.metrics)
 	if err != nil {
 		return fmt.Errorf("could not set advisory for id: %s, account name: %s, error: %v", config.ID, config.AccountName, err)
 	}

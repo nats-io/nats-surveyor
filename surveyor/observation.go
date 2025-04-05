@@ -143,7 +143,7 @@ type ServiceObsConfig struct {
 	ExternalAccountConfig *ServiceObservationExternalAccountConfig `json:"-"`
 
 	// optional provided interface for obtaining NATS connection
-	Conn Conn `json:"-"`
+	ConnProvider ConnProvider `json:"-"`
 	// unique identifier for set of NATS options, to permit reload on change
 	NatsOptsID string `json:"nats_opts_id"`
 	// nats options appended to base surveyor options
@@ -491,7 +491,12 @@ func (om *ServiceObsManager) Set(config *ServiceObsConfig) error {
 		return nil
 	}
 
-	obs, err := newServiceObservationListener(config, om.provider, om.logger, om.metrics)
+	provider := om.provider
+	if config.ConnProvider != nil {
+		provider = config.ConnProvider
+	}
+
+	obs, err := newServiceObservationListener(config, provider, om.logger, om.metrics)
 	if err != nil {
 		return fmt.Errorf("could not set observation for id: %s, service name: %s, error: %v", config.ID, config.ServiceName, err)
 	}
