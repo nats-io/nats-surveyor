@@ -304,6 +304,8 @@ func (o *serviceObsListener) Start() error {
 		return fmt.Errorf("nats connection failed for id: %s, service name: %s, error: %v", o.config.ID, o.config.ServiceName, err)
 	}
 
+	o.running = true
+
 	sub, err := o.conn.Conn().Subscribe(o.config.Topic, o.observationHandler)
 	if err != nil {
 		o.conn.Close()

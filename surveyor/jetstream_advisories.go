@@ -595,6 +595,7 @@ func (o *jsAdvisoryListener) Stop() {
 	o.metrics.jsAdvisoriesGauge.Dec()
 	o.conn.Close()
 	o.conn = nil
+	o.running = false
 }
 
 // JSAdvisoryManager exposes methods to operate on JetStream advisories
