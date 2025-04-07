@@ -253,6 +253,8 @@ type JSAdvisoryConfig struct {
 	// optional configuration for importing JS metrics and advisories from other accounts
 	ExternalAccountConfig *JSAdvisoriesExternalAccountConfig `json:"-"`
 
+	// optional provided interface for obtaining NATS connection
+	ConnProvider ConnProvider `json:"-"`
 	// unique identifier for set of NATS options, to permit reload on change
 	NatsOptsID string `json:"nats_opts_id"`
 	// nats options appended to base surveyor options
@@ -360,30 +362,31 @@ func NewJetStreamAdvisoryConfigFromFile(f string) (*JSAdvisoryConfig, error) {
 type jsAdvisoryListener struct {
 	sync.Mutex
 	config      *JSAdvisoryConfig
-	cp          *natsConnPool
 	logger      *logrus.Logger
 	metrics     *JSAdvisoryMetrics
-	pc          *pooledNatsConn
+	provider    ConnProvider
+	conn        Conn
 	subAdvisory *nats.Subscription
 	subMetric   *nats.Subscription
+	running     bool
 }
 
-func newJetStreamAdvisoryListener(config *JSAdvisoryConfig, cp *natsConnPool, logger *logrus.Logger, metrics *JSAdvisoryMetrics) (*jsAdvisoryListener, error) {
+func newJetStreamAdvisoryListener(config *JSAdvisoryConfig, provider ConnProvider, logger *logrus.Logger, metrics *JSAdvisoryMetrics) (*jsAdvisoryListener, error) {
 	err := config.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("invalid JetStream advisory config for id: %s, account name: %s, error: %v", config.ID, config.AccountName, err)
 	}
 
 	return &jsAdvisoryListener{
-		config:  config,
-		cp:      cp,
-		logger:  logger,
-		metrics: metrics,
+		config:   config,
+		provider: provider,
+		logger:   logger,
+		metrics:  metrics,
 	}, nil
 }
 
-func (o *jsAdvisoryListener) natsContext() *natsContext {
-	natsCtx := &natsContext{
+func (o *jsAdvisoryListener) natsContext() *NatsContext {
+	natsCtx := &NatsContext{
 		JWT:         o.config.JWT,
 		Seed:        o.config.Seed,
 		Credentials: o.config.Credentials,
@@ -405,15 +408,24 @@ func (o *jsAdvisoryListener) natsContext() *natsContext {
 func (o *jsAdvisoryListener) Start() error {
 	o.Lock()
 	defer o.Unlock()
-	if o.pc != nil {
-		// already started
-		return nil
+	if o.running {
+		if o.conn != nil && o.conn.IsConnected() {
+			// already started
+			return nil
+		}
+		o.Unlock()
+		o.Stop()
+		o.Lock()
 	}
 
-	pc, err := o.cp.Get(o.natsContext())
+	var err error
+	o.conn, err = o.provider.Get(o.natsContext())
 	if err != nil {
 		return fmt.Errorf("nats connection failed for id: %s, account name: %s, error: %v", o.config.ID, o.config.AccountName, err)
 	}
+
+	o.running = true
+
 	metricsSubject := api.JSMetricPrefix + ".>"
 	advisorySubject := api.JSAdvisoryPrefix + ".>"
 	if o.config.ExternalAccountConfig != nil {
@@ -421,20 +433,19 @@ func (o *jsAdvisoryListener) Start() error {
 		advisorySubject = o.config.ExternalAccountConfig.AdvisorySubject
 	}
 
-	subAdvisory, err := pc.nc.Subscribe(metricsSubject, o.advisoryHandler)
+	subAdvisory, err := o.conn.Conn().Subscribe(metricsSubject, o.advisoryHandler)
 	if err != nil {
-		pc.ReturnToPool()
+		o.conn.Close()
 		return fmt.Errorf("could not subscribe to JetStream advisory for id: %s, account name: %s, topic: %s, error: %v", o.config.ID, o.config.AccountName, api.JSAdvisoryPrefix, err)
 	}
 
-	subMetric, err := pc.nc.Subscribe(advisorySubject, o.advisoryHandler)
+	subMetric, err := o.conn.Conn().Subscribe(advisorySubject, o.advisoryHandler)
 	if err != nil {
 		_ = subAdvisory.Unsubscribe()
-		pc.ReturnToPool()
+		o.conn.Close()
 		return fmt.Errorf("could not subscribe to JetStream advisory for id: %s, account name: %s, topic: %s, error: %v", o.config.ID, o.config.AccountName, api.JSMetricPrefix, err)
 	}
 
-	o.pc = pc
 	o.subAdvisory = subAdvisory
 	o.subMetric = subMetric
 	o.logger.Infof("started JetStream advisory for id: %s, account name: %s, advisory topic: %s, metric topic: %s", o.config.ID, o.config.AccountName, api.JSAdvisoryPrefix, api.JSMetricPrefix)
@@ -565,7 +576,8 @@ func (o *jsAdvisoryListener) advisoryHandler(m *nats.Msg) {
 func (o *jsAdvisoryListener) Stop() {
 	o.Lock()
 	defer o.Unlock()
-	if o.pc == nil {
+
+	if !o.running {
 		// already stopped
 		return
 	}
@@ -581,25 +593,26 @@ func (o *jsAdvisoryListener) Stop() {
 	}
 
 	o.metrics.jsAdvisoriesGauge.Dec()
-	o.pc.ReturnToPool()
-	o.pc = nil
+	o.conn.Close()
+	o.conn = nil
+	o.running = false
 }
 
 // JSAdvisoryManager exposes methods to operate on JetStream advisories
 type JSAdvisoryManager struct {
 	sync.Mutex
-	cp          *natsConnPool
+	provider    ConnProvider
 	listenerMap map[string]*jsAdvisoryListener
 	logger      *logrus.Logger
 	metrics     *JSAdvisoryMetrics
 }
 
 // newJetStreamAdvisoryManager creates a JSAdvisoryManager for managing JetStream advisories
-func newJetStreamAdvisoryManager(cp *natsConnPool, logger *logrus.Logger, metrics *JSAdvisoryMetrics) *JSAdvisoryManager {
+func newJetStreamAdvisoryManager(provider ConnProvider, logger *logrus.Logger, metrics *JSAdvisoryMetrics) *JSAdvisoryManager {
 	return &JSAdvisoryManager{
-		cp:      cp,
-		logger:  logger,
-		metrics: metrics,
+		provider: provider,
+		logger:   logger,
+		metrics:  metrics,
 	}
 }
 
@@ -679,7 +692,12 @@ func (am *JSAdvisoryManager) Set(config *JSAdvisoryConfig) error {
 		return nil
 	}
 
-	adv, err := newJetStreamAdvisoryListener(config, am.cp, am.logger, am.metrics)
+	provider := am.provider
+	if config.ConnProvider != nil {
+		provider = config.ConnProvider
+	}
+
+	adv, err := newJetStreamAdvisoryListener(config, provider, am.logger, am.metrics)
 	if err != nil {
 		return fmt.Errorf("could not set advisory for id: %s, account name: %s, error: %v", config.ID, config.AccountName, err)
 	}

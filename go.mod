@@ -1,21 +1,21 @@
 module github.com/nats-io/nats-surveyor
 
-go 1.24.1
+go 1.24.0
 
 require (
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
-	github.com/fsnotify/fsnotify v1.8.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/klauspost/compress v1.18.0
 	github.com/nats-io/jsm.go v0.2.0
 	github.com/nats-io/nats-server/v2 v2.11.0
-	github.com/nats-io/nats.go v1.39.1
+	github.com/nats-io/nats.go v1.41.0
 	github.com/nats-io/nuid v1.0.1
 	github.com/prometheus/client_golang v1.21.1
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.63.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.9.1
-	github.com/spf13/viper v1.20.0
+	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.36.0
 	golang.org/x/sync v0.12.0
