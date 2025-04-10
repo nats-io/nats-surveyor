@@ -145,6 +145,15 @@ func init() {
 	rootCmd.Flags().IntP("count", "c", 1, "Expected number of servers (-1 for undefined).")
 	_ = viper.BindPFlag("count", rootCmd.Flags().Lookup("count"))
 
+	// timeout
+	rootCmd.Flags().Duration("timeout", surveyor.DefaultPollTimeout, "Polling timeout")
+	_ = viper.BindPFlag("timeout", rootCmd.Flags().Lookup("timeout"))
+
+	// server-discovery-timeout
+	rootCmd.Flags().DurationP("server-discovery-timeout", "", 500*time.Millisecond,
+		"Maximum wait time between responses from servers during server discovery.\nUse in conjunction with -count=-1.")
+	_ = viper.BindPFlag("server-discovery-timeout", rootCmd.Flags().Lookup("server-discovery-timeout"))
+
 	// creds
 	rootCmd.Flags().String("creds", "", "Credentials File")
 	_ = viper.BindPFlag("creds", rootCmd.Flags().Lookup("creds"))
@@ -168,14 +177,6 @@ func init() {
 	// password
 	rootCmd.Flags().String("password", "", "NATS user password")
 	_ = viper.BindPFlag("password", rootCmd.Flags().Lookup("password"))
-
-	// server-discovery-timeout
-	rootCmd.Flags().DurationP("server-discovery-timeout", "", 500*time.Millisecond, "Maximum wait time between responses from servers during server discovery. Use in conjunction with -count=-1.")
-	_ = viper.BindPFlag("server-discovery-timeout", rootCmd.Flags().Lookup("server-discovery-timeout"))
-
-	// timeout
-	rootCmd.Flags().Duration("timeout", surveyor.DefaultPollTimeout, "Polling timeout")
-	_ = viper.BindPFlag("timeout", rootCmd.Flags().Lookup("timeout"))
 
 	// tlscert
 	rootCmd.Flags().String("tlscert", "", "Client certificate file for NATS connections.")

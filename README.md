@@ -20,14 +20,15 @@ must be enabled to use surveyor.
 Flags:
   -s, --servers string                      NATS Cluster url(s) (default "nats://127.0.0.1:4222")
   -c, --count int                           Expected number of servers (-1 for undefined). (default 1)
+      --timeout duration                    Polling timeout (default 3s)
+      --server-discovery-timeout duration   Maximum wait time between responses from servers during server discovery.
+                                            Use in conjunction with -count=-1. (default 500ms)
       --creds string                        Credentials File
       --nkey string                         Nkey Seed File
       --jwt string                          User JWT. Use in conjunction with --seed
       --seed string                         Private key (nkey seed). Use in conjunction with --jwt
       --user string                         NATS user name or token
       --password string                     NATS user password
-      --server-discovery-timeout duration   Maximum wait time between responses from servers during server discovery. Use in conjunction with -count=-1. (default 500ms)
-      --timeout duration                    Polling timeout (default 3s)
       --tlscert string                      Client certificate file for NATS connections.
       --tlskey string                       Client private key for NATS connections.
       --tlscacert string                    Client certificate CA on NATS connections.
