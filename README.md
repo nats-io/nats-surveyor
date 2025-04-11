@@ -76,7 +76,7 @@ At this time, NATS 2.0 System credentials are required for meaningful usage. Tho
 
 ### Config Files
 
-Surveyor uses Viper to read configs, so it will support all file types that Viper supports (JSON, TOML, YAML, HCL, envfile, and Java properties)
+Surveyor uses [Viper](https://github.com/spf13/viper) to read configs, so it will support all file types that Viper supports (JSON, TOML, YAML, HCL, envfile, and Java properties)
 
 To use a config file pass the `--config` flag. The defaults are `/etc/nats-surveyor/nats-surveyor[.ext]` and `./nats-surveyor[.ext]` with one of the supported extensions.
 
@@ -121,7 +121,7 @@ Surveyor) is through docker-compose.
 
 Follow these links for installation instructions:
 
-- [Docker Installation](https://docs.docker.com/v17.09/engine/installation/)
+- [Docker Installation](https://docs.docker.com/engine/install/)
 - [Docker Compose Installation](https://docs.docker.com/compose/install/)
 
 ### Environment Variables
