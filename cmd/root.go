@@ -36,6 +36,7 @@ var (
 	rootCmd = &cobra.Command{
 		Use:     "nats-surveyor",
 		Short:   "Prometheus exporter for NATS",
+		Args:    cobra.NoArgs,
 		RunE:    run,
 		Version: Version,
 	}
