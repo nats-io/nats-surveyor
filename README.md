@@ -15,40 +15,40 @@ must be enabled to use surveyor.
 ## Usage
 
 ```text
-Usage:
   nats-surveyor [flags]
 
 Flags:
-      --accounts                            Export per account metrics
-      --gatewayz                            Export gateway metrics
-  -a, --addr string                         Network host to listen on. (default "0.0.0.0")
-      --config string                       config file (default is ./nats-surveyor.yaml)
-  -c, --count int                           Expected number of servers (-1 for undefined). (default 1)
-      --creds string                        Credentials File
-  -h, --help                                help for nats-surveyor
-      --http-pass string                    Set the password for HTTP scrapes. NATS bcrypt supported.
-      --http-tlscacert string               Client certificate CA for verification (used with HTTPS).
-      --http-tlscert string                 Server certificate file (Enables HTTPS).
-      --http-tlskey string                  Private key for server certificate (used with HTTPS).
-      --http-user string                    Enable basic auth and set user name for HTTP scrapes.
-      --jetstream string                    Listen for JetStream Advisories based on config files in a directory.
-      --jwt string                          User JWT. Use in conjunction with --seed
-      --log-level string                    Log level, one of: trace|debug|info|warn|error|fatal|panic (default "info")
-      --nkey string                         Nkey Seed File
-      --observe string                      Listen for observation statistics based on config files in a directory.
-      --password string                     NATS user password
-  -p, --port int                            Port to listen on. (default 7777)
-      --prefix string                       Replace the default prefix for all the metrics.
-      --seed string                         Private key (nkey seed). Use in conjunction with --jwt
-      --server-discovery-timeout duration   Maximum wait time between responses from servers during server discovery. Use in conjunction with -count=-1. (default 500ms)
   -s, --servers string                      NATS Cluster url(s) (default "nats://127.0.0.1:4222")
+  -c, --count int                           Expected number of servers (-1 for undefined). (default 1)
       --timeout duration                    Polling timeout (default 3s)
-      --tlscacert string                    Client certificate CA on NATS connections.
+      --server-discovery-timeout duration   Maximum wait time between responses from servers during server discovery.
+                                            Use in conjunction with -count=-1. (default 500ms)
+      --creds string                        Credentials File
+      --nkey string                         Nkey Seed File
+      --jwt string                          User JWT. Use in conjunction with --seed
+      --seed string                         Private key (nkey seed). Use in conjunction with --jwt
+      --user string                         NATS user name or token
+      --password string                     NATS user password
       --tlscert string                      Client certificate file for NATS connections.
       --tlskey string                       Client private key for NATS connections.
-      --tlsfirst bool                       Whether to use TLS First connections.
-      --user string                         NATS user name or token
-      --sys-req-prefix                      Subject prefix for system requests (default "$SYS.REQ")
+      --tlscacert string                    Client certificate CA on NATS connections.
+      --tlsfirst                            Whether to use TLS First connections.
+  -p, --port int                            Port to listen on. (default 7777)
+  -a, --addr string                         Network host to listen on. (default "0.0.0.0")
+      --http-tlscert string                 Server certificate file (Enables HTTPS).
+      --http-tlskey string                  Private key for server certificate (used with HTTPS).
+      --http-tlscacert string               Client certificate CA for verification (used with HTTPS).
+      --http-user string                    Enable basic auth and set user name for HTTP scrapes.
+      --http-pass string                    Set the password for HTTP scrapes. NATS bcrypt supported.
+      --prefix string                       Replace the default prefix for all the metrics.
+      --observe string                      Listen for observation statistics based on config files in a directory.
+      --jetstream string                    Listen for JetStream Advisories based on config files in a directory.
+      --accounts                            Export per account metrics
+      --gatewayz                            Export gateway metrics
+      --sys-req-prefix string               Subject prefix for system requests ($SYS.REQ) (default "$SYS.REQ")
+      --log-level string                    Log level, one of: trace|debug|info|warn|error|fatal|panic (default "info")
+      --config string                       config file (default is ./nats-surveyor.yaml)
+  -h, --help                                help for nats-surveyor
   -v, --version                             version for nats-surveyor
 ```
 
@@ -76,7 +76,7 @@ At this time, NATS 2.0 System credentials are required for meaningful usage. Tho
 
 ### Config Files
 
-Surveyor uses Viper to read configs, so it will support all file types that Viper supports (JSON, TOML, YAML, HCL, envfile, and Java properties)
+Surveyor uses [Viper](https://github.com/spf13/viper) to read configs, so it will support all file types that Viper supports (JSON, TOML, YAML, HCL, envfile, and Java properties)
 
 To use a config file pass the `--config` flag. The defaults are `/etc/nats-surveyor/nats-surveyor[.ext]` and `./nats-surveyor[.ext]` with one of the supported extensions.
 
@@ -92,7 +92,7 @@ log-level: debug
 
 Environment variables are also taken into account. Any environment variable that is prefixed with `NATS_SURVEYOR_` will be read.
 
-Each flag has a matching environment variable, flag names should be converted to uppercase and dashes replaced with underscores.  Example: 
+Each flag has a matching environment variable, flag names should be converted to uppercase and dashes replaced with underscores.  Example:
 
 ```
 NATS_SURVEYOR_SERVERS=nats://127.0.0.1:4222
@@ -121,8 +121,8 @@ Surveyor) is through docker-compose.
 
 Follow these links for installation instructions:
 
-* [Docker Installation](https://docs.docker.com/v17.09/engine/installation/)
-* [Docker Compose Installation](https://docs.docker.com/compose/install/)
+- [Docker Installation](https://docs.docker.com/engine/install/)
+- [Docker Compose Installation](https://docs.docker.com/compose/install/)
 
 ### Environment Variables
 
@@ -190,8 +190,8 @@ NATS surveyor stack, e.g. `http://yourremotehost:3000`.
 
 The first time you connect, you'll need to login:
 
-* User:  *admin*
-* Password: *admin*
+- User:  *admin*
+- Password: *admin*
 
 After logging in, navigate to "Manage dashboards" and you'll see a dashboard
 available named **NATS Surveyor**, where you'll be able to monitor your
@@ -249,7 +249,7 @@ More information can be found [here](https://github.com/prometheus/prometheus/is
 ## Service Observations
 
 Services can be observed by creating JSON files in the `observations` directory.
-The file extension must be `.json`. 
+The file extension must be `.json`.
 Only one authentication method needs to be provided.
 Example file format:
 
@@ -270,7 +270,7 @@ Example file format:
 }
 ```
 
-Files are watched and updated using [fsnotify](https://github.com/fsnotify/fsnotify) 
+Files are watched and updated using [fsnotify](https://github.com/fsnotify/fsnotify)
 
 ## JetStream
 
@@ -281,6 +281,7 @@ e sure that you give access to the `$JS.EVENT.>` subject to your user.
 Example file format:
 
 ### Credentials
+
 ```json
 {
   "name":       "my account",
