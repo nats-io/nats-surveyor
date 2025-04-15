@@ -142,6 +142,19 @@ func init() {
 	rootCmd.Flags().StringP("servers", "s", nats.DefaultURL, "NATS Cluster url(s)")
 	_ = viper.BindPFlag("servers", rootCmd.Flags().Lookup("servers"))
 
+	// count
+	rootCmd.Flags().IntP("count", "c", 1, "Expected number of servers (-1 for undefined).")
+	_ = viper.BindPFlag("count", rootCmd.Flags().Lookup("count"))
+
+	// timeout
+	rootCmd.Flags().Duration("timeout", surveyor.DefaultPollTimeout, "Polling timeout")
+	_ = viper.BindPFlag("timeout", rootCmd.Flags().Lookup("timeout"))
+
+	// server-discovery-timeout
+	rootCmd.Flags().DurationP("server-discovery-timeout", "", 500*time.Millisecond,
+		"Maximum wait time between responses from servers during server discovery.\nUse in conjunction with -count=-1.")
+	_ = viper.BindPFlag("server-discovery-timeout", rootCmd.Flags().Lookup("server-discovery-timeout"))
+
 	// creds
 	rootCmd.Flags().String("creds", "", "Credentials File")
 	_ = viper.BindPFlag("creds", rootCmd.Flags().Lookup("creds"))
@@ -166,26 +179,6 @@ func init() {
 	rootCmd.Flags().String("password", "", "NATS user password")
 	_ = viper.BindPFlag("password", rootCmd.Flags().Lookup("password"))
 
-	// count
-	rootCmd.Flags().IntP("count", "c", 1, "Expected number of servers (-1 for undefined).")
-	_ = viper.BindPFlag("count", rootCmd.Flags().Lookup("count"))
-
-	// server-discovery-timeout
-	rootCmd.Flags().DurationP("server-discovery-timeout", "", 500*time.Millisecond, "Maximum wait time between responses from servers during server discovery. Use in conjunction with -count=-1.")
-	_ = viper.BindPFlag("server-discovery-timeout", rootCmd.Flags().Lookup("server-discovery-timeout"))
-
-	// timeout
-	rootCmd.Flags().Duration("timeout", surveyor.DefaultPollTimeout, "Polling timeout")
-	_ = viper.BindPFlag("timeout", rootCmd.Flags().Lookup("timeout"))
-
-	// port
-	rootCmd.Flags().IntP("port", "p", surveyor.DefaultListenPort, "Port to listen on.")
-	_ = viper.BindPFlag("port", rootCmd.Flags().Lookup("port"))
-
-	// addr
-	rootCmd.Flags().StringP("addr", "a", surveyor.DefaultListenAddress, "Network host to listen on.")
-	_ = viper.BindPFlag("addr", rootCmd.Flags().Lookup("addr"))
-
 	// tlscert
 	rootCmd.Flags().String("tlscert", "", "Client certificate file for NATS connections.")
 	_ = viper.BindPFlag("tlscert", rootCmd.Flags().Lookup("tlscert"))
@@ -201,6 +194,14 @@ func init() {
 	// tlsfirst
 	rootCmd.Flags().Bool("tlsfirst", false, "Whether to use TLS First connections.")
 	_ = viper.BindPFlag("tlsfirst", rootCmd.Flags().Lookup("tlsfirst"))
+
+	// port
+	rootCmd.Flags().IntP("port", "p", surveyor.DefaultListenPort, "Port to listen on.")
+	_ = viper.BindPFlag("port", rootCmd.Flags().Lookup("port"))
+
+	// addr
+	rootCmd.Flags().StringP("addr", "a", surveyor.DefaultListenAddress, "Network host to listen on.")
+	_ = viper.BindPFlag("addr", rootCmd.Flags().Lookup("addr"))
 
 	// http-tlscert
 	rootCmd.Flags().String("http-tlscert", "", "Server certificate file (Enables HTTPS).")
@@ -249,6 +250,8 @@ func init() {
 	// log-level
 	rootCmd.Flags().String("log-level", "info", "Log level, one of: trace|debug|info|warn|error|fatal|panic")
 	_ = viper.BindPFlag("log-level", rootCmd.Flags().Lookup("log-level"))
+
+	rootCmd.Flags().SortFlags = false
 
 	cobra.OnInitialize(initConfig)
 }
