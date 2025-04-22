@@ -739,6 +739,7 @@ func (sc *StatzCollector) pollGatewayInfo() error {
 
 func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountDetail, []*jsStat) {
 	opts := server.JSzOptions{
+		Limit:      102400,
 		Accounts:   true,
 		Streams:    true,
 		Consumer:   true,
