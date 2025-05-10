@@ -81,6 +81,7 @@ type Options struct {
 	JetStreamConfigDir   string
 	Accounts             bool
 	Gatewayz             bool
+	Jsz                  string
 	SysReqPrefix         string
 	Logger               *logrus.Logger    // not exposed by CLI
 	Provider             ConnProvider      // not exposed by CLI
@@ -225,6 +226,7 @@ func (s *Surveyor) createStatszCollector() error {
 		s.opts.PollTimeout,
 		s.opts.Accounts,
 		s.opts.Gatewayz,
+		s.opts.Jsz,
 		s.opts.SysReqPrefix,
 		s.opts.ConstLabels,
 	)

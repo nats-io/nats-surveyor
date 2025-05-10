@@ -75,6 +75,7 @@ func rootCmdArgs(args []string) []string {
 		"-observe":         "--observe",
 		"-jetstream":       "--jetstream",
 		"-gatewayz":        "--gatewayz",
+		"-jsz":             "--jsz",
 	}
 	newArgs := make([]string, 0)
 
@@ -243,6 +244,10 @@ func init() {
 	rootCmd.Flags().Bool("gatewayz", false, "Export gateway metrics")
 	_ = viper.BindPFlag("gatewayz", rootCmd.Flags().Lookup("gatewayz"))
 
+	// jsz streams
+	rootCmd.Flags().String("jsz", "", "Export jsz metrics optionally, one of: all|streams|consumers")
+	_ = viper.BindPFlag("jsz", rootCmd.Flags().Lookup("jsz"))
+
 	// sys-req-prefix
 	rootCmd.Flags().String("sys-req-prefix", surveyor.DefaultSysReqPrefix, "Subject prefix for system requests ($SYS.REQ)")
 	_ = viper.BindPFlag("sys-req-prefix", rootCmd.Flags().Lookup("sys-req-prefix"))
@@ -283,6 +288,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.JetStreamConfigDir = viper.GetString("jetstream")
 	opts.Accounts = viper.GetBool("accounts")
 	opts.Gatewayz = viper.GetBool("gatewayz")
+	opts.Jsz = viper.GetString("jsz")
 	opts.SysReqPrefix = viper.GetString("sys-req-prefix")
 	opts.ServerResponseWait = viper.GetDuration("server-discovery-timeout")
 

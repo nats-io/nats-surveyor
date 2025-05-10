@@ -45,6 +45,7 @@ Flags:
       --jetstream string                    Listen for JetStream Advisories based on config files in a directory.
       --accounts                            Export per account metrics
       --gatewayz                            Export gateway metrics
+      --jsz                                 Export jsz metrics
       --sys-req-prefix string               Subject prefix for system requests ($SYS.REQ) (default "$SYS.REQ")
       --log-level string                    Log level, one of: trace|debug|info|warn|error|fatal|panic (default "info")
       --config string                       config file (default is ./nats-surveyor.yaml)
