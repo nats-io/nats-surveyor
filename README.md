@@ -45,12 +45,13 @@ Flags:
       --jetstream string                    Listen for JetStream Advisories based on config files in a directory.
       --accounts                            Export per account metrics
       --gatewayz                            Export gateway metrics
-      --jsz                                 Export jsz metrics
+      --jsz string                          Export jsz metrics optionally, one of: all|streams|consumers
       --sys-req-prefix string               Subject prefix for system requests ($SYS.REQ) (default "$SYS.REQ")
       --log-level string                    Log level, one of: trace|debug|info|warn|error|fatal|panic (default "info")
       --config string                       config file (default is ./nats-surveyor.yaml)
   -h, --help                                help for nats-surveyor
   -v, --version                             version for nats-surveyor
+
 ```
 
 At this time, NATS 2.0 System credentials are required for meaningful usage. Those can be provided in 2 ways:
