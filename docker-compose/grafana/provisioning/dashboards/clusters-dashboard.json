@@ -32,7 +32,10 @@
   ],
   "panels": [
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -86,7 +89,10 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -144,7 +150,10 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -255,7 +264,10 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -365,7 +377,10 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -379,7 +394,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Messages sent for each route",
           "fieldConfig": {
             "defaults": {
@@ -478,7 +496,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Messages received for each route",
           "fieldConfig": {
             "defaults": {
@@ -578,7 +599,10 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -592,7 +616,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Bytes sent for each route",
           "fieldConfig": {
             "defaults": {
@@ -691,7 +718,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Bytes received for each route",
           "fieldConfig": {
             "defaults": {
@@ -790,7 +820,10 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -804,7 +837,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Data in the pending buffers that needs to be sent to remotes",
           "fieldConfig": {
             "defaults": {
@@ -902,7 +938,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "The number of servers in each cluster",
           "fieldConfig": {
             "defaults": {
@@ -1009,6 +1048,13 @@
   "templating": {
     "list": [
       {
+        "type": "datasource",
+        "name": "prom_ds",
+        "label": "Prometheus Datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
         "allValue": ".*",
         "current": {
           "selected": true,
@@ -1017,7 +1063,10 @@
             "$__all"
           ]
         },
-        "datasource": "Prometheus",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "definition": "label_values(nats_core_info, server_cluster)",
         "hide": 0,
         "includeAll": true,

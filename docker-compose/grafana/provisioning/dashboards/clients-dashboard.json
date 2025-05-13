@@ -32,7 +32,10 @@
   ],
   "panels": [
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -87,7 +90,10 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -141,7 +147,10 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -196,7 +205,10 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -210,7 +222,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Point in time view of clients connected to each Server",
           "fieldConfig": {
             "defaults": {
@@ -309,7 +324,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Point in time view of clients connected to each Server",
           "fieldConfig": {
             "defaults": {
@@ -409,7 +427,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Connections received by the server in a second",
           "fieldConfig": {
             "defaults": {
@@ -509,7 +530,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Slow consumers detected by each server",
           "fieldConfig": {
             "defaults": {
@@ -609,7 +633,10 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -623,7 +650,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Number of subscriptions active on the server",
           "fieldConfig": {
             "defaults": {
@@ -720,7 +750,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "The difference in subscription count per minute",
           "fieldConfig": {
             "defaults": {
@@ -826,6 +859,13 @@
   "templating": {
     "list": [
       {
+        "type": "datasource",
+        "name": "prom_ds",
+        "label": "Prometheus Datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
         "allValue": ".*",
         "current": {
           "selected": false,
@@ -834,7 +874,10 @@
             "$__all"
           ]
         },
-        "datasource": "Prometheus",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "definition": "label_values(nats_core_info, server_cluster)",
         "hide": 0,
         "includeAll": true,
@@ -860,7 +903,10 @@
           "text": "27",
           "value": "27"
         },
-        "datasource": "Prometheus",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "definition": "query_result(nats_survey_expected_count)",
         "hide": 2,
         "includeAll": false,

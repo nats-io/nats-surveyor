@@ -1,34 +1,4 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    }
-  ],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "6.4.4"
-    },
-    {
-      "type": "panel",
-      "id": "graph",
-      "name": "Graph",
-      "version": ""
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "1.0.0"
-    }
-  ],
   "annotations": {
     "list": [
       {
@@ -54,7 +24,10 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Percentile of service time spent in the service ",
       "fill": 1,
       "fillGradient": 0,
@@ -152,7 +125,10 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Percentile of total time spent in the service and in the total which includes network overhead ",
       "fill": 1,
       "fillGradient": 0,
@@ -250,7 +226,10 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Average times taken to serve a request.\n\n* **service time** is the time taken to execute the service\n* **total time** includes network latencies between all parties",
       "fill": 1,
       "fillGradient": 0,
@@ -345,7 +324,10 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Time distribution spent traversing the NATS cluster",
       "fill": 1,
       "fillGradient": 0,
@@ -458,7 +440,10 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Response time distribution between NATS and the Requesting Client",
       "fill": 1,
       "fillGradient": 0,
@@ -569,7 +554,10 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Response time distribution between NATS and the Service",
       "fill": 1,
       "fillGradient": 0,
@@ -680,7 +668,10 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Number of observations received by status",
       "fill": 1,
       "fillGradient": 0,
@@ -768,13 +759,25 @@
   "refresh": "10s",
   "schemaVersion": 20,
   "style": "dark",
-  "tags": [],
+  "tags": [
+    "surveyor"
+  ],
   "templating": {
     "list": [
       {
+        "type": "datasource",
+        "name": "prom_ds",
+        "label": "Prometheus Datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
         "allValue": ".+",
         "current": {},
-        "datasource": "${DS_PROMETHEUS}",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "definition": "label_values(nats_latency_total_duration_sum, service)",
         "hide": 0,
         "includeAll": true,

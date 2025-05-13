@@ -30,7 +30,10 @@
   ],
   "panels": [
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -84,7 +87,10 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -139,7 +145,10 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -153,7 +162,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "",
           "fieldConfig": {
             "defaults": {
@@ -264,7 +276,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "",
           "fieldConfig": {
             "defaults": {
@@ -377,7 +392,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Data sent per second",
           "fieldConfig": {
             "defaults": {
@@ -477,7 +495,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Data received per second",
           "fieldConfig": {
             "defaults": {
@@ -577,7 +598,10 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -591,7 +615,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Messages sent per second",
           "fieldConfig": {
             "defaults": {
@@ -691,7 +718,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Messages received per second",
           "fieldConfig": {
             "defaults": {
@@ -791,7 +821,10 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -805,7 +838,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Cluster wide RTT as calculated from the Surveyor",
           "fieldConfig": {
             "defaults": {
@@ -909,6 +945,13 @@
   "templating": {
     "list": [
       {
+        "type": "datasource",
+        "name": "prom_ds",
+        "label": "Prometheus Datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
         "allValue": ".*",
         "current": {
           "selected": false,
@@ -917,7 +960,10 @@
             "$__all"
           ]
         },
-        "datasource": "Prometheus",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "definition": "label_values(nats_core_info, server_cluster)",
         "hide": 0,
         "includeAll": true,

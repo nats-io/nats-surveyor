@@ -32,7 +32,10 @@
   ],
   "panels": [
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -86,7 +89,10 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -141,7 +147,10 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -155,7 +164,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "",
           "fieldConfig": {
             "defaults": {
@@ -266,7 +278,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Bytes sent for each gateway",
           "fieldConfig": {
             "defaults": {
@@ -365,7 +380,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Bytes received for each gateway",
           "fieldConfig": {
             "defaults": {
@@ -464,7 +482,10 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -478,7 +499,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "",
           "fieldConfig": {
             "defaults": {
@@ -591,7 +615,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Messages sent for each gateway",
           "fieldConfig": {
             "defaults": {
@@ -690,7 +717,10 @@
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "description": "Messages received for each gateway",
           "fieldConfig": {
             "defaults": {
@@ -797,6 +827,13 @@
   "templating": {
     "list": [
       {
+        "type": "datasource",
+        "name": "prom_ds",
+        "label": "Prometheus Datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
         "allValue": ".*",
         "current": {
           "selected": false,
@@ -805,7 +842,10 @@
             "$__all"
           ]
         },
-        "datasource": "Prometheus",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "definition": "label_values(nats_core_info, server_cluster)",
         "hide": 0,
         "includeAll": true,
