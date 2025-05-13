@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": null,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -39,7 +42,10 @@
       "type": "row"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -100,7 +106,10 @@
       "repeatDirection": "h",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "expr": "count(group by(server_cluster) (nats_core_jetstream_info{server_jetstream=\"true\"}))",
           "hide": false,
@@ -109,7 +118,10 @@
           "refId": "D"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "expr": "nats_survey_expected_count",
           "hide": false,
@@ -118,7 +130,10 @@
           "refId": "C"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "count(nats_core_jetstream_info{server_jetstream=\"true\"})",
@@ -129,7 +144,10 @@
           "refId": "A"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": true,
           "expr": "count(nats_core_jetstream_enabled == 1)",
@@ -146,7 +164,10 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -210,7 +231,10 @@
       "repeatDirection": "h",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "sum(nats_core_jetstream_filestore_size_bytes{})",
@@ -221,7 +245,10 @@
           "refId": "A"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": true,
           "expr": "sum(nats_core_jetstream_filestore_used_bytes{})",
@@ -232,7 +259,10 @@
           "refId": "B"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "exemplar": true,
           "expr": "sum(nats_core_jetstream_filestore_reserved_bytes{})",
           "hide": false,
@@ -247,7 +277,10 @@
       "type": "bargauge"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Highly Available Asset Distribution for replicated streams, objects, KV stores, and replicated consumers.  Not applicable to single server mode.",
       "fieldConfig": {
         "defaults": {
@@ -301,7 +334,10 @@
       "pluginVersion": "9.1.3",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_jetstream_ha_assets",
@@ -318,7 +354,10 @@
       "type": "piechart"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Highly Available Asset Count including replicated streams, objects, KV stores, and replicated consumers.  Not applicable to single server mode.",
       "fieldConfig": {
         "defaults": {
@@ -396,7 +435,10 @@
       },
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "sum by(server_name) (nats_core_jetstream_ha_assets)",
@@ -413,7 +455,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -477,7 +522,10 @@
       "pluginVersion": "9.1.3",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_jetstream_api_requests",
@@ -488,7 +536,10 @@
           "refId": "A"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_jetstream_api_errors",
@@ -523,7 +574,10 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -587,7 +641,10 @@
       "repeatDirection": "h",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "sum(nats_core_jetstream_memstore_size_bytes{})",
@@ -598,7 +655,10 @@
           "refId": "A"
         },
         {
-          "datasource":null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": true,
           "expr": "sum(nats_core_jetstream_memstore_used_bytes{})",
@@ -609,7 +669,10 @@
           "refId": "B"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "exemplar": true,
           "expr": "sum(nats_core_jetstream_memstore_reserved_bytes{})",
           "hide": false,
@@ -637,7 +700,10 @@
       "type": "row"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -716,7 +782,10 @@
       "repeatDirection": "h",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "nats_core_jetstream_cluster_raft_group_leader > 0",
@@ -735,7 +804,10 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -814,7 +886,10 @@
       "type": "state-timeline"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -1000,7 +1075,10 @@
       "repeatDirection": "h",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "nats_core_jetstream_cluster_raft_group_replica_peer_offline",
@@ -1012,7 +1090,10 @@
           "refId": "A"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_jetstream_cluster_raft_group_replica_peer_current",
@@ -1024,7 +1105,10 @@
           "refId": "B"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_jetstream_cluster_raft_group_replica_peer_active",
@@ -1095,7 +1179,10 @@
       "type": "row"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -1283,7 +1370,10 @@
       "pluginVersion": "9.1.3",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_stream_count",
@@ -1295,7 +1385,10 @@
           "refId": "I"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_storage_used",
@@ -1307,7 +1400,10 @@
           "refId": "J"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_storage_reserved",
@@ -1319,7 +1415,10 @@
           "refId": "A"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_memory_used",
@@ -1331,7 +1430,10 @@
           "refId": "B"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_memory_reserved",
@@ -1343,7 +1445,10 @@
           "refId": "C"
         },
         {
-          "datasource":null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_enabled",
@@ -1355,7 +1460,10 @@
           "refId": "D"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_storage_used / nats_core_account_jetstream_storage_reserved",
@@ -1367,7 +1475,10 @@
           "refId": "E"
         },
         {
-          "datasource":null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_memory_used / nats_core_account_jetstream_memory_reserved",
@@ -1498,7 +1609,10 @@
       "type": "table"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1548,7 +1662,10 @@
       "pluginVersion": "9.1.3",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_storage_used",
@@ -1570,7 +1687,10 @@
       "type": "bargauge"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1620,7 +1740,10 @@
       "pluginVersion": "9.1.3",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_memory_used",
@@ -1637,7 +1760,10 @@
       "type": "bargauge"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Number of Highly Available Assets by Stream.  A high number of HA Assets will place pressure on the system.",
       "fieldConfig": {
         "defaults": {
@@ -1694,7 +1820,10 @@
       "pluginVersion": "9.1.3",
       "targets": [
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_consumer_count",
@@ -1705,12 +1834,18 @@
           "refId": "A"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "hide": false,
           "refId": "B"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "builder",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_replica_count",
@@ -1722,7 +1857,10 @@
           "refId": "C"
         },
         {
-          "datasource": null,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "nats_core_account_jetstream_replica_count + (nats_core_account_jetstream_replica_count * nats_core_account_jetstream_consumer_count)",
@@ -1804,9 +1942,18 @@
   "refresh": "5s",
   "schemaVersion": 37,
   "style": "dark",
-  "tags": [],
+  "tags": [
+    "surveyor"
+  ],
   "templating": {
     "list": [
+      {
+        "type": "datasource",
+        "name": "prom_ds",
+        "label": "Prometheus Datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
       {
         "auto": false,
         "auto_count": 30,
@@ -1967,7 +2114,10 @@
           "text": "surveyor",
           "value": "surveyor"
         },
-        "datasource": null,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "definition": "label_values(nats_core_info, job)",
         "hide": 2,
         "includeAll": false,
@@ -1990,7 +2140,10 @@
           "text": "localhost:7777",
           "value": "localhost:7777"
         },
-        "datasource": null,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "definition": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
         "hide": 2,
         "includeAll": false,
@@ -2018,7 +2171,10 @@
             "$__all"
           ]
         },
-        "datasource": null,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "definition": "label_values(nats_core_info{job=~\"$surveyor_job\", instance=~\"$surveyor_instance\"}, server_cluster)",
         "description": "Pick a Cluster. NOTE: top row \"Summary Metrics\" ignore the cluster selection currently.",
         "hide": 0,
@@ -2064,7 +2220,10 @@
         "type": "interval"
       },
       {
-        "datasource": null,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
         "filters": [],
         "hide": 0,
         "name": "Filters",

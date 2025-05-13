@@ -33,7 +33,10 @@
   "panels": [
     {
       "collapsed": false,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -47,7 +50,10 @@
     },
     {
       "cacheTimeout": null,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Total current connections across all servers",
       "fieldConfig": {
         "defaults": {
@@ -114,7 +120,10 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -168,7 +177,10 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {},
@@ -223,7 +235,10 @@
     },
     {
       "cacheTimeout": null,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Total current connections across all servers",
       "fieldConfig": {
         "defaults": {
@@ -291,7 +306,10 @@
     },
     {
       "collapsed": false,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -305,7 +323,10 @@
     },
     {
       "cacheTimeout": null,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Number of known servers",
       "fieldConfig": {
         "defaults": {
@@ -372,7 +393,10 @@
     },
     {
       "cacheTimeout": null,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Number of known clusters",
       "fieldConfig": {
         "defaults": {
@@ -440,7 +464,10 @@
     },
     {
       "cacheTimeout": null,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Number of routes reported as active",
       "fieldConfig": {
         "defaults": {
@@ -508,7 +535,10 @@
     },
     {
       "cacheTimeout": null,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "description": "Number of routes reported as active",
       "fieldConfig": {
         "defaults": {
@@ -580,7 +610,10 @@
       "cacheTimeout": null,
       "dashLength": 10,
       "dashes": false,
-      "datasource": null,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
       "decimals": null,
       "description": "Distribution of NATS Server Versions across the cluster",
       "fieldConfig": {
@@ -704,6 +737,13 @@
   "templating": {
     "list": [
       {
+        "type": "datasource",
+        "name": "prom_ds",
+        "label": "Prometheus Datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
         "allValue": ".*",
         "current": {
           "selected": true,
@@ -712,7 +752,10 @@
             "$__all"
           ]
         },
-        "datasource": "Prometheus",
+             "datasource": {
+        "type": "prometheus",
+        "uid" : "${prom_ds}"
+      },
         "definition": "label_values(nats_core_info, server_cluster)",
         "hide": 0,
         "includeAll": true,
