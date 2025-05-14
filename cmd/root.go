@@ -253,7 +253,7 @@ func init() {
 	_ = viper.BindPFlag("jsz-leaders-only", rootCmd.Flags().Lookup("jsz-leaders-only"))
 
 	// jsz filter list only
-	rootCmd.Flags().StringArray("jsz-filter", nil, "Fetch selected list of jsz metrics")
+	rootCmd.Flags().StringArray("jsz-filter", nil, "Export jsz consumer metrics that match selected filters")
 	_ = viper.BindPFlag("jsz-filter", rootCmd.Flags().Lookup("jsz-filter"))
 
 	// sys-req-prefix
