@@ -192,6 +192,7 @@ type StatzCollector struct {
 	collectAccounts     bool
 	collectGatewayz     bool
 	collectJsz          string
+	jszLeadersOnly      bool
 	sysReqPrefix        string
 	accStatZeroConn     map[string]int
 	natsUp              *prometheus.Desc
@@ -243,6 +244,7 @@ type consumerStats struct {
 	consumerNumPending           float64
 	consumerAckFloorStreamSeq    float64
 	consumerAckFloorConsumerSeq  float64
+	consumerRaftGroup            string
 }
 
 type streamAccountStats struct {
@@ -563,7 +565,7 @@ func (sc *StatzCollector) buildDescs() {
 }
 
 // NewStatzCollector creates a NATS Statz Collector
-func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, serverDiscoveryWait, pollTimeout time.Duration, accounts bool, gatewayz bool, jsz string, sysReqPrefix string, constLabels prometheus.Labels) *StatzCollector {
+func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, serverDiscoveryWait, pollTimeout time.Duration, accounts bool, gatewayz bool, jsz string, jszLeadersOnly bool, sysReqPrefix string, constLabels prometheus.Labels) *StatzCollector {
 	// Remove the potential wildcard users might place
 	// since we are simply prepending the string
 	sysReqPrefix = strings.TrimSuffix(sysReqPrefix, ".>")
@@ -583,6 +585,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int, ser
 		collectAccounts:     accounts,
 		collectGatewayz:     gatewayz,
 		collectJsz:          jsz,
+		jszLeadersOnly:      jszLeadersOnly,
 		sysReqPrefix:        sysReqPrefix,
 		accStatZeroConn:     make(map[string]int),
 
@@ -889,13 +892,25 @@ func (sc *StatzCollector) pollAccountInfo() error {
 				}
 
 				for _, consumer := range stream.Consumer {
-					var consumerLeader string
+					var consumerLeader, raftGroup string
 					if consumer.Cluster != nil {
 						consumerLeader = consumer.Cluster.Leader
+						raftGroup = consumer.Cluster.RaftGroup
+					}
+					if raftGroup == "" {
+						// For R1 may need to find manually within the complete list
+						// of raft groups.
+						for _, cr := range stream.ConsumerRaftGroups {
+							if cr.Name == consumer.Name {
+								raftGroup = cr.RaftGroup
+								break
+							}
+						}
 					}
 					cs := consumerStats{
 						consumerName:                 consumer.Name,
 						consumerLeader:               consumerLeader,
+						consumerRaftGroup:            raftGroup,
 						consumerDeliveredConsumerSeq: float64(consumer.Delivered.Consumer),
 						consumerDeliveredStreamSeq:   float64(consumer.Delivered.Stream),
 						consumerNumAckPending:        float64(consumer.NumAckPending),
@@ -1488,120 +1503,115 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					metrics.newGaugeMetric(sc.descs.accJetstreamReplicaCount, streamStat.replicaCount, append(accLabels, streamStat.streamName, streamStat.raftGroup))
 				}
 				for _, streamStat := range stat.jszData {
-					metrics.newGaugeMetric(sc.descs.accJszStreamMsgs,
-						streamStat.streamMessages,
-						append(accLabels, streamStat.accountName,
-							streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-							streamStat.streamName, streamStat.streamLeader,
-						),
-					)
-					metrics.newGaugeMetric(sc.descs.accJszStreamBytes,
-						streamStat.streamBytes,
-						append(accLabels, streamStat.accountName,
-							streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-							streamStat.streamName, streamStat.streamLeader,
-						),
-					)
-					metrics.newGaugeMetric(sc.descs.accJszStreamFirstSeq,
-						streamStat.streamFirstSeq,
-						append(accLabels, streamStat.accountName,
-							streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-							streamStat.streamName, streamStat.streamLeader,
-						),
-					)
-					metrics.newGaugeMetric(sc.descs.accJszStreamLastSeq,
-						streamStat.streamLastSeq,
-						append(accLabels, streamStat.accountName,
-							streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-							streamStat.streamName, streamStat.streamLeader,
-						),
-					)
-					metrics.newGaugeMetric(sc.descs.accJszStreamConsumerCount,
-						streamStat.streamConsumerCount,
-						append(accLabels, streamStat.accountName,
-							streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-							streamStat.streamName, streamStat.streamLeader,
-						),
-					)
-					metrics.newGaugeMetric(sc.descs.accJszStreamSubjectCount,
-						streamStat.streamSubjectCount,
-						append(accLabels, streamStat.accountName,
-							streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-							streamStat.streamName, streamStat.streamLeader,
-						),
-					)
+					showStreamMetrics := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == streamStat.streamLeader
+
+					if showStreamMetrics {
+						metrics.newGaugeMetric(sc.descs.accJszStreamMsgs,
+							streamStat.streamMessages,
+							append(accLabels, streamStat.accountName,
+								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+								streamStat.streamName, streamStat.streamLeader,
+							),
+						)
+						metrics.newGaugeMetric(sc.descs.accJszStreamBytes,
+							streamStat.streamBytes,
+							append(accLabels, streamStat.accountName,
+								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+								streamStat.streamName, streamStat.streamLeader,
+							),
+						)
+						metrics.newGaugeMetric(sc.descs.accJszStreamFirstSeq,
+							streamStat.streamFirstSeq,
+							append(accLabels, streamStat.accountName,
+								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+								streamStat.streamName, streamStat.streamLeader,
+							),
+						)
+						metrics.newGaugeMetric(sc.descs.accJszStreamLastSeq,
+							streamStat.streamLastSeq,
+							append(accLabels, streamStat.accountName,
+								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+								streamStat.streamName, streamStat.streamLeader,
+							),
+						)
+						metrics.newGaugeMetric(sc.descs.accJszStreamConsumerCount,
+							streamStat.streamConsumerCount,
+							append(accLabels, streamStat.accountName,
+								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+								streamStat.streamName, streamStat.streamLeader,
+							),
+						)
+						metrics.newGaugeMetric(sc.descs.accJszStreamSubjectCount,
+							streamStat.streamSubjectCount,
+							append(accLabels, streamStat.accountName,
+								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+								streamStat.streamName, streamStat.streamLeader,
+							),
+						)
+					}
 
 					for _, consumerStat := range streamStat.consumerStats {
-						metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredConsumerSeq,
-							consumerStat.consumerDeliveredConsumerSeq,
-							append(accLabels, streamStat.accountName,
-								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-								streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-							),
-						)
-					}
-					for _, consumerStat := range streamStat.consumerStats {
-						metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredStreamSeq,
-							consumerStat.consumerDeliveredStreamSeq,
-							append(accLabels, streamStat.accountName,
-								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-								streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-							),
-						)
-					}
-					for _, consumerStat := range streamStat.consumerStats {
-						metrics.newGaugeMetric(sc.descs.accJszConsumerNumAckPending,
-							consumerStat.consumerNumAckPending,
-							append(accLabels, streamStat.accountName,
-								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-								streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-							),
-						)
-					}
-					for _, consumerStat := range streamStat.consumerStats {
-						metrics.newGaugeMetric(sc.descs.accJszConsumerNumRedelivered,
-							consumerStat.consumerNumRedelivered,
-							append(accLabels, streamStat.accountName,
-								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-								streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-							),
-						)
-					}
-					for _, consumerStat := range streamStat.consumerStats {
-						metrics.newGaugeMetric(sc.descs.accJszConsumerNumWaiting,
-							consumerStat.consumerNumWaiting,
-							append(accLabels, streamStat.accountName,
-								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-								streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-							),
-						)
-					}
-					for _, consumerStat := range streamStat.consumerStats {
-						metrics.newGaugeMetric(sc.descs.accJszConsumerNumPending,
-							consumerStat.consumerNumPending,
-							append(accLabels, streamStat.accountName,
-								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-								streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-							),
-						)
-					}
-					for _, consumerStat := range streamStat.consumerStats {
-						metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorStreamSeq,
-							consumerStat.consumerAckFloorStreamSeq,
-							append(accLabels, streamStat.accountName,
-								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-								streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-							),
-						)
-					}
-					for _, consumerStat := range streamStat.consumerStats {
-						metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorConsumerSeq,
-							consumerStat.consumerAckFloorConsumerSeq,
-							append(accLabels, streamStat.accountName,
-								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-								streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-							),
-						)
+						showConsumerMetrics := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == consumerStat.consumerLeader
+
+						if showConsumerMetrics {
+							raftGroup := consumerStat.consumerRaftGroup
+							metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredConsumerSeq,
+								consumerStat.consumerDeliveredConsumerSeq,
+								append(accLabels, streamStat.accountName,
+									streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+									streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+								),
+							)
+							metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredStreamSeq,
+								consumerStat.consumerDeliveredStreamSeq,
+								append(accLabels, streamStat.accountName,
+									streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+									streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+								),
+							)
+							metrics.newGaugeMetric(sc.descs.accJszConsumerNumAckPending,
+								consumerStat.consumerNumAckPending,
+								append(accLabels, streamStat.accountName,
+									streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+									streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+								),
+							)
+							metrics.newGaugeMetric(sc.descs.accJszConsumerNumRedelivered,
+								consumerStat.consumerNumRedelivered,
+								append(accLabels, streamStat.accountName,
+									streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+									streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+								),
+							)
+							metrics.newGaugeMetric(sc.descs.accJszConsumerNumWaiting,
+								consumerStat.consumerNumWaiting,
+								append(accLabels, streamStat.accountName,
+									streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+									streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+								),
+							)
+							metrics.newGaugeMetric(sc.descs.accJszConsumerNumPending,
+								consumerStat.consumerNumPending,
+								append(accLabels, streamStat.accountName,
+									streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+									streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+								),
+							)
+							metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorStreamSeq,
+								consumerStat.consumerAckFloorStreamSeq,
+								append(accLabels, streamStat.accountName,
+									streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+									streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+								),
+							)
+							metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorConsumerSeq,
+								consumerStat.consumerAckFloorConsumerSeq,
+								append(accLabels, streamStat.accountName,
+									streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+									streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+								),
+							)
+						}
 					}
 				}
 			}
