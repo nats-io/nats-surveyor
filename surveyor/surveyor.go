@@ -82,7 +82,8 @@ type Options struct {
 	Accounts             bool
 	Gatewayz             bool
 	Jsz                  string
-	JszLeadersOnly  bool
+	JszLeadersOnly       bool
+	JszFilterList        []string
 	SysReqPrefix         string
 	Logger               *logrus.Logger    // not exposed by CLI
 	Provider             ConnProvider      // not exposed by CLI
@@ -219,6 +220,12 @@ func (s *Surveyor) createStatszCollector() error {
 		s.logger.Debugln("Skipping per-account exports")
 	}
 
+	if len(s.opts.JszFilterList) > 0 {
+		if err := validateJszFilterList(s.opts.JszFilterList); err != nil {
+			return err
+		}
+	}
+
 	s.statzC = NewStatzCollector(
 		s.conn.Conn(),
 		s.logger,
@@ -229,11 +236,39 @@ func (s *Surveyor) createStatszCollector() error {
 		s.opts.Gatewayz,
 		s.opts.Jsz,
 		s.opts.JszLeadersOnly,
+		s.opts.JszFilterList,
 		s.opts.SysReqPrefix,
 		s.opts.ConstLabels,
 	)
 
 	return s.promRegistry.Register(s.statzC)
+}
+
+func validateJszFilterList(allowList []string) error {
+	allowedJszFilterMetrics := map[string]struct{}{
+		"stream_total_messages":           {},
+		"stream_total_bytes":              {},
+		"stream_first_seq":                {},
+		"stream_last_seq":                 {},
+		"stream_consumer_count":           {},
+		"stream_subject_count":            {},
+		"consumer_delivered_consumer_seq": {},
+		"consumer_delivered_stream_seq":   {},
+		"consumer_ack_floor_consumer_seq": {},
+		"consumer_ack_floor_stream_seq":   {},
+		"consumer_num_ack_pending":        {},
+		"consumer_num_pending":            {},
+		"consumer_num_redelivered":        {},
+		"consumer_num_waiting":            {},
+	}
+	for _, field := range allowList {
+		if _, ok := allowedJszFilterMetrics[field]; ok {
+			continue
+		} else {
+			return fmt.Errorf("invalid jsz filter %v", field)
+		}
+	}
+	return nil
 }
 
 // generates the TLS config for https

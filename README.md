@@ -47,6 +47,7 @@ Flags:
       --gatewayz                            Export gateway metrics
       --jsz string                          Export jsz metrics optionally, one of: all|streams|consumers
       --jsz-leaders-only bool               Fetch jsz data from stream and consumer leaders only
+      --jsz-filter string                   Export jsz consumer metrics that match selected filters
       --sys-req-prefix string               Subject prefix for system requests ($SYS.REQ) (default "$SYS.REQ")
       --log-level string                    Log level, one of: trace|debug|info|warn|error|fatal|panic (default "info")
       --config string                       config file (default is ./nats-surveyor.yaml)

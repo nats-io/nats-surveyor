@@ -249,8 +249,12 @@ func init() {
 	_ = viper.BindPFlag("jsz", rootCmd.Flags().Lookup("jsz"))
 
 	// jsz leader only
-	rootCmd.Flags().Bool("jsz-leaders-only", false, "Fetch JSZ metrics from stream and consumer leaders only")
+	rootCmd.Flags().Bool("jsz-leaders-only", false, "Fetch jsz metrics from stream and consumer leaders only")
 	_ = viper.BindPFlag("jsz-leaders-only", rootCmd.Flags().Lookup("jsz-leaders-only"))
+
+	// jsz filter list only
+	rootCmd.Flags().StringArray("jsz-filter", nil, "Fetch selected list of jsz metrics")
+	_ = viper.BindPFlag("jsz-filter", rootCmd.Flags().Lookup("jsz-filter"))
 
 	// sys-req-prefix
 	rootCmd.Flags().String("sys-req-prefix", surveyor.DefaultSysReqPrefix, "Subject prefix for system requests ($SYS.REQ)")
@@ -294,6 +298,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.Gatewayz = viper.GetBool("gatewayz")
 	opts.Jsz = viper.GetString("jsz")
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")
+	opts.JszFilterList = viper.GetStringSlice("jsz-filter")
 	opts.SysReqPrefix = viper.GetString("sys-req-prefix")
 	opts.ServerResponseWait = viper.GetDuration("server-discovery-timeout")
 
