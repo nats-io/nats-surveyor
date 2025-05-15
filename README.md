@@ -46,6 +46,8 @@ Flags:
       --accounts                            Export per account metrics
       --gatewayz                            Export gateway metrics
       --jsz string                          Export jsz metrics optionally, one of: all|streams|consumers
+      --jsz-leaders-only bool               Fetch jsz data from stream and consumer leaders only
+      --jsz-filter stringArray              Export jsz consumer metrics that match selected filters
       --sys-req-prefix string               Subject prefix for system requests ($SYS.REQ) (default "$SYS.REQ")
       --log-level string                    Log level, one of: trace|debug|info|warn|error|fatal|panic (default "info")
       --config string                       config file (default is ./nats-surveyor.yaml)
@@ -115,6 +117,40 @@ Additionally, there is a `nats_up` metric that will normally return 1, but will 
 and no additional NATS metrics when there is no connectivity to the NATS system.  This
 allows users to differentiate between a problem with the exporter itself connectivity with
 the NATS system.
+
+## JSZ Metrics
+
+Since v0.9.1, nats-surveyor supports collecting stream and consumer metrics. By default, surveyor will collect all the metrics
+from all the replicas from streams and consumers which depending of the size of your deployment, can result in high cardinality 
+issues in the Prometheus setup.  To narrow down the list of metrics to be exported there are a few options.
+
+- Using `--jsz=streams` to make sure that only the streams metrics is collected (if consumer metrics are not needed).
+
+- Using `--jsz-leaders-only` to skip data from the stream and consumer replicas.
+
+- Using `--jsz-filter` to decrease number of consumer metrics:
+
+  The following list of metrics for consumers is available to be used as filters: 
+
+  ```
+  consumer_delivered_consumer_seq
+  consumer_delivered_stream_seq
+  consumer_ack_floor_consumer_seq
+  consumer_ack_floor_stream_seq
+  consumer_num_ack_pending
+  consumer_num_pending
+  consumer_num_redelivered
+  consumer_num_waiting
+  ```
+
+For example, the following will make surveyor only collect the metrics from the leaders
+and picking up `num_pending`, `num_ack_pending` and `num_waiting` from the consumers.
+  
+```
+  nats-surveyor --jsz=all \
+                --jsz-leaders-only \
+                --jsz-filter=consumer_num_pending,consumer_num_ack_pending,consumer_num_waiting
+```
 
 ## Docker Compose
 

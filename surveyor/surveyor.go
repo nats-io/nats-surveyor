@@ -82,6 +82,8 @@ type Options struct {
 	Accounts             bool
 	Gatewayz             bool
 	Jsz                  string
+	JszLeadersOnly       bool
+	JszFilters           []JszFilter
 	SysReqPrefix         string
 	Logger               *logrus.Logger    // not exposed by CLI
 	Provider             ConnProvider      // not exposed by CLI
@@ -227,6 +229,8 @@ func (s *Surveyor) createStatszCollector() error {
 		s.opts.Accounts,
 		s.opts.Gatewayz,
 		s.opts.Jsz,
+		s.opts.JszLeadersOnly,
+		s.opts.JszFilters,
 		s.opts.SysReqPrefix,
 		s.opts.ConstLabels,
 	)

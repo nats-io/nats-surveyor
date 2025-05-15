@@ -16,9 +16,11 @@ package cmd
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"os/signal"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -29,11 +31,13 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/thediveo/enumflag/v2"
 )
 
 var (
-	cfgFile string
-	rootCmd = &cobra.Command{
+	cfgFile    string
+	jszFilters []surveyor.JszFilter
+	rootCmd    = &cobra.Command{
 		Use:     "nats-surveyor",
 		Short:   "Prometheus exporter for NATS",
 		Args:    cobra.NoArgs,
@@ -248,6 +252,19 @@ func init() {
 	rootCmd.Flags().String("jsz", "", "Export jsz metrics optionally, one of: all|streams|consumers")
 	_ = viper.BindPFlag("jsz", rootCmd.Flags().Lookup("jsz"))
 
+	// jsz leader only
+	rootCmd.Flags().Bool("jsz-leaders-only", false, "Fetch jsz metrics from stream and consumer leaders only")
+	_ = viper.BindPFlag("jsz-leaders-only", rootCmd.Flags().Lookup("jsz-leaders-only"))
+
+	// jsz filter list using enumflag
+	rootCmd.Flags().Var(
+		enumflag.NewSlice(&jszFilters, "jsz-filter", surveyor.JszFilterIds, enumflag.EnumCaseInsensitive),
+		"jsz-filter",
+		fmt.Sprintf("Fetch selected jsz metrics only(comma separated list). Metrics: %s",
+			strings.Join(surveyor.JszFiltersToStringSlice(slices.Collect(maps.Keys(surveyor.JszFilterIds))), ",")),
+	)
+	_ = viper.BindPFlag("jsz-filter", rootCmd.Flags().Lookup("jsz-filter"))
+
 	// sys-req-prefix
 	rootCmd.Flags().String("sys-req-prefix", surveyor.DefaultSysReqPrefix, "Subject prefix for system requests ($SYS.REQ)")
 	_ = viper.BindPFlag("sys-req-prefix", rootCmd.Flags().Lookup("sys-req-prefix"))
@@ -260,7 +277,6 @@ func init() {
 
 	cobra.OnInitialize(initConfig)
 }
-
 func getSurveyorOpts() *surveyor.Options {
 	opts := surveyor.GetDefaultOptions()
 	opts.URLs = viper.GetString("servers")
@@ -289,6 +305,9 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.Accounts = viper.GetBool("accounts")
 	opts.Gatewayz = viper.GetBool("gatewayz")
 	opts.Jsz = viper.GetString("jsz")
+	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")
+	opts.JszFilters = jszFilters
+
 	opts.SysReqPrefix = viper.GetString("sys-req-prefix")
 	opts.ServerResponseWait = viper.GetDuration("server-discovery-timeout")
 

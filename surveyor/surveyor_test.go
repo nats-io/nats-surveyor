@@ -14,6 +14,7 @@
 package surveyor
 
 import (
+	"bufio"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -26,10 +27,9 @@ import (
 	"testing"
 	"time"
 
+	st "github.com/nats-io/nats-surveyor/test"
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/common/expfmt"
-
-	st "github.com/nats-io/nats-surveyor/test"
 )
 
 // Testing constants
@@ -801,4 +801,383 @@ func TestSurveyor_NATSUserPass(t *testing.T) {
 	if _, err = PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK); err != nil {
 		t.Fatalf("received unexpected error: %v", err)
 	}
+}
+
+func TestSurveyor_AccountJetStreamJszLeaderOnly(t *testing.T) {
+	sc := st.NewJetStreamCluster(t)
+	defer sc.Shutdown()
+
+	opt := getTestOptions()
+	opt.Credentials = ""
+	opt.NATSUser = "admin"
+	opt.NATSPassword = "s3cr3t!"
+	opt.Accounts = true
+	opt.ExpectedServers = 3
+	opt.Jsz = "all"
+	opt.JszLeadersOnly = true
+	s, err := NewSurveyor(opt)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	nc := sc.Clients[0]
+	js, err := nc.JetStream()
+	if err != nil {
+		t.Fatalf("Error creating JetStream context: %s", err)
+	}
+	// create 10 streams, half of them with replicas
+	for i := 0; i < 5; i++ {
+		_, err = js.AddStream(&nats.StreamConfig{Name: fmt.Sprintf("single%d", i), Subjects: []string{fmt.Sprintf("SINGLE.%d", i)}})
+		if err != nil {
+			t.Fatalf("Error adding stream: %s", err)
+		}
+		_, err = js.AddStream(&nats.StreamConfig{Name: fmt.Sprintf("repl%d", i), Subjects: []string{fmt.Sprintf("REPL.%d", i)}, Replicas: 3})
+		if err != nil {
+			t.Fatalf("Error adding stream: %s", err)
+		}
+	}
+
+	// create 15 consumers, 3 variants
+	for i := 0; i < 5; i++ {
+		// non-replicated consumer on non-replicated stream
+		_, err = js.AddConsumer("single1", &nats.ConsumerConfig{Durable: fmt.Sprintf("singlecons_%d", i)})
+		if err != nil {
+			t.Fatalf("Error adding consumer: %s", err)
+		}
+		// consumer with replicas on stream with replicas
+		_, err = js.AddConsumer("repl1", &nats.ConsumerConfig{Durable: fmt.Sprintf("replcons_%d", i), Replicas: 3})
+		if err != nil {
+			t.Fatalf("Error adding consumer: %s", err)
+		}
+		// non-replicated consumer on stream with replicas
+		_, err = js.AddConsumer("repl2", &nats.ConsumerConfig{Durable: fmt.Sprintf("singleonrepl_%d", i), Replicas: 1})
+		if err != nil {
+			t.Fatalf("Error adding consumer: %s", err)
+		}
+	}
+
+	output, err := PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []*regexp.Regexp{
+		regexp.MustCompile(`nats_stream_consumer_count`),
+		regexp.MustCompile(`nats_stream_first_seq`),
+		regexp.MustCompile(`nats_stream_last_seq`),
+		regexp.MustCompile(`nats_stream_subject_count`),
+		regexp.MustCompile(`nats_stream_total_bytes`),
+		regexp.MustCompile(`nats_stream_total_messages`),
+		regexp.MustCompile(`nats_consumer_ack_floor_consumer_seq`),
+		regexp.MustCompile(`nats_consumer_ack_floor_stream_seq`),
+		regexp.MustCompile(`nats_consumer_delivered_consumer_seq`),
+		regexp.MustCompile(`nats_consumer_delivered_stream_seq`),
+		regexp.MustCompile(`nats_consumer_num_ack_pending`),
+		regexp.MustCompile(`nats_consumer_num_pending`),
+		regexp.MustCompile(`nats_consumer_num_redelivered`),
+		regexp.MustCompile(`nats_consumer_num_waiting`),
+	}
+	for _, m := range want {
+		if !m.MatchString(output) {
+			t.Logf("output: %s", output)
+			t.Fatalf("missing: %s", m)
+		}
+	}
+
+	var totalStreams, totalConsumers int
+
+	reader := strings.NewReader(output)
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		if scanner.Err(); err != nil {
+			break
+		}
+		line := scanner.Text()
+		metric, labels := parseLabels(line)
+		if strings.HasPrefix(metric, "nats_stream") {
+			var (
+				serverName, streamLeader string
+				got, expected            string
+				ok                       bool
+			)
+			if got, ok = labels["account"]; !ok {
+				t.Fatalf("Expected account label")
+			}
+			expected = "JS"
+			if got != expected {
+				t.Errorf("Expected %v, got %v", expected, got)
+			}
+			// With leaders only, the stream name and leader should always match.
+			if serverName, ok = labels["server_name"]; !ok {
+				t.Errorf("Expected server_name label")
+			}
+			if streamLeader, ok = labels["stream_leader"]; !ok {
+				t.Errorf("Expected stream_leader label")
+			}
+			if serverName != streamLeader {
+				t.Fatalf("Expected stream_leader and server_name to be the same label")
+			}
+			raftGroup, ok := labels["raft_group"]
+			if !ok {
+				t.Fatalf("Expected raft_group label")
+			}
+			if !strings.HasPrefix(raftGroup, "S-") {
+				t.Errorf("Unexpected prefix for raft group: %v", raftGroup)
+			}
+
+			totalStreams++
+		} else if strings.HasPrefix(metric, "nats_consumer") {
+			var (
+				serverName, consumerLeader string
+				got, expected              string
+				ok                         bool
+			)
+			if got, ok = labels["account"]; !ok {
+				t.Fatalf("Expected account label")
+			}
+			expected = "JS"
+			if got != expected {
+				t.Errorf("Expected %v, got %v", expected, got)
+			}
+			if serverName, ok = labels["server_name"]; !ok {
+				t.Errorf("Expected server_name label")
+			}
+			if consumerLeader, ok = labels["consumer_leader"]; !ok {
+				t.Errorf("Expected stream_leader label")
+			}
+			if serverName != consumerLeader {
+				t.Fatalf("Expected consumer_leader and server_name to be the same label")
+			}
+			raftGroup, ok := labels["raft_group"]
+			if !ok {
+				t.Fatalf("Expected raft_group label")
+			}
+			if !strings.HasPrefix(raftGroup, "C-") {
+				t.Errorf("Unexpected prefix for raft group: %v", raftGroup)
+			}
+
+			totalConsumers++
+		}
+	}
+	expectedConsumerMetrics := 120
+	if totalConsumers != expectedConsumerMetrics {
+		t.Errorf("Expected %v, got %v", expectedConsumerMetrics, totalConsumers)
+	}
+	expectedStreamMetrics := 60
+	if totalStreams != expectedStreamMetrics {
+		t.Errorf("Expected %v, got %v", expectedStreamMetrics, totalStreams)
+	}
+}
+
+func TestSurveyor_AccountJetStreamJszFilters(t *testing.T) {
+	sc := st.NewJetStreamCluster(t)
+	defer sc.Shutdown()
+
+	opt := getTestOptions()
+	opt.Credentials = ""
+	opt.NATSUser = "admin"
+	opt.NATSPassword = "s3cr3t!"
+	opt.Accounts = true
+	opt.ExpectedServers = 3
+	opt.Jsz = "all"
+	opt.JszLeadersOnly = true
+	opt.JszFilters = []JszFilter{ConsumerNumAckPending, ConsumerNumPending}
+	s, err := NewSurveyor(opt)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	nc := sc.Clients[0]
+	js, err := nc.JetStream()
+	if err != nil {
+		t.Fatalf("Error creating JetStream context: %s", err)
+	}
+	// create 10 streams, half of them with replicas
+	for i := 0; i < 5; i++ {
+		_, err = js.AddStream(&nats.StreamConfig{Name: fmt.Sprintf("single%d", i), Subjects: []string{fmt.Sprintf("SINGLE.%d", i)}})
+		if err != nil {
+			t.Fatalf("Error adding stream: %s", err)
+		}
+		_, err = js.AddStream(&nats.StreamConfig{Name: fmt.Sprintf("repl%d", i), Subjects: []string{fmt.Sprintf("REPL.%d", i)}, Replicas: 3})
+		if err != nil {
+			t.Fatalf("Error adding stream: %s", err)
+		}
+	}
+
+	// create 15 consumers, 3 variants
+	for i := 0; i < 5; i++ {
+		// non-replicated consumer on non-replicated stream
+		_, err = js.AddConsumer("single1", &nats.ConsumerConfig{Durable: fmt.Sprintf("singlecons_%d", i)})
+		if err != nil {
+			t.Fatalf("Error adding consumer: %s", err)
+		}
+		// consumer with replicas on stream with replicas
+		_, err = js.AddConsumer("repl1", &nats.ConsumerConfig{Durable: fmt.Sprintf("replcons_%d", i), Replicas: 3})
+		if err != nil {
+			t.Fatalf("Error adding consumer: %s", err)
+		}
+		// non-replicated consumer on stream with replicas
+		_, err = js.AddConsumer("repl2", &nats.ConsumerConfig{Durable: fmt.Sprintf("singleonrepl_%d", i), Replicas: 1})
+		if err != nil {
+			t.Fatalf("Error adding consumer: %s", err)
+		}
+	}
+
+	output, err := PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []*regexp.Regexp{
+		regexp.MustCompile(`nats_stream_consumer_count`),
+		regexp.MustCompile(`nats_stream_first_seq`),
+		regexp.MustCompile(`nats_stream_last_seq`),
+		regexp.MustCompile(`nats_stream_subject_count`),
+		regexp.MustCompile(`nats_stream_total_bytes`),
+		regexp.MustCompile(`nats_stream_total_messages`),
+		regexp.MustCompile(`nats_consumer_num_ack_pending`),
+		regexp.MustCompile(`nats_consumer_num_pending`),
+	}
+	for _, m := range want {
+		if !m.MatchString(output) {
+			t.Logf("output: %s", output)
+			t.Fatalf("missing: %s", m)
+		}
+	}
+
+	notWanted := []*regexp.Regexp{
+		regexp.MustCompile(`nats_consumer_ack_floor_consumer_seq`),
+		regexp.MustCompile(`nats_consumer_ack_floor_stream_seq`),
+		regexp.MustCompile(`nats_consumer_delivered_consumer_seq`),
+		regexp.MustCompile(`nats_consumer_delivered_stream_seq`),
+		regexp.MustCompile(`nats_consumer_num_redelivered`),
+		regexp.MustCompile(`nats_consumer_num_waiting`),
+	}
+	for _, m := range notWanted {
+		if m.MatchString(output) {
+			t.Logf("output: %s", output)
+			t.Fatalf("unexpected: %s", m)
+		}
+	}
+
+	var totalStreams, totalConsumers int
+
+	reader := strings.NewReader(output)
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		if scanner.Err(); err != nil {
+			break
+		}
+		line := scanner.Text()
+		metric, labels := parseLabels(line)
+		if strings.HasPrefix(metric, "nats_stream") {
+			var (
+				serverName, streamLeader string
+				got, expected            string
+				ok                       bool
+			)
+			if got, ok = labels["account"]; !ok {
+				t.Fatalf("Expected account label")
+			}
+			expected = "JS"
+			if got != expected {
+				t.Errorf("Expected %v, got %v", expected, got)
+			}
+			// With leaders only, the stream name and leader should always match.
+			if serverName, ok = labels["server_name"]; !ok {
+				t.Errorf("Expected server_name label")
+			}
+			if streamLeader, ok = labels["stream_leader"]; !ok {
+				t.Errorf("Expected stream_leader label")
+			}
+			if serverName != streamLeader {
+				t.Fatalf("Expected stream_leader and server_name to be the same label")
+			}
+			raftGroup, ok := labels["raft_group"]
+			if !ok {
+				t.Fatalf("Expected raft_group label")
+			}
+			if !strings.HasPrefix(raftGroup, "S-") {
+				t.Errorf("Unexpected prefix for raft group: %v", raftGroup)
+			}
+
+			totalStreams++
+		} else if strings.HasPrefix(metric, "nats_consumer") {
+			var (
+				serverName, consumerLeader string
+				got, expected              string
+				ok                         bool
+			)
+			if got, ok = labels["account"]; !ok {
+				t.Fatalf("Expected account label")
+			}
+			expected = "JS"
+			if got != expected {
+				t.Errorf("Expected %v, got %v", expected, got)
+			}
+			if serverName, ok = labels["server_name"]; !ok {
+				t.Errorf("Expected server_name label")
+			}
+			if consumerLeader, ok = labels["consumer_leader"]; !ok {
+				t.Errorf("Expected stream_leader label")
+			}
+			if serverName != consumerLeader {
+				t.Fatalf("Expected consumer_leader and server_name to be the same label")
+			}
+			raftGroup, ok := labels["raft_group"]
+			if !ok {
+				t.Fatalf("Expected raft_group label")
+			}
+			if !strings.HasPrefix(raftGroup, "C-") {
+				t.Errorf("Unexpected prefix for raft group: %v", raftGroup)
+			}
+
+			totalConsumers++
+		}
+	}
+	expectedConsumerMetrics := 30
+	if totalConsumers != expectedConsumerMetrics {
+		t.Errorf("Expected %v, got %v", expectedConsumerMetrics, totalConsumers)
+	}
+	expectedStreamMetrics := 60
+	if totalStreams != expectedStreamMetrics {
+		t.Errorf("Expected %v, got %v", expectedStreamMetrics, totalStreams)
+	}
+}
+
+// parseLabels is a simple function that parses the prometheus format
+// and returns the metric name plus a map with the fields.
+func parseLabels(line string) (string, map[string]string) {
+	re := regexp.MustCompile(`(\w+)\s*=\s*"([^"]*)"`)
+	start := -1
+	end := -1
+	for i, c := range line {
+		if c == '{' && start == -1 {
+			start = i
+		}
+		if c == '}' {
+			end = i
+			break
+		}
+	}
+	if start == -1 || end == -1 || start >= end {
+		return "", nil
+	}
+
+	labelPart := line[start+1 : end]
+	metric := line[:start]
+	matches := re.FindAllStringSubmatch(labelPart, -1)
+	labels := make(map[string]string)
+	for _, match := range matches {
+		key := match[1]
+		value := match[2]
+		labels[key] = value
+	}
+	return metric, labels
 }
