@@ -984,7 +984,7 @@ func TestSurveyor_AccountJetStreamJszFilters(t *testing.T) {
 	opt.ExpectedServers = 3
 	opt.Jsz = "all"
 	opt.JszLeadersOnly = true
-	opt.JszFilterList = []string{"consumer_num_ack_pending", "consumer_num_pending"}
+	opt.JszFilters = []JszFilter{ConsumerNumAckPending, ConsumerNumPending}
 	s, err := NewSurveyor(opt)
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
