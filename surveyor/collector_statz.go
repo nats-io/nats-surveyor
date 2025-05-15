@@ -1557,9 +1557,9 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 						)
 					}
 
+					hasFilters := len(sc.jszFilterSet) > 0
 					for _, consumerStat := range streamStat.consumerStats {
 						showConsumerMetrics := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == consumerStat.consumerLeader
-						hasFilters := len(sc.jszFilterSet) > 0
 						if showConsumerMetrics {
 							raftGroup := consumerStat.consumerRaftGroup
 
