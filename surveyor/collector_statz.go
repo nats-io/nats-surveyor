@@ -1808,6 +1808,10 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte,
 
 // Performs JSON Unmarshal, decompressing snappy encoding if necessary
 func unmarshalMsg(msg *nats.Msg, v any) error {
+
+	if msg.Header.Get("Status") == "503" && len(msg.Data) == 0 {
+		return fmt.Errorf("Got a message with status 503: No responders available: %v", msg)
+	}
 	data := msg.Data
 
 	if msg.Header.Get("Content-Encoding") == "snappy" {
