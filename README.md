@@ -120,7 +120,7 @@ the NATS system.
 
 ## JSZ Metrics
 
-Since v0.9.0, nats-surveyor supports collecting stream and consumer metrics. By default, surveyor will collect all the metrics
+Since v0.9.1, nats-surveyor supports collecting stream and consumer metrics. By default, surveyor will collect all the metrics
 from all the replicas from streams and consumers which depending of the size of your deployment, can result in high cardinality 
 issues in the Prometheus setup.  To narrow down the list of metrics to be exported there are a few options.
 
@@ -148,10 +148,8 @@ and picking up `num_pending`, `num_ack_pending` and `num_waiting` from the consu
   
 ```
   nats-surveyor --jsz=all \
-				--jsz-leaders-only \
-				--jsz-filter=consumer_num_pending \
-				--jsz-filter=consumer_num_ack_pending \
-				--jsz-filter=consumer_num_waiting
+                --jsz-leaders-only \
+                --jsz-filter=consumer_num_pending,consumer_num_ack_pending,consumer_num_waiting
 ```
 
 ## Docker Compose
