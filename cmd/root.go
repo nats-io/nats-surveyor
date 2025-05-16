@@ -261,7 +261,7 @@ func init() {
 		enumflag.NewSlice(&jszFilters, "jsz-filter", surveyor.JszFilterIds, enumflag.EnumCaseInsensitive),
 		"jsz-filter",
 		fmt.Sprintf("Fetch selected jsz metrics only(comma separated list). Metrics: %s",
-			strings.Join(surveyor.JszFiltersToStringSlice(slices.Collect(maps.Keys(surveyor.JszFilterIds))), ",")),
+			strings.Join(surveyor.JszFiltersToStringSlice(slices.Sorted(maps.Keys(surveyor.JszFilterIds))), ",")),
 	)
 	_ = viper.BindPFlag("jsz-filter", rootCmd.Flags().Lookup("jsz-filter"))
 
