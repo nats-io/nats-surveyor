@@ -102,6 +102,42 @@ Each flag has a matching environment variable, flag names should be converted to
 NATS_SURVEYOR_SERVERS=nats://127.0.0.1:4222
 NATS_SURVEYOR_ACCOUNTS=true
 NATS_SURVEYOR_LOG_LEVEL=debug
+NATS_SURVEYOR_USER=myuser
+NATS_SURVEYOR_PASSWORD=mypassword
+```
+
+### Docker Compose
+
+The included docker-compose setup supports authintication using either creds file
+or username/password:
+
+**Using credential file:**
+
+```bash
+export 
+export 
+export NATS_SURVEYOR_SERVER_COUNT=1
+NATS_SURVEYOR_CREDS=/path/to/SYS.creds NATS_SURVEYOR_SERVERS=nats://host.docker.internal:4222 docker-compose up
+
+
+**Using username/password:**
+
+```bash
+NATS_SURVEYOR_USER=system NATS_SURVEYOR_PASSWORD=s3cret  NATS_SURVEYOR_CREDS=/path/to/SYS.creds NATS_SURVEYOR_SERVERS=nats://host.docker.internal:4222 docker compose up
+
+```
+
+**Using the survey.sh helper script:**
+
+```bash
+./survey.sh nats://host.docker.internal:4222 1 ./SYS.creds
+```
+
+Note that on linux, you may need to set the permissions for the bind-mounted prometheus data directory:
+
+```
+chmod -Rv 777 storage/
+
 ```
 
 ## Metrics
@@ -121,7 +157,7 @@ the NATS system.
 ## JSZ Metrics
 
 Since v0.9.1, nats-surveyor supports collecting stream and consumer metrics. By default, surveyor will collect all the metrics
-from all the replicas from streams and consumers which depending of the size of your deployment, can result in high cardinality 
+from all the replicas from streams and consumers which depending of the size of your deployment, can result in high cardinality
 issues in the Prometheus setup.  To narrow down the list of metrics to be exported there are a few options.
 
 - Using `--jsz=streams` to make sure that only the streams metrics is collected (if consumer metrics are not needed).
@@ -130,7 +166,7 @@ issues in the Prometheus setup.  To narrow down the list of metrics to be export
 
 - Using `--jsz-filter` to decrease number of consumer metrics:
 
-  The following list of metrics for consumers is available to be used as filters: 
+  The following list of metrics for consumers is available to be used as filters:
 
   ```
   consumer_delivered_consumer_seq
