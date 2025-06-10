@@ -1,5 +1,3 @@
-version: "3"
-
 networks:
   monitor-net:
     driver: bridge
