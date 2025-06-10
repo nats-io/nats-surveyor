@@ -30,6 +30,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/thediveo/enumflag/v2"
 )
@@ -274,6 +275,12 @@ func init() {
 	_ = viper.BindPFlag("log-level", rootCmd.Flags().Lookup("log-level"))
 
 	rootCmd.Flags().SortFlags = false
+
+	// Automatically add environment variable info to all flags
+	rootCmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		envVar := strings.ToUpper("NATS_SURVEYOR_" + strings.ReplaceAll(flag.Name, "-", "_"))
+		flag.Usage = fmt.Sprintf("%s (%s)", flag.Usage, envVar)
+	})
 
 	cobra.OnInitialize(initConfig)
 }
