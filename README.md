@@ -118,7 +118,6 @@ or username/password:
 **Using username/password:**
 
 `NATS_SURVEYOR_USER=system NATS_SURVEYOR_PASSWORD=s3cret NATS_SURVEYOR_SERVERS=nats://host.docker.internal:4222 docker compose up`
-```
 
 **Using the survey.sh helper script:**
 
