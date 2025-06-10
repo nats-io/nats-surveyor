@@ -56,7 +56,7 @@ Flags:
 
 ```
 
-At this time, NATS 2.0 System credentials are required for meaningful usage. Those can be provided in 2 ways:
+NATS 2.0 System credentials can be provided in 2 ways:
 
 - using `--creds` option to supply chained credentials file (containing JWT and NKey seed):
 
@@ -102,6 +102,34 @@ Each flag has a matching environment variable, flag names should be converted to
 NATS_SURVEYOR_SERVERS=nats://127.0.0.1:4222
 NATS_SURVEYOR_ACCOUNTS=true
 NATS_SURVEYOR_LOG_LEVEL=debug
+NATS_SURVEYOR_USER=myuser
+NATS_SURVEYOR_PASSWORD=mypassword
+```
+
+### Docker Compose
+
+The included docker-compose setup supports authintication using either creds file
+or username/password:
+
+**Using credential file:**
+
+`NATS_SURVEYOR_CREDS=/path/to/SYS.creds NATS_SURVEYOR_SERVERS=nats://host.docker.internal:4222 docker-compose up`
+
+**Using username/password:**
+
+`NATS_SURVEYOR_USER=system NATS_SURVEYOR_PASSWORD=s3cret NATS_SURVEYOR_SERVERS=nats://host.docker.internal:4222 docker compose up`
+
+**Using the survey.sh helper script:**
+
+```bash
+./survey.sh nats://host.docker.internal:4222 1 ./SYS.creds
+```
+
+Note that on linux, you may need to set the permissions for the bind-mounted prometheus data directory:
+
+```
+chmod -Rv 777 storage/
+
 ```
 
 ## Metrics
@@ -121,7 +149,7 @@ the NATS system.
 ## JSZ Metrics
 
 Since v0.9.1, nats-surveyor supports collecting stream and consumer metrics. By default, surveyor will collect all the metrics
-from all the replicas from streams and consumers which depending of the size of your deployment, can result in high cardinality 
+from all the replicas from streams and consumers which depending of the size of your deployment, can result in high cardinality
 issues in the Prometheus setup.  To narrow down the list of metrics to be exported there are a few options.
 
 - Using `--jsz=streams` to make sure that only the streams metrics is collected (if consumer metrics are not needed).
@@ -130,7 +158,7 @@ issues in the Prometheus setup.  To narrow down the list of metrics to be export
 
 - Using `--jsz-filter` to decrease number of consumer metrics:
 
-  The following list of metrics for consumers is available to be used as filters: 
+  The following list of metrics for consumers is available to be used as filters:
 
   ```
   consumer_delivered_consumer_seq
@@ -222,7 +250,7 @@ If things aren't working, look in the output for any lines that contain
 `exited with code 1` and address the problem. They are usually docker
 volume mount problems or connectivity problems.
 
-Next, with your browser, navigate to `http://127.0.0.1:3000`, or if you are
+Next, with your browser, navigate to <http://127.0.0.1:3000>, or if you are
 running the Surveyor stack remotely, the hostname of the host running the
 NATS surveyor stack, e.g. `http://yourremotehost:3000`.
 
@@ -232,7 +260,7 @@ The first time you connect, you'll need to login:
 - Password: *admin*
 
 After logging in, navigate to "Manage dashboards" and you'll see a dashboard
-available named **NATS Surveyor**, where you'll be able to monitor your
+available named [**NATS Surveyor**](http://localhost:3000/dashboards?query=NATS%20Surveyor), where you'll be able to monitor your
 entire NATS deployment.
 
 ### Stopping (while keeping the containers)
@@ -342,7 +370,6 @@ Files are watched and updated using [fsnotify](https://github.com/fsnotify/fsnot
 
 - [ ] Windows builds
 - [ ] Other events (connections, disconnects, etc)
-- [ ] Best Guess Server Count
 
 [License-Url]: https://www.apache.org/licenses/LICENSE-2.0
 [License-Image]: https://img.shields.io/badge/License-Apache2-blue.svg
