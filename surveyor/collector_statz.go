@@ -611,7 +611,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 
 	sc.expectedCnt.WithLabelValues().Set(float64(numServers))
 
-	nc.Subscribe(sc.reply+".*", sc.handleResponse)
+	nc.Subscribe(sc.reply+".*", sc.handleStatzResponse)
 	return sc
 }
 
@@ -632,11 +632,12 @@ func (sc *StatzCollector) newGatewayzDescs(gwType string, newPromDesc func(name,
 	}
 }
 
-func (sc *StatzCollector) handleResponse(msg *nats.Msg) {
+func (sc *StatzCollector) handleStatzResponse(msg *nats.Msg) {
 	m := &server.ServerStatsMsg{}
 
 	if err := unmarshalMsg(msg, m); err != nil {
 		sc.logger.Warnf("Error unmarshalling statz json: %v", err)
+		return
 	}
 
 	sc.Lock()
