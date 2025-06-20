@@ -6,6 +6,8 @@ services:
   surveyor:
     image: natsio/nats-surveyor:${SURVEYOR_DOCKER_TAG}
     container_name: nats-surveyor
+    ports:
+      - "7777:7777"
     restart: always
     extra_hosts:
       - "host.docker.internal:host-gateway"
