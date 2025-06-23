@@ -216,7 +216,7 @@ type StatzCollector struct {
 }
 
 type accountStats struct {
-	accountID string
+	accountID   string
 	accountName string
 
 	stats []*accStat
@@ -815,9 +815,9 @@ func (sc *StatzCollector) pollAccountInfo() error {
 			accountName = stats[0].Data.Name
 		}
 		sts := &accountStats{
-			accountID: accID,
+			accountID:   accID,
 			accountName: accountName,
-			stats:     stats,
+			stats:       stats,
 		}
 
 		accStats[accID] = sts
@@ -829,7 +829,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 		// If no account stats returned, still report JS metrics
 		if !ok {
 			sts = &accountStats{
-				accountID: accID,
+				accountID:   accID,
 				accountName: accDetail.Name,
 			}
 		}
