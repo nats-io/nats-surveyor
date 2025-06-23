@@ -217,6 +217,7 @@ type StatzCollector struct {
 
 type accountStats struct {
 	accountID string
+	accountName string
 
 	stats []*accStat
 
@@ -406,7 +407,7 @@ func (sc *StatzCollector) buildDescs() {
 
 	// Account scope metrics
 	if sc.collectAccounts || collectJsz {
-		accLabel := []string{"account"}
+		accLabel := []string{"account", "account_name"}
 		serverAndAccLabel := append(sc.serverLabels, accLabel...)
 		sc.descs.accCount = newPromDesc("account_count", "The number of accounts detected", nil)
 
@@ -435,7 +436,7 @@ func (sc *StatzCollector) buildDescs() {
 		sc.descs.accJetstreamConsumerCount = newPromDesc("account_jetstream_consumer_count", "The number of consumers per stream for this account", append(accLabel, "stream", "raft_group"))
 		sc.descs.accJetstreamReplicaCount = newPromDesc("account_jetstream_replica_count", "The number of replicas per stream for this account", append(accLabel, "stream", "raft_group"))
 
-		jszLabels := []string{"account", "account_name", "cluster_name", "raft_group", "server_id", "server_name", "stream", "stream_leader"}
+		jszLabels := append(accLabel, []string{"cluster_name", "raft_group", "server_id", "server_name", "stream", "stream_leader"}...)
 		var consumerLabels []string
 		consumerLabels = append(consumerLabels, jszLabels...)
 		consumerLabels = append(consumerLabels, "consumer_name")
@@ -809,8 +810,13 @@ func (sc *StatzCollector) pollAccountInfo() error {
 
 	accStats := make(map[string]*accountStats, len(accs))
 	for accID, stats := range accs {
+		accountName := ""
+		if len(stats) > 0 && stats[0].Data != nil {
+			accountName = stats[0].Data.Name
+		}
 		sts := &accountStats{
 			accountID: accID,
+			accountName: accountName,
 			stats:     stats,
 		}
 
@@ -824,6 +830,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 		if !ok {
 			sts = &accountStats{
 				accountID: accID,
+				accountName: accDetail.Name,
 			}
 		}
 		sts.jetstreamEnabled = 1.0
@@ -1475,7 +1482,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		if sc.collectAccounts || collectJsz {
 			metrics.newGaugeMetric(sc.descs.accCount, float64(len(sc.accStats)), nil)
 			for _, stat := range sc.accStats {
-				accLabels := []string{stat.accountID}
+				accLabels := []string{stat.accountID, stat.accountName}
 				for _, as := range stat.stats {
 					serverAndAccLabels := append(sc.serverLabelValues(as.Server), accLabels...)
 					metrics.newGaugeMetric(sc.descs.accConnCount, float64(as.Data.Conns), serverAndAccLabels)
@@ -1518,42 +1525,42 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					if showStreamMetrics {
 						metrics.newGaugeMetric(sc.descs.accJszStreamMsgs,
 							streamStat.streamMessages,
-							append(accLabels, streamStat.accountName,
+							append(accLabels,
 								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
 								streamStat.streamName, streamStat.streamLeader,
 							),
 						)
 						metrics.newGaugeMetric(sc.descs.accJszStreamBytes,
 							streamStat.streamBytes,
-							append(accLabels, streamStat.accountName,
+							append(accLabels,
 								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
 								streamStat.streamName, streamStat.streamLeader,
 							),
 						)
 						metrics.newGaugeMetric(sc.descs.accJszStreamFirstSeq,
 							streamStat.streamFirstSeq,
-							append(accLabels, streamStat.accountName,
+							append(accLabels,
 								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
 								streamStat.streamName, streamStat.streamLeader,
 							),
 						)
 						metrics.newGaugeMetric(sc.descs.accJszStreamLastSeq,
 							streamStat.streamLastSeq,
-							append(accLabels, streamStat.accountName,
+							append(accLabels,
 								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
 								streamStat.streamName, streamStat.streamLeader,
 							),
 						)
 						metrics.newGaugeMetric(sc.descs.accJszStreamConsumerCount,
 							streamStat.streamConsumerCount,
-							append(accLabels, streamStat.accountName,
+							append(accLabels,
 								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
 								streamStat.streamName, streamStat.streamLeader,
 							),
 						)
 						metrics.newGaugeMetric(sc.descs.accJszStreamSubjectCount,
 							streamStat.streamSubjectCount,
-							append(accLabels, streamStat.accountName,
+							append(accLabels,
 								streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
 								streamStat.streamName, streamStat.streamLeader,
 							),
@@ -1569,7 +1576,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 							if sc.jszFilterSet[ConsumerDeliveredConsumerSeq] || !hasFilters {
 								metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredConsumerSeq,
 									consumerStat.consumerDeliveredConsumerSeq,
-									append(accLabels, streamStat.accountName,
+									append(accLabels,
 										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
 										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
 									),
@@ -1579,7 +1586,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 							if sc.jszFilterSet[ConsumerDeliveredStreamSeq] || !hasFilters {
 								metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredStreamSeq,
 									consumerStat.consumerDeliveredStreamSeq,
-									append(accLabels, streamStat.accountName,
+									append(accLabels,
 										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
 										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
 									),
@@ -1588,7 +1595,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 							if sc.jszFilterSet[ConsumerNumAckPending] || !hasFilters {
 								metrics.newGaugeMetric(sc.descs.accJszConsumerNumAckPending,
 									consumerStat.consumerNumAckPending,
-									append(accLabels, streamStat.accountName,
+									append(accLabels,
 										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
 										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
 									),
@@ -1597,7 +1604,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 							if sc.jszFilterSet[ConsumerNumRedelivered] || !hasFilters {
 								metrics.newGaugeMetric(sc.descs.accJszConsumerNumRedelivered,
 									consumerStat.consumerNumRedelivered,
-									append(accLabels, streamStat.accountName,
+									append(accLabels,
 										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
 										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
 									),
@@ -1606,7 +1613,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 							if sc.jszFilterSet[ConsumerNumWaiting] || !hasFilters {
 								metrics.newGaugeMetric(sc.descs.accJszConsumerNumWaiting,
 									consumerStat.consumerNumWaiting,
-									append(accLabels, streamStat.accountName,
+									append(accLabels,
 										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
 										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
 									),
@@ -1615,7 +1622,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 							if sc.jszFilterSet[ConsumerNumPending] || !hasFilters {
 								metrics.newGaugeMetric(sc.descs.accJszConsumerNumPending,
 									consumerStat.consumerNumPending,
-									append(accLabels, streamStat.accountName,
+									append(accLabels,
 										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
 										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
 									),
@@ -1624,7 +1631,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 							if sc.jszFilterSet[ConsumerAckFloorStreamSeq] || !hasFilters {
 								metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorStreamSeq,
 									consumerStat.consumerAckFloorStreamSeq,
-									append(accLabels, streamStat.accountName,
+									append(accLabels,
 										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
 										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
 									),
@@ -1633,7 +1640,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 							if sc.jszFilterSet[ConsumerAckFloorConsumerSeq] || !hasFilters {
 								metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorConsumerSeq,
 									consumerStat.consumerAckFloorConsumerSeq,
-									append(accLabels, streamStat.accountName,
+									append(accLabels,
 										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
 										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
 									),
