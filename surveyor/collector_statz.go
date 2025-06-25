@@ -246,6 +246,8 @@ type consumerStats struct {
 	consumerAckFloorStreamSeq    float64
 	consumerAckFloorConsumerSeq  float64
 	consumerRaftGroup            string
+	consumerAckFloorLastActive   float64
+	consumerDeliveredLastActive  float64
 }
 
 type streamAccountStats struct {
