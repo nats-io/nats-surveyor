@@ -148,6 +148,8 @@ type statzDescs struct {
 	accJszConsumerNumPending           *prometheus.Desc
 	accJszConsumerAckFloorStreamSeq    *prometheus.Desc
 	accJszConsumerAckFloorConsumerSeq  *prometheus.Desc
+	accJszConsumerAckFloorLastActive   *prometheus.Desc
+	accJszConsumerDeliveredLastActive  *prometheus.Desc
 }
 
 // gatewayzDescs holds the gateway metric descriptions
@@ -524,6 +526,18 @@ func (sc *StatzCollector) buildDescs() {
 		sc.descs.accJszConsumerAckFloorConsumerSeq = prometheus.NewDesc(
 			prometheus.BuildFQName("nats", "consumer", "ack_floor_consumer_seq"),
 			"Number of ack floor consumer seq from a consumer",
+			consumerLabels,
+			nil,
+		)
+		sc.descs.accJszConsumerAckFloorLastActive = prometheus.NewDesc(
+			prometheus.BuildFQName("nats", "consumer", "ack_floor_last_active"),
+			"Unix timestamp of last ack floor activity from a consumer",
+			consumerLabels,
+			nil,
+		)
+		sc.descs.accJszConsumerDeliveredLastActive = prometheus.NewDesc(
+			prometheus.BuildFQName("nats", "consumer", "delivered_last_active"),
+			"Unix timestamp of last delivered message activity from a consumer",
 			consumerLabels,
 			nil,
 		)
