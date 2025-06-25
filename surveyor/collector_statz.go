@@ -933,6 +933,16 @@ func (sc *StatzCollector) pollAccountInfo() error {
 							}
 						}
 					}
+
+					// Extract timestamp values, converting to Unix timestamp or 0 if nil
+					var ackFloorLastActive, deliveredLastActive float64
+					if consumer.AckFloor.Last != nil {
+						ackFloorLastActive = float64(consumer.AckFloor.Last.UnixMilli())
+					}
+					if consumer.Delivered.Last != nil {
+						deliveredLastActive = float64(consumer.Delivered.Last.UnixMilli())
+					}
+
 					cs := consumerStats{
 						consumerName:                 consumer.Name,
 						consumerLeader:               consumerLeader,
@@ -945,6 +955,8 @@ func (sc *StatzCollector) pollAccountInfo() error {
 						consumerNumPending:           float64(consumer.NumPending),
 						consumerAckFloorStreamSeq:    float64(consumer.AckFloor.Stream),
 						consumerAckFloorConsumerSeq:  float64(consumer.AckFloor.Consumer),
+						consumerAckFloorLastActive:   ackFloorLastActive,
+						consumerDeliveredLastActive:  deliveredLastActive,
 					}
 					sas.consumerStats = append(sas.consumerStats, &cs)
 				}
