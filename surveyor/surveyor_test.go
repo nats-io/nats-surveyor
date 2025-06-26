@@ -584,7 +584,7 @@ func TestSurveyor_HTTPS(t *testing.T) {
 }
 
 func TestSurveyor_UserPass(t *testing.T) {
-	ns := st.StartBasicServer()
+	ns := st.NewSingleServer(t)
 	defer ns.Shutdown()
 
 	opts := getTestOptions()
