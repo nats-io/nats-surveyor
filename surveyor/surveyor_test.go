@@ -584,7 +584,7 @@ func TestSurveyor_HTTPS(t *testing.T) {
 }
 
 func TestSurveyor_UserPass(t *testing.T) {
-	ns := st.StartBasicServer()
+	ns := st.NewSingleServer(t)
 	defer ns.Shutdown()
 
 	opts := getTestOptions()
@@ -630,6 +630,28 @@ func TestSurveyor_NoServer(t *testing.T) {
 
 	if err == nil {
 		t.Fatalf("didn't get expected error")
+	}
+}
+
+func TestSurveyor_NoSystemAccount(t *testing.T) {
+	ns := st.StartBasicServer()
+	defer ns.Shutdown()
+
+	opts := getTestOptions()
+	opts.HTTPUser = "colin"
+	opts.HTTPPassword = "secret"
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	_, err = httpGet("http://colin:secret@127.0.0.1:7777/metrics")
+	if err == nil {
+		t.Fatalf("shold not work without system account")
 	}
 }
 
