@@ -723,7 +723,9 @@ func (sc *StatzCollector) poll() error {
 			}
 		case <-time.After(sc.pollTimeout):
 			done = true
-			sc.logger.Warnf("Poll timeout after %v while waiting for responses", sc.pollTimeout)
+			if expectedServers != -1 {
+				sc.logger.Warnf("Poll timeout after %v while waiting for responses", sc.pollTimeout)
+			}
 		}
 	}
 
