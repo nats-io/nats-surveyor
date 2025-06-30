@@ -387,14 +387,14 @@ func TestSurveyor_AccountJetStreamAssets(t *testing.T) {
 		regexp.MustCompile(`nats_core_account_conn_count`),
 		regexp.MustCompile(`nats_core_account_count`),
 		regexp.MustCompile(`nats_core_account_jetstream_enabled`),
-		regexp.MustCompile(`nats_core_account_jetstream_stream_count\{account="JS"} 10`),
-		regexp.MustCompile(`nats_core_account_jetstream_consumer_count\{account="JS",raft_group="[^"]+",stream="repl1"} 5`),
-		regexp.MustCompile(`nats_core_account_jetstream_consumer_count\{account="JS",raft_group="[^"]+",stream="repl2"} 5`),
-		regexp.MustCompile(`nats_core_account_jetstream_consumer_count\{account="JS",raft_group="[^"]+",stream="single1"} 5`),
-		regexp.MustCompile(`nats_core_account_jetstream_tiered_storage_used\{account="JS",tier="R1"}`),
-		regexp.MustCompile(`nats_core_account_jetstream_tiered_storage_used\{account="JS",tier="R3"}`),
-		regexp.MustCompile(`nats_core_account_jetstream_tiered_storage_reserved\{account="JS",tier="R1"}`),
-		regexp.MustCompile(`nats_core_account_jetstream_tiered_storage_reserved\{account="JS",tier="R3"}`),
+		regexp.MustCompile(`nats_core_account_jetstream_stream_count\{account="JS",account_name="[^"]+"} 10`),
+		regexp.MustCompile(`nats_core_account_jetstream_consumer_count\{account="JS",account_name="[^"]+",raft_group="[^"]+",stream="repl1"} 5`),
+		regexp.MustCompile(`nats_core_account_jetstream_consumer_count\{account="JS",account_name="[^"]+",raft_group="[^"]+",stream="repl2"} 5`),
+		regexp.MustCompile(`nats_core_account_jetstream_consumer_count\{account="JS",account_name="[^"]+",raft_group="[^"]+",stream="single1"} 5`),
+		regexp.MustCompile(`nats_core_account_jetstream_tiered_storage_used\{account="JS",account_name="[^"]+",tier="R1"}`),
+		regexp.MustCompile(`nats_core_account_jetstream_tiered_storage_used\{account="JS",account_name="[^"]+",tier="R3"}`),
+		regexp.MustCompile(`nats_core_account_jetstream_tiered_storage_reserved\{account="JS",account_name="[^"]+",tier="R1"}`),
+		regexp.MustCompile(`nats_core_account_jetstream_tiered_storage_reserved\{account="JS",account_name="[^"]+",tier="R3"}`),
 	}
 	for _, m := range want {
 		if !m.MatchString(output) {
