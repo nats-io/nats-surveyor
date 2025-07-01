@@ -125,12 +125,7 @@ or username/password:
 ./survey.sh nats://host.docker.internal:4222 1 ./SYS.creds
 ```
 
-Note that on linux, you may need to set the permissions for the bind-mounted prometheus data directory:
-
-```
-chmod -Rv 777 storage/
-
-```
+Note: on Linux you may need to manually set write permissions for the bind-mounted prometheus data directory(`storage`).
 
 ## Metrics
 
