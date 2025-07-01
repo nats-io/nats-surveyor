@@ -13,7 +13,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       # When both USER/PASS and CREDS are passed
-      # the USER/PASS taakes priority
+      # the USER/PASS takes priority
       - ${NATS_SURVEYOR_CREDS:-/dev/null}:/etc/surveyor/SYS.creds
       - ./observations:/observations
       - ./jetstream:/jetstream
