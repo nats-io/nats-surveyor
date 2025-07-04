@@ -9,5 +9,5 @@ fi
 export NATS_SURVEYOR_SERVERS=$1
 export NATS_SURVEYOR_SERVER_COUNT=$2
 export NATS_SURVEYOR_CREDS=$3
-docker-compose up
+docker compose up
 

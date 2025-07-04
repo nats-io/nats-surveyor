@@ -1,5 +1,3 @@
-version: "3"
-
 networks:
   monitor-net:
     driver: bridge
@@ -8,12 +6,24 @@ services:
   surveyor:
     image: natsio/nats-surveyor:${SURVEYOR_DOCKER_TAG}
     container_name: nats-surveyor
+    ports:
+      - "7777:7777"
     restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
-      - $NATS_SURVEYOR_CREDS:/etc/surveyor/SYS.creds
+      # When both USER/PASS and CREDS are passed
+      # the USER/PASS takes priority
+      - ${NATS_SURVEYOR_CREDS:-/dev/null}:/etc/surveyor/SYS.creds
       - ./observations:/observations
       - ./jetstream:/jetstream
-    command: --count ${NATS_SURVEYOR_SERVER_COUNT} --creds /etc/surveyor/SYS.creds -s "${NATS_SURVEYOR_SERVERS}" --accounts --observe /observations --jetstream /jetstream
+    environment:
+      - NATS_SURVEYOR_CREDS=/etc/surveyor/SYS.creds
+      - NATS_SURVEYOR_USER  
+      - NATS_SURVEYOR_PASSWORD
+      - NATS_SURVEYOR_SERVERS
+      - NATS_SURVEYOR_SERVER_COUNT
+    command: --count ${NATS_SURVEYOR_SERVER_COUNT} -s "${NATS_SURVEYOR_SERVERS}" --accounts --observe /observations --jetstream /jetstream
     networks:
       - monitor-net
     labels:
