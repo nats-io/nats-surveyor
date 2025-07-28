@@ -170,11 +170,11 @@ or username/password:
 
 **Using credential file:**
 
-`NATS_SURVEYOR_CREDS=/path/to/SYS.creds NATS_SURVEYOR_SERVERS=nats://host.docker.internal:4222 docker compose up`
+`NATS_SURVEYOR_CREDS=/path/to/SYS.creds NATS_SURVEYOR_SERVERS=nats://host.docker.internal:4222 docker compose up --pull always`
 
 **Using username/password:**
 
-`NATS_SURVEYOR_USER=system NATS_SURVEYOR_PASSWORD=s3cret NATS_SURVEYOR_SERVERS=nats://host.docker.internal:4222 docker compose up`
+`NATS_SURVEYOR_USER=system NATS_SURVEYOR_PASSWORD=s3cret NATS_SURVEYOR_SERVERS=nats://host.docker.internal:4222 docker compose up --pull always`
 
 **Using the survey.sh helper script:**
 
@@ -215,10 +215,10 @@ but it's recommended you provide a list for backup servers to connect to, e.g.
 
 You can start the Surveyor stack two ways.  The first is through docker
 compose.  Ensure the environment varibles are set, that you are working
-from the /docker-compose directory and run `docker compose up`.
+from the /docker-compose directory and run `docker compose up --pull always`.
 
 ```bash
-$ docker-compose up
+$ docker compose up --pull always
 Recreating nats-surveyor ... done
 Recreating prometheus    ... done
 Recreating grafana       ... done
