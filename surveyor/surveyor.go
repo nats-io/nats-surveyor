@@ -80,6 +80,7 @@ type Options struct {
 	ObservationConfigDir string
 	JetStreamConfigDir   string
 	Accounts             bool
+	AccountsDetailed     bool
 	Gatewayz             bool
 	Jsz                  string
 	JszLeadersOnly       bool
@@ -216,6 +217,10 @@ func (s *Surveyor) createStatszCollector() error {
 		return nil
 	}
 
+	if s.opts.AccountsDetailed {
+		s.opts.Accounts = true
+	}
+
 	if !s.opts.Accounts {
 		s.logger.Debugln("Skipping per-account exports")
 	}
@@ -227,6 +232,7 @@ func (s *Surveyor) createStatszCollector() error {
 		s.opts.ServerResponseWait,
 		s.opts.PollTimeout,
 		s.opts.Accounts,
+		s.opts.AccountsDetailed,
 		s.opts.Gatewayz,
 		s.opts.Jsz,
 		s.opts.JszLeadersOnly,
