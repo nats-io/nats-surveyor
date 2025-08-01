@@ -188,34 +188,35 @@ type gatewayzDescs struct {
 // StatzCollector collects statz from a server deployment
 type StatzCollector struct {
 	sync.Mutex
-	flightGroup         singleflight.Group
-	nc                  *nats.Conn
-	logger              *logrus.Logger
-	start               time.Time
-	uptime              time.Duration
-	stats               []*server.ServerStatsMsg
-	statsChan           chan *server.ServerStatsMsg
-	jsStats             []*jsStat
-	accStats            []*accountStats
-	gatewayStatz        []*gatewayStatz
-	rtts                map[string]time.Duration
-	pollTimeout         time.Duration
-	reply               string
-	polling             bool
-	pollkey             string
-	numServers          int
-	serverDiscoveryWait time.Duration
-	servers             map[string]bool
-	doneCh              chan struct{}
-	descs               statzDescs
-	collectAccounts     bool
-	collectGatewayz     bool
-	collectJsz          string
-	jszLeadersOnly      bool
-	jszFilterSet        map[JszFilter]bool
-	sysReqPrefix        string
-	accStatZeroConn     map[string]int
-	natsUp              *prometheus.Desc
+	flightGroup             singleflight.Group
+	nc                      *nats.Conn
+	logger                  *logrus.Logger
+	start                   time.Time
+	uptime                  time.Duration
+	stats                   []*server.ServerStatsMsg
+	statsChan               chan *server.ServerStatsMsg
+	jsStats                 []*jsStat
+	accStats                []*accountStats
+	gatewayStatz            []*gatewayStatz
+	rtts                    map[string]time.Duration
+	pollTimeout             time.Duration
+	reply                   string
+	polling                 bool
+	pollkey                 string
+	numServers              int
+	serverDiscoveryWait     time.Duration
+	servers                 map[string]bool
+	doneCh                  chan struct{}
+	descs                   statzDescs
+	collectAccounts         bool
+	collectAccountsDetailed bool
+	collectGatewayz         bool
+	collectJsz              string
+	jszLeadersOnly          bool
+	jszFilterSet            map[JszFilter]bool
+	sysReqPrefix            string
+	accStatZeroConn         map[string]int
+	natsUp                  *prometheus.Desc
 
 	serverLabels       []string
 	serverInfoLabels   []string
@@ -441,22 +442,25 @@ func (sc *StatzCollector) buildDescs() {
 		sc.descs.accBytesRecv = newPromDesc("account_bytes_recv", "The number of bytes received on this account across all connections", serverAndAccLabel)
 		sc.descs.accMsgsSent = newPromDesc("account_msgs_sent", "The number of messages sent on this account across all connections", serverAndAccLabel)
 		sc.descs.accMsgsRecv = newPromDesc("account_msgs_recv", "The number of messages received on this account across all connections", serverAndAccLabel)
-		sc.descs.accClientBytesSent = newPromDesc("account_client_bytes_sent", "The number of bytes sent on this account via a client connection", serverAndAccLabel)
-		sc.descs.accClientBytesRecv = newPromDesc("account_client_bytes_recv", "The number of bytes received on this account via a client connection", serverAndAccLabel)
-		sc.descs.accClientMsgsSent = newPromDesc("account_client_msgs_sent", "The number of messages sent on this account via a client connection", serverAndAccLabel)
-		sc.descs.accClientMsgsRecv = newPromDesc("account_client_msgs_recv", "The number of messages received on this account via a client connection", serverAndAccLabel)
-		sc.descs.accLeafBytesSent = newPromDesc("account_leaf_bytes_sent", "The number of bytes sent on this account via a leafnode connection", serverAndAccLabel)
-		sc.descs.accLeafBytesRecv = newPromDesc("account_leaf_bytes_recv", "The number of bytes received on this account via a leafnode connection", serverAndAccLabel)
-		sc.descs.accLeafMsgsSent = newPromDesc("account_leaf_msgs_sent", "The number of messages sent on this account via a leafnode connection", serverAndAccLabel)
-		sc.descs.accLeafMsgsRecv = newPromDesc("account_leaf_msgs_recv", "The number of messages received on this account via a leafnode connection", serverAndAccLabel)
-		sc.descs.accRouteBytesSent = newPromDesc("account_route_bytes_sent", "The number of bytes sent on this account via a route connection", serverAndAccLabel)
-		sc.descs.accRouteBytesRecv = newPromDesc("account_route_bytes_recv", "The number of bytes received on this account via a route connection", serverAndAccLabel)
-		sc.descs.accRouteMsgsSent = newPromDesc("account_route_msgs_sent", "The number of messages sent on this account via a route connection", serverAndAccLabel)
-		sc.descs.accRouteMsgsRecv = newPromDesc("account_route_msgs_recv", "The number of messages received on this account via a route connection", serverAndAccLabel)
-		sc.descs.accGatewayBytesSent = newPromDesc("account_gateway_bytes_sent", "The number of bytes sent on this account via a gateway connection", serverAndAccLabel)
-		sc.descs.accGatewayBytesRecv = newPromDesc("account_gateway_bytes_recv", "The number of bytes received on this account via a gateway connection", serverAndAccLabel)
-		sc.descs.accGatewayMsgsSent = newPromDesc("account_gateway_msgs_sent", "The number of messages sent on this account via a gateway connection", serverAndAccLabel)
-		sc.descs.accGatewayMsgsRecv = newPromDesc("account_gateway_msgs_recv", "The number of messages received on this account via a gateway connection", serverAndAccLabel)
+
+		if sc.collectAccountsDetailed {
+			sc.descs.accClientBytesSent = newPromDesc("account_client_bytes_sent", "The number of bytes sent on this account via a client connection", serverAndAccLabel)
+			sc.descs.accClientBytesRecv = newPromDesc("account_client_bytes_recv", "The number of bytes received on this account via a client connection", serverAndAccLabel)
+			sc.descs.accClientMsgsSent = newPromDesc("account_client_msgs_sent", "The number of messages sent on this account via a client connection", serverAndAccLabel)
+			sc.descs.accClientMsgsRecv = newPromDesc("account_client_msgs_recv", "The number of messages received on this account via a client connection", serverAndAccLabel)
+			sc.descs.accLeafBytesSent = newPromDesc("account_leaf_bytes_sent", "The number of bytes sent on this account via a leafnode connection", serverAndAccLabel)
+			sc.descs.accLeafBytesRecv = newPromDesc("account_leaf_bytes_recv", "The number of bytes received on this account via a leafnode connection", serverAndAccLabel)
+			sc.descs.accLeafMsgsSent = newPromDesc("account_leaf_msgs_sent", "The number of messages sent on this account via a leafnode connection", serverAndAccLabel)
+			sc.descs.accLeafMsgsRecv = newPromDesc("account_leaf_msgs_recv", "The number of messages received on this account via a leafnode connection", serverAndAccLabel)
+			sc.descs.accRouteBytesSent = newPromDesc("account_route_bytes_sent", "The number of bytes sent on this account via a route connection", serverAndAccLabel)
+			sc.descs.accRouteBytesRecv = newPromDesc("account_route_bytes_recv", "The number of bytes received on this account via a route connection", serverAndAccLabel)
+			sc.descs.accRouteMsgsSent = newPromDesc("account_route_msgs_sent", "The number of messages sent on this account via a route connection", serverAndAccLabel)
+			sc.descs.accRouteMsgsRecv = newPromDesc("account_route_msgs_recv", "The number of messages received on this account via a route connection", serverAndAccLabel)
+			sc.descs.accGatewayBytesSent = newPromDesc("account_gateway_bytes_sent", "The number of bytes sent on this account via a gateway connection", serverAndAccLabel)
+			sc.descs.accGatewayBytesRecv = newPromDesc("account_gateway_bytes_recv", "The number of bytes received on this account via a gateway connection", serverAndAccLabel)
+			sc.descs.accGatewayMsgsSent = newPromDesc("account_gateway_msgs_sent", "The number of messages sent on this account via a gateway connection", serverAndAccLabel)
+			sc.descs.accGatewayMsgsRecv = newPromDesc("account_gateway_msgs_recv", "The number of messages received on this account via a gateway connection", serverAndAccLabel)
+		}
 
 		// Aggregated metrics
 		sc.descs.accJetstreamEnabled = newPromDesc("account_jetstream_enabled", "Whether JetStream is enabled or not for this account", accLabel)
@@ -604,7 +608,7 @@ func (sc *StatzCollector) buildDescs() {
 
 // NewStatzCollector creates a NATS Statz Collector.
 func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
-	serverDiscoveryWait, pollTimeout time.Duration, accounts bool, gatewayz bool,
+	serverDiscoveryWait, pollTimeout time.Duration, accounts, accountsDetailed bool, gatewayz bool,
 	jsz string, jszLeadersOnly bool, jszFilters []JszFilter, sysReqPrefix string,
 	constLabels prometheus.Labels) *StatzCollector {
 	// Remove the potential wildcard users might place
@@ -615,20 +619,21 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 	}
 
 	sc := &StatzCollector{
-		nc:                  nc,
-		logger:              logger,
-		numServers:          numServers,
-		serverDiscoveryWait: serverDiscoveryWait,
-		reply:               nc.NewRespInbox(),
-		pollTimeout:         pollTimeout,
-		servers:             make(map[string]bool),
-		doneCh:              make(chan struct{}, 1),
-		collectAccounts:     accounts,
-		collectGatewayz:     gatewayz,
-		collectJsz:          jsz,
-		jszLeadersOnly:      jszLeadersOnly,
-		sysReqPrefix:        sysReqPrefix,
-		accStatZeroConn:     make(map[string]int),
+		nc:                      nc,
+		logger:                  logger,
+		numServers:              numServers,
+		serverDiscoveryWait:     serverDiscoveryWait,
+		reply:                   nc.NewRespInbox(),
+		pollTimeout:             pollTimeout,
+		servers:                 make(map[string]bool),
+		doneCh:                  make(chan struct{}, 1),
+		collectAccounts:         accounts,
+		collectAccountsDetailed: accountsDetailed,
+		collectGatewayz:         gatewayz,
+		collectJsz:              jsz,
+		jszLeadersOnly:          jszLeadersOnly,
+		sysReqPrefix:            sysReqPrefix,
+		accStatZeroConn:         make(map[string]int),
 
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
 		serverLabels:       []string{"server_cluster", "server_name", "server_id"},
@@ -1317,22 +1322,25 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 		ch <- sc.descs.accBytesRecv
 		ch <- sc.descs.accMsgsSent
 		ch <- sc.descs.accMsgsRecv
-		ch <- sc.descs.accClientBytesSent
-		ch <- sc.descs.accClientBytesRecv
-		ch <- sc.descs.accClientMsgsSent
-		ch <- sc.descs.accClientMsgsRecv
-		ch <- sc.descs.accLeafBytesSent
-		ch <- sc.descs.accLeafBytesRecv
-		ch <- sc.descs.accLeafMsgsSent
-		ch <- sc.descs.accLeafMsgsRecv
-		ch <- sc.descs.accRouteBytesSent
-		ch <- sc.descs.accRouteBytesRecv
-		ch <- sc.descs.accRouteMsgsSent
-		ch <- sc.descs.accRouteMsgsRecv
-		ch <- sc.descs.accGatewayBytesSent
-		ch <- sc.descs.accGatewayBytesRecv
-		ch <- sc.descs.accGatewayMsgsSent
-		ch <- sc.descs.accGatewayMsgsRecv
+
+		if sc.collectAccountsDetailed {
+			ch <- sc.descs.accClientBytesSent
+			ch <- sc.descs.accClientBytesRecv
+			ch <- sc.descs.accClientMsgsSent
+			ch <- sc.descs.accClientMsgsRecv
+			ch <- sc.descs.accLeafBytesSent
+			ch <- sc.descs.accLeafBytesRecv
+			ch <- sc.descs.accLeafMsgsSent
+			ch <- sc.descs.accLeafMsgsRecv
+			ch <- sc.descs.accRouteBytesSent
+			ch <- sc.descs.accRouteBytesRecv
+			ch <- sc.descs.accRouteMsgsSent
+			ch <- sc.descs.accRouteMsgsRecv
+			ch <- sc.descs.accGatewayBytesSent
+			ch <- sc.descs.accGatewayBytesRecv
+			ch <- sc.descs.accGatewayMsgsSent
+			ch <- sc.descs.accGatewayMsgsRecv
+		}
 
 		ch <- sc.descs.accJetstreamEnabled
 		ch <- sc.descs.accJetstreamMemoryUsed
@@ -1548,22 +1556,25 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					metrics.newCounterMetric(sc.descs.accBytesRecv, float64(as.Data.Received.Bytes), serverAndAccLabels)
 					metrics.newCounterMetric(sc.descs.accMsgsSent, float64(as.Data.Sent.Msgs), serverAndAccLabels)
 					metrics.newCounterMetric(sc.descs.accMsgsRecv, float64(as.Data.Received.Msgs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accClientBytesSent, float64(as.Data.Sent.Bytes-as.Data.Sent.Routes.Bytes-as.Data.Sent.Gateways.Bytes-as.Data.Sent.Leafs.Bytes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accClientBytesRecv, float64(as.Data.Received.Bytes-as.Data.Received.Routes.Bytes-as.Data.Received.Gateways.Bytes-as.Data.Received.Leafs.Bytes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accClientMsgsSent, float64(as.Data.Sent.Msgs-as.Data.Sent.Routes.Msgs-as.Data.Sent.Gateways.Msgs-as.Data.Sent.Leafs.Msgs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accClientMsgsRecv, float64(as.Data.Received.Msgs-as.Data.Received.Routes.Msgs-as.Data.Received.Gateways.Msgs-as.Data.Received.Leafs.Msgs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accLeafBytesSent, float64(as.Data.Sent.Leafs.Bytes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accLeafBytesRecv, float64(as.Data.Received.Leafs.Bytes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accLeafMsgsSent, float64(as.Data.Sent.Leafs.Msgs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accLeafMsgsRecv, float64(as.Data.Received.Leafs.Msgs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accRouteBytesSent, float64(as.Data.Sent.Routes.Bytes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accRouteBytesRecv, float64(as.Data.Received.Routes.Bytes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accRouteMsgsSent, float64(as.Data.Sent.Routes.Msgs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accRouteMsgsRecv, float64(as.Data.Received.Routes.Msgs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accGatewayBytesSent, float64(as.Data.Sent.Gateways.Bytes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accGatewayBytesRecv, float64(as.Data.Received.Gateways.Bytes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accGatewayMsgsSent, float64(as.Data.Sent.Gateways.Msgs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accGatewayMsgsRecv, float64(as.Data.Received.Gateways.Msgs), serverAndAccLabels)
+
+					if sc.collectAccountsDetailed {
+						metrics.newCounterMetric(sc.descs.accClientBytesSent, float64(as.Data.Sent.Bytes-as.Data.Sent.Routes.Bytes-as.Data.Sent.Gateways.Bytes-as.Data.Sent.Leafs.Bytes), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accClientBytesRecv, float64(as.Data.Received.Bytes-as.Data.Received.Routes.Bytes-as.Data.Received.Gateways.Bytes-as.Data.Received.Leafs.Bytes), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accClientMsgsSent, float64(as.Data.Sent.Msgs-as.Data.Sent.Routes.Msgs-as.Data.Sent.Gateways.Msgs-as.Data.Sent.Leafs.Msgs), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accClientMsgsRecv, float64(as.Data.Received.Msgs-as.Data.Received.Routes.Msgs-as.Data.Received.Gateways.Msgs-as.Data.Received.Leafs.Msgs), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accLeafBytesSent, float64(as.Data.Sent.Leafs.Bytes), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accLeafBytesRecv, float64(as.Data.Received.Leafs.Bytes), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accLeafMsgsSent, float64(as.Data.Sent.Leafs.Msgs), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accLeafMsgsRecv, float64(as.Data.Received.Leafs.Msgs), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accRouteBytesSent, float64(as.Data.Sent.Routes.Bytes), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accRouteBytesRecv, float64(as.Data.Received.Routes.Bytes), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accRouteMsgsSent, float64(as.Data.Sent.Routes.Msgs), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accRouteMsgsRecv, float64(as.Data.Received.Routes.Msgs), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accGatewayBytesSent, float64(as.Data.Sent.Gateways.Bytes), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accGatewayBytesRecv, float64(as.Data.Received.Gateways.Bytes), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accGatewayMsgsSent, float64(as.Data.Sent.Gateways.Msgs), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accGatewayMsgsRecv, float64(as.Data.Received.Gateways.Msgs), serverAndAccLabels)
+					}
 				}
 
 				metrics.newGaugeMetric(sc.descs.accJetstreamEnabled, stat.jetstreamEnabled, accLabels)

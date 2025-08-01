@@ -242,8 +242,11 @@ func init() {
 	_ = viper.BindPFlag("jetstream", rootCmd.Flags().Lookup("jetstream"))
 
 	// accounts
-	rootCmd.Flags().Bool("accounts", false, "Export per account metrics")
+	rootCmd.Flags().Bool("accounts", false, "Export per-account metrics")
 	_ = viper.BindPFlag("accounts", rootCmd.Flags().Lookup("accounts"))
+
+	rootCmd.Flags().Bool("accounts-detailed", false, "Export granular per-account bytes and message metrics")
+	_ = viper.BindPFlag("accounts-detailed", rootCmd.Flags().Lookup("accounts-detailed"))
 
 	// gatewayz
 	rootCmd.Flags().Bool("gatewayz", false, "Export gateway metrics")
@@ -310,6 +313,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.ObservationConfigDir = viper.GetString("observe")
 	opts.JetStreamConfigDir = viper.GetString("jetstream")
 	opts.Accounts = viper.GetBool("accounts")
+	opts.AccountsDetailed = viper.GetBool("accounts-detailed")
 	opts.Gatewayz = viper.GetBool("gatewayz")
 	opts.Jsz = viper.GetString("jsz")
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")
