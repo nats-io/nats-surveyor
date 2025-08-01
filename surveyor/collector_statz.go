@@ -167,6 +167,8 @@ type statzDescs struct {
 	accJszConsumerNumPending           *prometheus.Desc
 	accJszConsumerAckFloorStreamSeq    *prometheus.Desc
 	accJszConsumerAckFloorConsumerSeq  *prometheus.Desc
+	accJszConsumerAckFloorLastActive   *prometheus.Desc
+	accJszConsumerDeliveredLastActive  *prometheus.Desc
 }
 
 // gatewayzDescs holds the gateway metric descriptions
@@ -267,6 +269,8 @@ type consumerStats struct {
 	consumerAckFloorStreamSeq    float64
 	consumerAckFloorConsumerSeq  float64
 	consumerRaftGroup            string
+	consumerAckFloorLastActive   float64
+	consumerDeliveredLastActive  float64
 }
 
 type streamAccountStats struct {
@@ -563,6 +567,18 @@ func (sc *StatzCollector) buildDescs() {
 		sc.descs.accJszConsumerAckFloorConsumerSeq = prometheus.NewDesc(
 			prometheus.BuildFQName("nats", "consumer", "ack_floor_consumer_seq"),
 			"Number of ack floor consumer seq from a consumer",
+			consumerLabels,
+			nil,
+		)
+		sc.descs.accJszConsumerAckFloorLastActive = prometheus.NewDesc(
+			prometheus.BuildFQName("nats", "consumer", "ack_floor_last_active"),
+			"Unix timestamp of last ack floor activity from a consumer",
+			consumerLabels,
+			nil,
+		)
+		sc.descs.accJszConsumerDeliveredLastActive = prometheus.NewDesc(
+			prometheus.BuildFQName("nats", "consumer", "delivered_last_active"),
+			"Unix timestamp of last delivered message activity from a consumer",
 			consumerLabels,
 			nil,
 		)
@@ -965,6 +981,16 @@ func (sc *StatzCollector) pollAccountInfo() error {
 							}
 						}
 					}
+
+					// Extract timestamp values, converting to Unix timestamp or 0 if nil
+					var ackFloorLastActive, deliveredLastActive float64
+					if consumer.AckFloor.Last != nil {
+						ackFloorLastActive = float64(consumer.AckFloor.Last.UnixMilli())
+					}
+					if consumer.Delivered.Last != nil {
+						deliveredLastActive = float64(consumer.Delivered.Last.UnixMilli())
+					}
+
 					cs := consumerStats{
 						consumerName:                 consumer.Name,
 						consumerLeader:               consumerLeader,
@@ -977,6 +1003,8 @@ func (sc *StatzCollector) pollAccountInfo() error {
 						consumerNumPending:           float64(consumer.NumPending),
 						consumerAckFloorStreamSeq:    float64(consumer.AckFloor.Stream),
 						consumerAckFloorConsumerSeq:  float64(consumer.AckFloor.Consumer),
+						consumerAckFloorLastActive:   ackFloorLastActive,
+						consumerDeliveredLastActive:  deliveredLastActive,
 					}
 					sas.consumerStats = append(sas.consumerStats, &cs)
 				}
@@ -1369,6 +1397,8 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 			ch <- sc.descs.accJszConsumerNumPending
 			ch <- sc.descs.accJszConsumerAckFloorStreamSeq
 			ch <- sc.descs.accJszConsumerAckFloorConsumerSeq
+			ch <- sc.descs.accJszConsumerAckFloorLastActive
+			ch <- sc.descs.accJszConsumerDeliveredLastActive
 		}
 	}
 
@@ -1722,6 +1752,24 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 								metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorConsumerSeq,
 									consumerStat.consumerAckFloorConsumerSeq,
 									append(accLabels,
+										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+									),
+								)
+							}
+							if sc.jszFilterSet[ConsumerAckFloorLastActive] || !hasFilters {
+								metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorLastActive,
+									consumerStat.consumerAckFloorLastActive,
+									append(accLabels, streamStat.accountName,
+										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+									),
+								)
+							}
+							if sc.jszFilterSet[ConsumerDeliveredLastActive] || !hasFilters {
+								metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredLastActive,
+									consumerStat.consumerDeliveredLastActive,
+									append(accLabels, streamStat.accountName,
 										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
 										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
 									),
