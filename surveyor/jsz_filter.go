@@ -32,6 +32,8 @@ const (
 	ConsumerNumPending
 	ConsumerNumRedelivered
 	ConsumerNumWaiting
+	ConsumerAckFloorLastActive
+	ConsumerDeliveredLastActive
 )
 
 // JszFilterIds maps enum values to their string representations
@@ -50,6 +52,8 @@ var JszFilterIds = map[JszFilter][]string{
 	ConsumerNumPending:           {"consumer_num_pending"},
 	ConsumerNumRedelivered:       {"consumer_num_redelivered"},
 	ConsumerNumWaiting:           {"consumer_num_waiting"},
+	ConsumerAckFloorLastActive:   {"consumer_ack_floor_last_active"},
+	ConsumerDeliveredLastActive:  {"consumer_delivered_last_active"},
 }
 
 // JszFiltersToStringSlice converts a slice of JszFilter enums to their string representations

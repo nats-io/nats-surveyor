@@ -895,8 +895,10 @@ func TestSurveyor_AccountJetStreamJszLeaderOnly(t *testing.T) {
 		regexp.MustCompile(`nats_stream_total_messages`),
 		regexp.MustCompile(`nats_consumer_ack_floor_consumer_seq`),
 		regexp.MustCompile(`nats_consumer_ack_floor_stream_seq`),
+		regexp.MustCompile(`nats_consumer_ack_floor_last_active`),
 		regexp.MustCompile(`nats_consumer_delivered_consumer_seq`),
 		regexp.MustCompile(`nats_consumer_delivered_stream_seq`),
+		regexp.MustCompile(`nats_consumer_delivered_last_active`),
 		regexp.MustCompile(`nats_consumer_num_ack_pending`),
 		regexp.MustCompile(`nats_consumer_num_pending`),
 		regexp.MustCompile(`nats_consumer_num_redelivered`),
@@ -984,7 +986,7 @@ func TestSurveyor_AccountJetStreamJszLeaderOnly(t *testing.T) {
 			totalConsumers++
 		}
 	}
-	expectedConsumerMetrics := 120
+	expectedConsumerMetrics := 150
 	if totalConsumers != expectedConsumerMetrics {
 		t.Errorf("Expected %v, got %v", expectedConsumerMetrics, totalConsumers)
 	}
@@ -1076,8 +1078,10 @@ func TestSurveyor_AccountJetStreamJszFilters(t *testing.T) {
 	notWanted := []*regexp.Regexp{
 		regexp.MustCompile(`nats_consumer_ack_floor_consumer_seq`),
 		regexp.MustCompile(`nats_consumer_ack_floor_stream_seq`),
+		regexp.MustCompile(`nats_consumer_ack_floor_last_active`),
 		regexp.MustCompile(`nats_consumer_delivered_consumer_seq`),
 		regexp.MustCompile(`nats_consumer_delivered_stream_seq`),
+		regexp.MustCompile(`nats_consumer_delivered_last_active`),
 		regexp.MustCompile(`nats_consumer_num_redelivered`),
 		regexp.MustCompile(`nats_consumer_num_waiting`),
 	}
