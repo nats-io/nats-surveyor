@@ -618,12 +618,17 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 		sysReqPrefix = DefaultSysReqPrefix
 	}
 
+	var reply string
+	if nc != nil {
+		reply = nc.NewRespInbox()
+	}
+
 	sc := &StatzCollector{
 		nc:                      nc,
 		logger:                  logger,
 		numServers:              numServers,
 		serverDiscoveryWait:     serverDiscoveryWait,
-		reply:                   nc.NewRespInbox(),
+		reply:                   reply,
 		pollTimeout:             pollTimeout,
 		servers:                 make(map[string]bool),
 		doneCh:                  make(chan struct{}, 1),
@@ -653,7 +658,14 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 
 	sc.expectedCnt.WithLabelValues().Set(float64(numServers))
 
-	nc.Subscribe(sc.reply+".*", sc.handleStatzResponse)
+	for _, opt := range opts {
+		opt(sc)
+	}
+
+	if nc != nil {
+		nc.Subscribe(sc.reply+".*", sc.handleStatzResponse)
+	}
+
 	return sc
 }
 
@@ -1416,11 +1428,13 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		timer := prometheus.NewTimer(sc.pollTime.WithLabelValues())
 
 		// poll the servers
-		if err := sc.poll(); err != nil {
-			sc.logger.Warnf("Error polling NATS server: %v", err)
-			sc.pollErrCnt.WithLabelValues().Inc()
-			metrics.newGaugeMetric(sc.natsUp, 0, nil)
-			return metrics.metrics, nil
+		if sc.nc != nil {
+			if err := sc.poll(); err != nil {
+				sc.logger.Warnf("Error polling NATS server: %v", err)
+				sc.pollErrCnt.WithLabelValues().Inc()
+				metrics.newGaugeMetric(sc.natsUp, 0, nil)
+				return metrics.metrics, nil
+			}
 		}
 
 		// lock the stats
