@@ -606,11 +606,110 @@ func (sc *StatzCollector) buildDescs() {
 	}, []string{"expected"})
 }
 
+type StatzCollectorOpt func(sc *StatzCollector)
+
+// ServerAPIAccstatzResponse is the response type for accstatz, defined here since nats-server doesn't export it
+type ServerAPIAccstatzResponse struct {
+	server.ServerAPIResponse
+	Data server.AccountStatz `json:"data,omitempty"`
+}
+
+func WithAllStats(stats []*server.ServerStatsMsg, accStatzs []*ServerAPIAccstatzResponse,
+	jsStatzs []*server.ServerAPIJszResponse, gatewayStatzs []*server.ServerAPIGatewayzResponse,
+) StatzCollectorOpt {
+	return func(sc *StatzCollector) {
+		// statz
+		sc.stats = stats
+
+		// accstatz
+		accs := make(map[string][]*accStat)
+		for _, statz := range accStatzs {
+			for _, acc := range statz.Data.Accounts {
+				accInfo := accs[acc.Account]
+				accs[acc.Account] = append(accInfo, &accStat{
+					Server: statz.Server,
+					Data:   acc,
+				})
+			}
+		}
+
+		accStats := make(map[string]*accountStats, len(accs))
+		for accID, stats := range accs {
+			sts := mapAccountStat(accID, stats)
+			accStats[accID] = sts
+		}
+
+		// js statz
+		sc.jsStats = make([]*jsStat, 0)
+		jsInfos := make([]*server.JSInfo, 0)
+		jsInfoDatas := make([]*jsInfoData, 0)
+		for _, statz := range jsStatzs {
+			if statz.Data == nil {
+				continue
+			}
+			s := &jsStat{
+				Server: statz.Server,
+				Data:   statz.Data,
+			}
+			jsInfos = append(jsInfos, statz.Data)
+			sc.jsStats = append(sc.jsStats, s)
+
+			info := &jsInfoData{statz.Server.ID, statz.Server.Name, statz.Server.Cluster, statz.Data}
+			jsInfoDatas = append(jsInfoDatas, info)
+		}
+
+		// Add jsinfo to accstatz
+		jsAccInfos := make(map[string]*server.AccountDetail)
+		for _, jsInfo := range jsInfos {
+			for _, acc := range jsInfo.AccountDetails {
+				accInfo, ok := jsAccInfos[acc.Id]
+				if !ok {
+					jsAccInfos[acc.Id] = acc
+					continue
+				}
+				mergeStreamDetails(accInfo, acc)
+				jsAccInfos[acc.Id] = acc
+			}
+		}
+		for accID, accDetail := range jsAccInfos {
+			sts := accStats[accID]
+			sts = mapJSAccountDetailToStats(accID, accDetail, sts)
+			accStats[accID] = sts
+		}
+		for _, jsz := range jsInfoDatas {
+			for _, accDetail := range jsz.AccountDetails {
+				sts, ok := accStats[accDetail.Id]
+				if !ok {
+					continue
+				}
+				sts = mapJSStreamDetailToStats(jsz, accDetail, sts)
+				accStats[accDetail.Id] = sts
+			}
+		}
+
+		sc.accStats = make([]*accountStats, 0, len(accStats))
+		for _, acc := range accStats {
+			sc.accStats = append(sc.accStats, acc)
+		}
+
+		// gateway statz
+		sc.gatewayStatz = make([]*gatewayStatz, len(gatewayStatzs))
+		for _, statz := range gatewayStatzs {
+			g := &gatewayStatz{
+				ServerAPIResponse: server.ServerAPIResponse{Server: statz.Server},
+				Data:              statz.Data,
+			}
+			sc.gatewayStatz = append(sc.gatewayStatz, g)
+		}
+	}
+}
+
 // NewStatzCollector creates a NATS Statz Collector.
 func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 	serverDiscoveryWait, pollTimeout time.Duration, accounts, accountsDetailed bool, gatewayz bool,
 	jsz string, jszLeadersOnly bool, jszFilters []JszFilter, sysReqPrefix string,
-	constLabels prometheus.Labels) *StatzCollector {
+	constLabels prometheus.Labels, opts ...StatzCollectorOpt,
+) *StatzCollector {
 	// Remove the potential wildcard users might place
 	// since we are simply prepending the string
 	sysReqPrefix = strings.TrimSuffix(sysReqPrefix, ".>")
@@ -863,72 +962,14 @@ func (sc *StatzCollector) pollAccountInfo() error {
 
 	accStats := make(map[string]*accountStats, len(accs))
 	for accID, stats := range accs {
-		accountName := ""
-		if len(stats) > 0 && stats[0].Data != nil {
-			accountName = stats[0].Data.Name
-		}
-		sts := &accountStats{
-			accountID:   accID,
-			accountName: accountName,
-			stats:       stats,
-		}
-
+		sts := mapAccountStat(accID, stats)
 		accStats[accID] = sts
 	}
 
 	accDetails, jsStats, jsData := sc.getJSInfos(nc)
 	for accID, accDetail := range accDetails {
-		sts, ok := accStats[accID]
-		// If no account stats returned, still report JS metrics
-		if !ok {
-			sts = &accountStats{
-				accountID:   accID,
-				accountName: accDetail.Name,
-			}
-		}
-		sts.jetstreamEnabled = 1.0
-		sts.jetstreamMemoryUsed = float64(accDetail.Memory)
-		sts.jetstreamStorageUsed = float64(accDetail.Store)
-		sts.jetstreamMemoryReserved = float64(accDetail.ReservedMemory)
-		sts.jetstreamStorageReserved = float64(accDetail.ReservedStore)
-		sts.jetstreamTieredMemoryUsed = make(map[int]float64)
-		sts.jetstreamTieredStorageUsed = make(map[int]float64)
-		sts.jetstreamTieredMemoryReserved = make(map[int]float64)
-		sts.jetstreamTieredStorageReserved = make(map[int]float64)
-
-		sts.jetstreamStreamCount = float64(len(accDetail.Streams))
-		for _, stream := range accDetail.Streams {
-			sts.jetstreamStreams = append(sts.jetstreamStreams, streamAccountStats{
-				streamName:    stream.Name,
-				raftGroup:     stream.RaftGroup,
-				consumerCount: float64(len(stream.Consumer)),
-				replicaCount:  float64(stream.Config.Replicas),
-			})
-
-			// computed tiered storage usage
-			used := float64(stream.State.Bytes)
-			var reserved float64
-			if stream.Config.MaxBytes > 0 {
-				reserved = float64(stream.Config.MaxBytes)
-			}
-			if stream.Config.Storage == server.MemoryStorage {
-				if _, ok = sts.jetstreamTieredMemoryUsed[stream.Config.Replicas]; ok {
-					sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] += used
-					sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] += reserved
-				} else {
-					sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] = used
-					sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] = reserved
-				}
-			} else if stream.Config.Storage == server.FileStorage {
-				if _, ok = sts.jetstreamTieredStorageUsed[stream.Config.Replicas]; ok {
-					sts.jetstreamTieredStorageUsed[stream.Config.Replicas] += used
-					sts.jetstreamTieredStorageReserved[stream.Config.Replicas] += reserved
-				} else {
-					sts.jetstreamTieredStorageUsed[stream.Config.Replicas] = used
-					sts.jetstreamTieredStorageReserved[stream.Config.Replicas] = reserved
-				}
-			}
-		}
+		sts := accStats[accID]
+		sts = mapJSAccountDetailToStats(accID, accDetail, sts)
 		accStats[accID] = sts
 	}
 	for _, jsz := range jsData {
@@ -937,63 +978,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 			if !ok {
 				continue
 			}
-			for _, stream := range accDetail.Streams {
-				var streamLeader string
-				if stream.Cluster != nil {
-					streamLeader = stream.Cluster.Leader
-				}
-				sas := streamAccountStats{
-					accountID:          accDetail.Id,
-					accountName:        accDetail.Name,
-					serverID:           jsz.ServerID,
-					serverName:         jsz.ServerName,
-					clusterName:        jsz.ClusterName,
-					streamName:         stream.Name,
-					raftGroup:          stream.RaftGroup,
-					consumerCount:      float64(stream.State.Consumers),
-					replicaCount:       float64(stream.Config.Replicas),
-					streamMessages:     float64(stream.State.Msgs),
-					streamBytes:        float64(stream.State.Bytes),
-					streamFirstSeq:     float64(stream.State.FirstSeq),
-					streamLastSeq:      float64(stream.State.LastSeq),
-					streamSubjectCount: float64(stream.State.NumSubjects),
-					streamLeader:       streamLeader,
-					consumerStats:      make([]*consumerStats, 0),
-				}
-
-				for _, consumer := range stream.Consumer {
-					var consumerLeader, raftGroup string
-					if consumer.Cluster != nil {
-						consumerLeader = consumer.Cluster.Leader
-						raftGroup = consumer.Cluster.RaftGroup
-					}
-					if raftGroup == "" {
-						// For R1 may need to find manually within the complete list
-						// of raft groups.
-						for _, cr := range stream.ConsumerRaftGroups {
-							if cr.Name == consumer.Name {
-								raftGroup = cr.RaftGroup
-								break
-							}
-						}
-					}
-					cs := consumerStats{
-						consumerName:                 consumer.Name,
-						consumerLeader:               consumerLeader,
-						consumerRaftGroup:            raftGroup,
-						consumerDeliveredConsumerSeq: float64(consumer.Delivered.Consumer),
-						consumerDeliveredStreamSeq:   float64(consumer.Delivered.Stream),
-						consumerNumAckPending:        float64(consumer.NumAckPending),
-						consumerNumRedelivered:       float64(consumer.NumRedelivered),
-						consumerNumWaiting:           float64(consumer.NumWaiting),
-						consumerNumPending:           float64(consumer.NumPending),
-						consumerAckFloorStreamSeq:    float64(consumer.AckFloor.Stream),
-						consumerAckFloorConsumerSeq:  float64(consumer.AckFloor.Consumer),
-					}
-					sas.consumerStats = append(sas.consumerStats, &cs)
-				}
-				sts.jszData = append(sts.jszData, sas)
-			}
+			sts = mapJSStreamDetailToStats(jsz, accDetail, sts)
 			accStats[accDetail.Id] = sts
 		}
 	}
@@ -1928,4 +1913,139 @@ func unmarshalMsg(msg *nats.Msg, v any) error {
 	}
 
 	return json.Unmarshal(data, v)
+}
+
+// mapAccountStat creates account stats from the server account statz response.
+func mapAccountStat(accID string, stats []*accStat) *accountStats {
+	accountName := ""
+	if len(stats) > 0 && stats[0].Data != nil {
+		accountName = stats[0].Data.Name
+	}
+	sts := &accountStats{
+		accountID:   accID,
+		accountName: accountName,
+		stats:       stats,
+	}
+	return sts
+}
+
+// mapJSAccountDetail creates or updates account stats from the server JS Info response.
+func mapJSAccountDetailToStats(accID string, accDetail *server.AccountDetail, sts *accountStats) *accountStats {
+	// If no account stats returned, still report JS metrics
+	if sts == nil {
+		sts = &accountStats{
+			accountID:   accID,
+			accountName: accDetail.Name,
+		}
+	}
+
+	sts.jetstreamEnabled = 1.0
+	sts.jetstreamMemoryUsed = float64(accDetail.Memory)
+	sts.jetstreamStorageUsed = float64(accDetail.Store)
+	sts.jetstreamMemoryReserved = float64(accDetail.ReservedMemory)
+	sts.jetstreamStorageReserved = float64(accDetail.ReservedStore)
+	sts.jetstreamTieredMemoryUsed = make(map[int]float64)
+	sts.jetstreamTieredStorageUsed = make(map[int]float64)
+	sts.jetstreamTieredMemoryReserved = make(map[int]float64)
+	sts.jetstreamTieredStorageReserved = make(map[int]float64)
+
+	sts.jetstreamStreamCount = float64(len(accDetail.Streams))
+	for _, stream := range accDetail.Streams {
+		sts.jetstreamStreams = append(sts.jetstreamStreams, streamAccountStats{
+			streamName:    stream.Name,
+			raftGroup:     stream.RaftGroup,
+			consumerCount: float64(len(stream.Consumer)),
+			replicaCount:  float64(stream.Config.Replicas),
+		})
+
+		// computed tiered storage usage
+		used := float64(stream.State.Bytes)
+		var reserved float64
+		if stream.Config.MaxBytes > 0 {
+			reserved = float64(stream.Config.MaxBytes)
+		}
+		if stream.Config.Storage == server.MemoryStorage {
+			if _, ok := sts.jetstreamTieredMemoryUsed[stream.Config.Replicas]; ok {
+				sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] += used
+				sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] += reserved
+			} else {
+				sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] = used
+				sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] = reserved
+			}
+		} else if stream.Config.Storage == server.FileStorage {
+			if _, ok := sts.jetstreamTieredStorageUsed[stream.Config.Replicas]; ok {
+				sts.jetstreamTieredStorageUsed[stream.Config.Replicas] += used
+				sts.jetstreamTieredStorageReserved[stream.Config.Replicas] += reserved
+			} else {
+				sts.jetstreamTieredStorageUsed[stream.Config.Replicas] = used
+				sts.jetstreamTieredStorageReserved[stream.Config.Replicas] = reserved
+			}
+		}
+	}
+	return sts
+}
+
+// mapJSStreamDetailToStats updates account stats with JS stream detail from the server response.
+func mapJSStreamDetailToStats(jsz *jsInfoData, accDetail *server.AccountDetail, sts *accountStats) *accountStats {
+	if sts == nil {
+		return nil
+	}
+	for _, stream := range accDetail.Streams {
+		var streamLeader string
+		if stream.Cluster != nil {
+			streamLeader = stream.Cluster.Leader
+		}
+		sas := streamAccountStats{
+			accountID:          accDetail.Id,
+			accountName:        accDetail.Name,
+			serverID:           jsz.ServerID,
+			serverName:         jsz.ServerName,
+			clusterName:        jsz.ClusterName,
+			streamName:         stream.Name,
+			raftGroup:          stream.RaftGroup,
+			consumerCount:      float64(stream.State.Consumers),
+			replicaCount:       float64(stream.Config.Replicas),
+			streamMessages:     float64(stream.State.Msgs),
+			streamBytes:        float64(stream.State.Bytes),
+			streamFirstSeq:     float64(stream.State.FirstSeq),
+			streamLastSeq:      float64(stream.State.LastSeq),
+			streamSubjectCount: float64(stream.State.NumSubjects),
+			streamLeader:       streamLeader,
+			consumerStats:      make([]*consumerStats, 0),
+		}
+
+		for _, consumer := range stream.Consumer {
+			var consumerLeader, raftGroup string
+			if consumer.Cluster != nil {
+				consumerLeader = consumer.Cluster.Leader
+				raftGroup = consumer.Cluster.RaftGroup
+			}
+			if raftGroup == "" {
+				// For R1 may need to find manually within the complete list
+				// of raft groups.
+				for _, cr := range stream.ConsumerRaftGroups {
+					if cr.Name == consumer.Name {
+						raftGroup = cr.RaftGroup
+						break
+					}
+				}
+			}
+			cs := consumerStats{
+				consumerName:                 consumer.Name,
+				consumerLeader:               consumerLeader,
+				consumerRaftGroup:            raftGroup,
+				consumerDeliveredConsumerSeq: float64(consumer.Delivered.Consumer),
+				consumerDeliveredStreamSeq:   float64(consumer.Delivered.Stream),
+				consumerNumAckPending:        float64(consumer.NumAckPending),
+				consumerNumRedelivered:       float64(consumer.NumRedelivered),
+				consumerNumWaiting:           float64(consumer.NumWaiting),
+				consumerNumPending:           float64(consumer.NumPending),
+				consumerAckFloorStreamSeq:    float64(consumer.AckFloor.Stream),
+				consumerAckFloorConsumerSeq:  float64(consumer.AckFloor.Consumer),
+			}
+			sas.consumerStats = append(sas.consumerStats, &cs)
+		}
+		sts.jszData = append(sts.jszData, sas)
+	}
+	return sts
 }
