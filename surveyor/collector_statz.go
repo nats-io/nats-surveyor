@@ -614,16 +614,23 @@ type ServerAPIAccstatzResponse struct {
 	Data server.AccountStatz `json:"data,omitempty"`
 }
 
-func WithAllStats(stats []*server.ServerStatsMsg, accStatzs []*ServerAPIAccstatzResponse,
-	jsStatzs []*server.ServerAPIJszResponse, gatewayStatzs []*server.ServerAPIGatewayzResponse,
-) StatzCollectorOpt {
+type WithStatsBatch struct {
+	Stats         []*server.ServerStatsMsg
+	AccStatzs     []*ServerAPIAccstatzResponse
+	JsStatzs      []*server.ServerAPIJszResponse
+	GatewayStatzs []*server.ServerAPIGatewayzResponse
+}
+
+// WithStats lets you provide your own NATS Server responses for generating metrics.
+// If a NATS connection is provided, the collector will still poll for the stats and override the provided stats.
+func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 	return func(sc *StatzCollector) {
 		// statz
-		sc.stats = stats
+		sc.stats = batch.Stats
 
 		// accstatz
 		accs := make(map[string][]*accStat)
-		for _, statz := range accStatzs {
+		for _, statz := range batch.AccStatzs {
 			for _, acc := range statz.Data.Accounts {
 				accInfo := accs[acc.Account]
 				accs[acc.Account] = append(accInfo, &accStat{
@@ -643,7 +650,7 @@ func WithAllStats(stats []*server.ServerStatsMsg, accStatzs []*ServerAPIAccstatz
 		sc.jsStats = make([]*jsStat, 0)
 		jsInfos := make([]*server.JSInfo, 0)
 		jsInfoDatas := make([]*jsInfoData, 0)
-		for _, statz := range jsStatzs {
+		for _, statz := range batch.JsStatzs {
 			if statz.Data == nil {
 				continue
 			}
@@ -693,8 +700,8 @@ func WithAllStats(stats []*server.ServerStatsMsg, accStatzs []*ServerAPIAccstatz
 		}
 
 		// gateway statz
-		sc.gatewayStatz = make([]*gatewayStatz, len(gatewayStatzs))
-		for _, statz := range gatewayStatzs {
+		sc.gatewayStatz = make([]*gatewayStatz, len(batch.GatewayStatzs))
+		for _, statz := range batch.GatewayStatzs {
 			g := &gatewayStatz{
 				ServerAPIResponse: server.ServerAPIResponse{Server: statz.Server},
 				Data:              statz.Data,
