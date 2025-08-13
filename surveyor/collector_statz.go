@@ -35,6 +35,14 @@ import (
 // skip reporting account on a server after this many subsequent polls with 0 conns
 const accStatZeroConnSkip = 3
 
+type CollectJsz string
+
+const (
+	CollectJszAll       CollectJsz = "all"
+	CollectJszStreams   CollectJsz = "streams"
+	CollectJszConsumers CollectJsz = "consumers"
+)
+
 // statzDescs holds the metric descriptions
 type statzDescs struct {
 	Info             *prometheus.Desc
@@ -211,7 +219,7 @@ type StatzCollector struct {
 	collectAccounts         bool
 	collectAccountsDetailed bool
 	collectGatewayz         bool
-	collectJsz              string
+	collectJsz              CollectJsz
 	jszLeadersOnly          bool
 	jszFilterSet            map[JszFilter]bool
 	sysReqPrefix            string
@@ -614,6 +622,90 @@ type ServerAPIAccstatzResponse struct {
 	Data server.AccountStatz `json:"data,omitempty"`
 }
 
+func WithNATSConnection(nc *nats.Conn) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.nc = nc
+		if nc != nil {
+			sc.reply = nc.NewRespInbox()
+		}
+		return nil
+	}
+}
+
+func WithLogger(logger *logrus.Logger) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.logger = logger
+		return nil
+	}
+}
+
+func WithNumServers(numServers int) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.numServers = numServers
+		return nil
+	}
+}
+
+func WithServerDiscoveryWait(serverDiscoveryWait time.Duration) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.serverDiscoveryWait = serverDiscoveryWait
+		return nil
+	}
+}
+
+func WithPollTimeout(pollTimeout time.Duration) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.pollTimeout = pollTimeout
+		return nil
+	}
+}
+
+func WithCollectAccounts(collectAccounts bool, collectAccountsDetailed bool) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.collectAccounts = collectAccounts
+		sc.collectAccountsDetailed = collectAccountsDetailed
+		return nil
+	}
+}
+
+func WithCollectGatewayz(collectGatewayz bool) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.collectGatewayz = collectGatewayz
+		return nil
+	}
+}
+
+func WithCollectJsz(jsz CollectJsz, jszLeadersOnly bool, jszFilters []JszFilter) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.collectJsz = jsz
+		sc.jszLeadersOnly = jszLeadersOnly
+		for i := range jszFilters {
+			sc.jszFilterSet[jszFilters[i]] = true
+		}
+		return nil
+	}
+}
+
+func WithConstantLabels(constLabels prometheus.Labels) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.constLabels = constLabels
+		return nil
+	}
+}
+
+func WithSysRequestPrefix(prefix string) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		// Remove the potential wildcard users might place
+		// since we are simply prepending the string
+		prefix = strings.TrimSuffix(prefix, ".>")
+		if prefix == "" {
+			prefix = DefaultSysReqPrefix
+		}
+		sc.sysReqPrefix = prefix
+		return nil
+	}
+}
+
 type WithStatsBatch struct {
 	Stats         []*server.ServerStatsMsg
 	AccStatzs     []*ServerAPIAccstatzResponse
@@ -625,11 +717,6 @@ type WithStatsBatch struct {
 // If a NATS connection is provided, the collector will still poll for the stats and override the provided stats.
 func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 	return func(sc *StatzCollector) error {
-		// WithStats and NATS connection are mutually exclusive
-		if sc.nc != nil {
-			return fmt.Errorf("WithStats and nc are mutually exclusive")
-		}
-
 		// statz
 		sc.stats = batch.Stats
 
@@ -719,39 +806,41 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 }
 
 // NewStatzCollector creates a NATS Statz Collector.
+// Deprecated: NewStatzCollector is deprecated. Use NewStatzCollectorOpts instead.
 func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 	serverDiscoveryWait, pollTimeout time.Duration, accounts, accountsDetailed bool, gatewayz bool,
 	jsz string, jszLeadersOnly bool, jszFilters []JszFilter, sysReqPrefix string,
-	constLabels prometheus.Labels, opts ...StatzCollectorOpt,
+	constLabels prometheus.Labels,
 ) *StatzCollector {
-	// Remove the potential wildcard users might place
-	// since we are simply prepending the string
-	sysReqPrefix = strings.TrimSuffix(sysReqPrefix, ".>")
-	if sysReqPrefix == "" {
-		sysReqPrefix = DefaultSysReqPrefix
-	}
+	sc, _ := NewStatzCollectorOpts(
+		WithNATSConnection(nc),
+		WithLogger(logger),
+		WithNumServers(numServers),
+		WithServerDiscoveryWait(serverDiscoveryWait),
+		WithPollTimeout(pollTimeout),
+		WithCollectAccounts(accounts, accountsDetailed),
+		WithCollectGatewayz(gatewayz),
+		WithCollectJsz(CollectJsz(jsz), jszLeadersOnly, jszFilters),
+		WithConstantLabels(constLabels),
+		WithSysRequestPrefix(sysReqPrefix),
+	)
+	return sc
+}
 
-	var reply string
-	if nc != nil {
-		reply = nc.NewRespInbox()
-	}
-
+// NewStatzCollectorOpts creates a NATS Statz Collector with the given options.
+// It bubbles up the first error from the options.
+func NewStatzCollectorOpts(opts ...StatzCollectorOpt) (*StatzCollector, error) {
 	sc := &StatzCollector{
-		nc:                      nc,
-		logger:                  logger,
-		numServers:              numServers,
-		serverDiscoveryWait:     serverDiscoveryWait,
-		reply:                   reply,
-		pollTimeout:             pollTimeout,
-		servers:                 make(map[string]bool),
-		doneCh:                  make(chan struct{}, 1),
-		collectAccounts:         accounts,
-		collectAccountsDetailed: accountsDetailed,
-		collectGatewayz:         gatewayz,
-		collectJsz:              jsz,
-		jszLeadersOnly:          jszLeadersOnly,
-		sysReqPrefix:            sysReqPrefix,
-		accStatZeroConn:         make(map[string]int),
+		// initialize
+		servers:         make(map[string]bool),
+		doneCh:          make(chan struct{}, 1),
+		accStatZeroConn: make(map[string]int),
+		jszFilterSet:    make(map[JszFilter]bool),
+
+		// defaults
+		numServers:          DefaultExpectedServers,
+		serverDiscoveryWait: DefaultServerResponseWait,
+		pollTimeout:         DefaultPollTimeout,
 
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
 		serverLabels:       []string{"server_cluster", "server_name", "server_id"},
@@ -761,25 +850,30 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 		gatewayzLabels:     []string{"server_id", "server_name", "gateway_name", "remote_gateway_name", "gateway_id", "cid"},
 		jsServerLabels:     []string{"server_id", "server_name", "cluster_name"},
 		jsServerInfoLabels: []string{"server_name", "server_host", "server_id", "server_cluster", "server_domain", "server_version", "server_jetstream"},
-		constLabels:        constLabels,
-		jszFilterSet:       make(map[JszFilter]bool),
 	}
-	for i := range jszFilters {
-		sc.jszFilterSet[jszFilters[i]] = true
-	}
-	sc.buildDescs()
-
-	sc.expectedCnt.WithLabelValues().Set(float64(numServers))
 
 	for _, opt := range opts {
-		opt(sc)
+		if err := opt(sc); err != nil {
+			return nil, err
+		}
 	}
 
-	if nc != nil {
-		nc.Subscribe(sc.reply+".*", sc.handleStatzResponse)
+	if sc.nc != nil && len(sc.stats) > 0 {
+		return nil, fmt.Errorf("WithStats and WithNATSConnection are mutually exclusive")
 	}
 
-	return sc
+	sc.buildDescs()
+	sc.expectedCnt.WithLabelValues().Set(float64(sc.numServers))
+
+	if sc.nc != nil {
+		sc.nc.Subscribe(sc.reply+".*", sc.handleStatzResponse)
+	}
+
+	if sc.logger == nil {
+		sc.logger = logrus.New()
+	}
+
+	return sc, nil
 }
 
 func (sc *StatzCollector) newGatewayzDescs(gwType string, newPromDesc func(name, help string, labels []string) *prometheus.Desc) *gatewayzDescs {
@@ -961,10 +1055,10 @@ func (sc *StatzCollector) poll() error {
 	return nil
 }
 
-func shouldCollectJsz(setting string) (string, bool) {
-	jsz := strings.TrimSpace(strings.ToLower(setting))
+func shouldCollectJsz(setting CollectJsz) (CollectJsz, bool) {
+	jsz := strings.TrimSpace(strings.ToLower(string(setting)))
 	enabled := jsz == "all" || jsz == "streams" || jsz == "consumers"
-	return jsz, enabled
+	return CollectJsz(jsz), enabled
 }
 
 func (sc *StatzCollector) pollAccountInfo() error {
@@ -1031,7 +1125,7 @@ type jsInfoData struct {
 func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountDetail, []*jsStat, []*jsInfoData) {
 	var opts server.JSzOptions
 	jsz, collectJsz := shouldCollectJsz(sc.collectJsz)
-	getConsumers := jsz == "consumers" || jsz == "all"
+	getConsumers := jsz == CollectJszConsumers || jsz == CollectJszAll
 	if sc.collectAccounts {
 		opts = server.JSzOptions{
 			Accounts:   true,

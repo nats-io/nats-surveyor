@@ -22,18 +22,23 @@ func TestStatzCollector_WithoutNATSConnection(t *testing.T) {
 }
 
 func TestStatzCollector_WithStats(t *testing.T) {
-	sc := NewStatzCollector(nil, nil, 0, 0, 0, false, false, false, "", false, nil, "", nil, WithStats(
-		WithStatsBatch{
-			Stats: []*server.ServerStatsMsg{
-				{
-					Server: server.ServerInfo{
-						ID:      "server1",
-						Name:    "server1",
-						Cluster: "cluster1",
+	sc, err := NewStatzCollectorOpts(
+		WithStats(
+			WithStatsBatch{
+				Stats: []*server.ServerStatsMsg{
+					{
+						Server: server.ServerInfo{
+							ID:      "server1",
+							Name:    "server1",
+							Cluster: "cluster1",
+						},
 					},
 				},
-			},
-		}))
+			}),
+	)
+	if err != nil {
+		t.Fatalf("error creating statz collector: %v", err)
+	}
 
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(sc)
