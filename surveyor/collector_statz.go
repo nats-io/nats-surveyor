@@ -625,6 +625,11 @@ type WithStatsBatch struct {
 // If a NATS connection is provided, the collector will still poll for the stats and override the provided stats.
 func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 	return func(sc *StatzCollector) error {
+		// WithStats and NATS connection are mutually exclusive
+		if sc.nc != nil {
+			return fmt.Errorf("WithStats and nc are mutually exclusive")
+		}
+
 		// statz
 		sc.stats = batch.Stats
 
