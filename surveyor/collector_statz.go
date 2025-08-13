@@ -606,7 +606,7 @@ func (sc *StatzCollector) buildDescs() {
 	}, []string{"expected"})
 }
 
-type StatzCollectorOpt func(sc *StatzCollector)
+type StatzCollectorOpt func(sc *StatzCollector) error
 
 // ServerAPIAccstatzResponse is the response type for accstatz, defined here since nats-server doesn't export it
 type ServerAPIAccstatzResponse struct {
@@ -624,7 +624,7 @@ type WithStatsBatch struct {
 // WithStats lets you provide your own NATS Server responses for generating metrics.
 // If a NATS connection is provided, the collector will still poll for the stats and override the provided stats.
 func WithStats(batch WithStatsBatch) StatzCollectorOpt {
-	return func(sc *StatzCollector) {
+	return func(sc *StatzCollector) error {
 		// statz
 		sc.stats = batch.Stats
 
@@ -708,6 +708,8 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 			}
 			sc.gatewayStatz = append(sc.gatewayStatz, g)
 		}
+
+		return nil
 	}
 }
 
