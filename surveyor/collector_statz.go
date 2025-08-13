@@ -640,7 +640,7 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 			}
 		}
 
-		accStats := make(map[string]*accountStats, len(accs))
+		accStats := make(map[string]*accountStats)
 		for accID, stats := range accs {
 			sts := mapAccountStat(accID, stats)
 			accStats[accID] = sts
@@ -694,13 +694,13 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 			}
 		}
 
-		sc.accStats = make([]*accountStats, 0, len(accStats))
+		sc.accStats = make([]*accountStats, 0)
 		for _, acc := range accStats {
 			sc.accStats = append(sc.accStats, acc)
 		}
 
 		// gateway statz
-		sc.gatewayStatz = make([]*gatewayStatz, len(batch.GatewayStatzs))
+		sc.gatewayStatz = make([]*gatewayStatz, 0)
 		for _, statz := range batch.GatewayStatzs {
 			g := &gatewayStatz{
 				ServerAPIResponse: server.ServerAPIResponse{Server: statz.Server},
@@ -992,7 +992,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 
 	sc.Lock()
 	sc.jsStats = jsStats
-	sc.accStats = make([]*accountStats, 0, len(accStats))
+	sc.accStats = make([]*accountStats, 0)
 	for _, acc := range accStats {
 		sc.accStats = append(sc.accStats, acc)
 	}
