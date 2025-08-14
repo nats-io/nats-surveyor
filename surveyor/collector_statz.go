@@ -752,8 +752,6 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 
 		// js statz
 		sc.jsStats = make([]*jsStat, 0)
-		jsInfos := make([]*server.JSInfo, 0)
-		jsInfoDatas := make([]*jsInfoData, 0)
 		for _, statz := range batch.JsStatzs {
 			if statz.Data == nil {
 				continue
@@ -762,16 +760,13 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 				Server: statz.Server,
 				Data:   statz.Data,
 			}
-			jsInfos = append(jsInfos, statz.Data)
 			sc.jsStats = append(sc.jsStats, s)
-
-			info := &jsInfoData{statz.Server.ID, statz.Server.Name, statz.Server.Cluster, statz.Data}
-			jsInfoDatas = append(jsInfoDatas, info)
 		}
 
 		// Add jsinfo to accstatz
 		jsAccInfos := make(map[string]*server.AccountDetail)
-		for _, jsInfo := range jsInfos {
+		for _, jsStat := range sc.jsStats {
+			jsInfo := jsStat.Data
 			for _, acc := range jsInfo.AccountDetails {
 				accInfo, ok := jsAccInfos[acc.Id]
 				if !ok {
@@ -787,13 +782,13 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 			sts = mapJSAccountDetailToStats(accID, accDetail, sts)
 			accStats[accID] = sts
 		}
-		for _, jsz := range jsInfoDatas {
-			for _, accDetail := range jsz.AccountDetails {
+		for _, jsStat := range sc.jsStats {
+			for _, accDetail := range jsStat.Data.AccountDetails {
 				sts, ok := accStats[accDetail.Id]
 				if !ok {
 					continue
 				}
-				sts = mapJSStreamDetailToStats(jsz, accDetail, sts)
+				sts = mapJSStreamDetailToStats(jsStat.Server, accDetail, sts)
 				accStats[accDetail.Id] = sts
 			}
 		}
@@ -1086,19 +1081,19 @@ func (sc *StatzCollector) pollAccountInfo() error {
 		accStats[accID] = sts
 	}
 
-	accDetails, jsStats, jsData := sc.getJSInfos(nc)
+	accDetails, jsStats := sc.getJSInfos(nc)
 	for accID, accDetail := range accDetails {
 		sts := accStats[accID]
 		sts = mapJSAccountDetailToStats(accID, accDetail, sts)
 		accStats[accID] = sts
 	}
-	for _, jsz := range jsData {
-		for _, accDetail := range jsz.AccountDetails {
+	for _, jsStat := range jsStats {
+		for _, accDetail := range jsStat.Data.AccountDetails {
 			sts, ok := accStats[accDetail.Id]
 			if !ok {
 				continue
 			}
-			sts = mapJSStreamDetailToStats(jsz, accDetail, sts)
+			sts = mapJSStreamDetailToStats(jsStat.Server, accDetail, sts)
 			accStats[accDetail.Id] = sts
 		}
 	}
@@ -1127,14 +1122,7 @@ func (sc *StatzCollector) pollGatewayInfo() error {
 	return nil
 }
 
-type jsInfoData struct {
-	ServerID    string
-	ServerName  string
-	ClusterName string
-	*server.JSInfo
-}
-
-func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountDetail, []*jsStat, []*jsInfoData) {
+func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountDetail, []*jsStat) {
 	var opts server.JSzOptions
 	jsz, collectJsz := shouldCollectJsz(sc.collectJsz)
 	getConsumers := jsz == CollectJszConsumers || jsz == CollectJszAll
@@ -1157,8 +1145,6 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 	}
 
 	jss := make([]*jsStat, 0)
-	res := make([]*server.JSInfo, 0)
-	infos := make([]*jsInfoData, 0)
 	req, err := json.Marshal(opts)
 	if err != nil {
 		sc.logger.Warnf("Error marshaling request: %s", err)
@@ -1181,7 +1167,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 		if r.Error != nil {
 			if strings.Contains(r.Error.Description, "jetstream not enabled") {
 				// jetstream is not enabled on server
-				return nil, nil, nil
+				return nil, nil
 			}
 			continue
 		}
@@ -1189,16 +1175,14 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 			Server: r.Server,
 			Data:   &d,
 		})
-		res = append(res, &d)
-		infos = append(infos, &jsInfoData{r.Server.ID, r.Server.Name, r.Server.Cluster, &d})
-		if sc.numServers != -1 && len(res) == sc.numServers {
+		if sc.numServers != -1 && len(jss) == sc.numServers {
 			break
 		}
 	}
 
 	jsAccInfos := make(map[string]*server.AccountDetail)
-	for _, jsInfo := range res {
-		for _, acc := range jsInfo.AccountDetails {
+	for _, jsStat := range jss {
+		for _, acc := range jsStat.Data.AccountDetails {
 			accInfo, ok := jsAccInfos[acc.Id]
 			if !ok {
 				jsAccInfos[acc.Id] = acc
@@ -1209,7 +1193,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 		}
 	}
 
-	return jsAccInfos, jss, infos
+	return jsAccInfos, jss
 }
 
 type accStatz struct {
@@ -2106,7 +2090,7 @@ func mapJSAccountDetailToStats(accID string, accDetail *server.AccountDetail, st
 }
 
 // mapJSStreamDetailToStats updates account stats with JS stream detail from the server response.
-func mapJSStreamDetailToStats(jsz *jsInfoData, accDetail *server.AccountDetail, sts *accountStats) *accountStats {
+func mapJSStreamDetailToStats(server *server.ServerInfo, accDetail *server.AccountDetail, sts *accountStats) *accountStats {
 	if sts == nil {
 		return nil
 	}
@@ -2118,9 +2102,9 @@ func mapJSStreamDetailToStats(jsz *jsInfoData, accDetail *server.AccountDetail, 
 		sas := streamAccountStats{
 			accountID:          accDetail.Id,
 			accountName:        accDetail.Name,
-			serverID:           jsz.ServerID,
-			serverName:         jsz.ServerName,
-			clusterName:        jsz.ClusterName,
+			serverID:           server.ID,
+			serverName:         server.Name,
+			clusterName:        server.Cluster,
 			streamName:         stream.Name,
 			raftGroup:          stream.RaftGroup,
 			consumerCount:      float64(stream.State.Consumers),
