@@ -763,11 +763,10 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 			sc.jsStats = append(sc.jsStats, s)
 		}
 
-		// Add jsinfo to accstatz
+		// Combine jsz account, stream, and consumer details from all stats
 		jsAccInfos := make(map[string]*server.AccountDetail)
 		for _, jsStat := range sc.jsStats {
-			jsInfo := jsStat.Data
-			for _, acc := range jsInfo.AccountDetails {
+			for _, acc := range jsStat.Data.AccountDetails {
 				accInfo, ok := jsAccInfos[acc.Id]
 				if !ok {
 					jsAccInfos[acc.Id] = acc
@@ -777,11 +776,15 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 				jsAccInfos[acc.Id] = acc
 			}
 		}
+
+		// Add jsz account details to accstatz
 		for accID, accDetail := range jsAccInfos {
 			sts := accStats[accID]
 			sts = mapJSAccountDetailToStats(accID, accDetail, sts)
 			accStats[accID] = sts
 		}
+
+		// Add jsz stream details to accstatz
 		for _, jsStat := range sc.jsStats {
 			for _, accDetail := range jsStat.Data.AccountDetails {
 				sts, ok := accStats[accDetail.Id]
