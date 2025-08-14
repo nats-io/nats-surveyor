@@ -1,0 +1,33 @@
+{
+  "server": {
+    "name": "server1",
+    "host": "0.0.0.0",
+    "id": "server1",
+    "version": "2.11.0",
+    "jetstream": true,
+    "flags": 1
+  },
+  "data": {
+    "server_id": "server1",
+    "now": "2025-01-01T00:00:00Z",
+    "account_statz": [
+      {
+        "acc": "AABDFUPORNBCYFY5XMJZCT3JX4HNWJX7ELNVBAH3MD6RMBMF3ZNJ6X3Y",
+        "name": "account1",
+        "conns": 10,
+        "leafnodes": 10,
+        "total_conns": 10,
+        "num_subscriptions": 10,
+        "sent": {
+          "bytes": 1024,
+          "msgs": 100
+        },
+        "received": {
+          "bytes": 1024,
+          "msgs": 100
+        },
+        "slow_consumers": 1
+      }
+    ]
+  }
+}
