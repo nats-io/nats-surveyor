@@ -1,0 +1,69 @@
+{
+  "server": {
+    "name": "server1",
+    "host": "0.0.0.0",
+    "id": "server1",
+    "version": "2.11.0",
+    "jetstream": true,
+    "flags": 1
+  },
+  "data": {
+    "server_id": "server1",
+    "now": "2025-01-01T00:00:00Z",
+    "name": "server1",
+    "host": "0.0.0.0",
+    "port": 4222,
+    "outbound_gateways": {
+      "gateway1": {
+        "configured": true,
+        "connection": {
+          "cid": 1,
+          "kind": "Client",
+          "type": "nats",
+          "ip": "127.0.0.1",
+          "port": 1234,
+          "start": "2025-01-01T00:00:00Z",
+          "last_activity": "2025-01-02T00:00:00Z",
+          "stop": "2025-01-02T00:00:00Z",
+          "rtt": "1ms",
+          "uptime": "24h",
+          "idle": "1h",
+          "pending": 100,
+          "in_msgs": 100,
+          "out_msgs": 100,
+          "in_bytes": 512,
+          "out_bytes": 512,
+          "num_subs": 100,
+          "name": "connection1"
+        }
+      }
+    },
+    "inbound_gateways": {
+      "gateway1": [
+        {
+          "configured": true,
+          "connection": {
+            "cid": 2,
+            "kind": "Client",
+            "type": "nats",
+            "ip": "127.0.0.1",
+            "port": 5678,
+            "start": "2025-01-01T00:00:00Z",
+            "last_activity": "2025-01-02T00:00:00Z",
+            "stop": "2025-01-02T00:00:00Z",
+            "rtt": "1ms",
+            "uptime": "24h",
+            "idle": "1h",
+            "pending": 100,
+            "in_msgs": 100,
+            "out_msgs": 100,
+            "in_bytes": 512,
+            "out_bytes": 512,
+            "num_subs": 100,
+            "name": "connection2"
+          }
+        }
+      ]
+    }
+  }
+}

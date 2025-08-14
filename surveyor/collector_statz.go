@@ -717,6 +717,18 @@ type WithStatsBatch struct {
 // If a NATS connection is provided, the collector will still poll for the stats and override the provided stats.
 func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 	return func(sc *StatzCollector) error {
+		// Automatically set the collect flags for batch fields
+		if batch.AccStatzs != nil {
+			sc.collectAccounts = true
+			sc.collectAccountsDetailed = true
+		}
+		if batch.JsStatzs != nil {
+			sc.collectJsz = CollectJsz("all")
+		}
+		if batch.GatewayStatzs != nil {
+			sc.collectGatewayz = true
+		}
+
 		// statz
 		sc.stats = batch.Stats
 

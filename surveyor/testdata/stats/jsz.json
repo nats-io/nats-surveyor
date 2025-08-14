@@ -1,0 +1,84 @@
+{
+  "server": {
+    "name": "server1",
+    "host": "0.0.0.0",
+    "id": "server1",
+    "version": "2.11.0",
+    "jetstream": true,
+    "flags": 1
+  },
+  "data": {
+    "memory": 1024,
+    "storage": 1024,
+    "reserved_memory": 512,
+    "reserved_storage": 512,
+    "accounts": 10,
+    "ha_assets": 10,
+    "api": {
+      "level": 1,
+      "total": 1,
+      "errors": 0
+    },
+    "id": "server1",
+    "now": "2025-01-01T00:00:00Z",
+    "disabled": false,
+    "config": {
+      "max_memory": 1024,
+      "max_storage": 1024,
+      "sync_interval": 1000,
+      "sync_always": true
+    },
+    "streams": 10,
+    "consumers": 10,
+    "messages": 10,
+    "bytes": 1024,
+    "account_details": [
+      {
+        "name": "account1",
+        "id": "AABDFUPORNBCYFY5XMJZCT3JX4HNWJX7ELNVBAH3MD6RMBMF3ZNJ6X3Y",
+        "memory": 512,
+        "storage": 512,
+        "reserved_memory": 256,
+        "reserved_storage": 256,
+        "accounts": 1,
+        "ha_assets": 1,
+        "api": {
+          "level": 1,
+          "total": 1,
+          "errors": 0
+        },
+        "stream_detail": [
+          {
+            "name": "stream1",
+            "created": "2025-01-01T00:00:00Z",
+            "cluster": {
+              "name": "cluster1",
+              "leader": "server1"
+            },
+            "config": {
+              "name": "stream1",
+              "retention": "limits",
+              "max_consumers": -1,
+              "max_msgs": -1,
+              "max_bytes": -1,
+              "max_age": 3600,
+              "max_msg_size": -1,
+              "max_msgs_per_subject": -1,
+              "max_msg_size_bytes": -1,
+              "replicas": 3,
+              "storage": "file"
+            },
+            "state": {},
+            "stream_raft_group": "raft",
+            "consumer_raft_groups": [
+              {
+                "name": "consumer1",
+                "raft_group": "raft"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

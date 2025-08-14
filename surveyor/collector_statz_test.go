@@ -27,7 +27,7 @@ func TestStatzCollector_WithoutNATSConnection(t *testing.T) {
 }
 
 func TestStatzCollector_WithStats_Stats(t *testing.T) {
-	statsRaw, err := os.ReadFile("testdata/networks/stats.json")
+	statsRaw, err := os.ReadFile("testdata/stats/stats.json")
 	if err != nil {
 		t.Fatalf("error reading testdata: %v", err)
 	}
@@ -49,38 +49,26 @@ func TestStatzCollector_WithStats_Stats(t *testing.T) {
 	output := gatherStatzCollectorMetrics(t, sc)
 
 	// Based on TestSurveyor_Basic
-	if !strings.Contains(output, "nats_core_route_recv_msg_count") {
-		t.Fatalf("invalid output, missing 'nats_core_route_recv_msg_count':\n%v\n", output)
+	want := []string{
+		"nats_core_route_recv_msg_count",
+		"server_name",
+		"server_cluster",
+		"server_id",
+		"server_gateway_name",
+		"server_gateway_name_id",
+		"server_route_name",
+		"server_route_name_id",
+		"nats_survey_surveyed_count 1",
 	}
-	if !strings.Contains(output, "server_name") {
-		t.Fatalf("invalid output, missing 'server_name':\n%v\n", output)
+	for _, m := range want {
+		if !strings.Contains(output, m) {
+			t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
+		}
 	}
-	if !strings.Contains(output, "server_cluster") {
-		t.Fatalf("invalid output, missing 'server_cluster':\n%v\n", output)
-	}
-	if !strings.Contains(output, "server_id") {
-		t.Fatalf("invalid output, missing 'server_id':\n%v\n", output)
-	}
-	if !strings.Contains(output, "server_gateway_name") {
-		t.Fatalf("invalid output, missing 'server_gateway_name':\n%v\n", output)
-	}
-	if !strings.Contains(output, "server_gateway_name_id") {
-		t.Fatalf("invalid output, missing 'server_gateway_name_id':\n%v\n", output)
-	}
-	if !strings.Contains(output, "server_route_name") {
-		t.Fatalf("invalid output, missing 'server_route_name':\n%v\n", output)
-	}
-	if !strings.Contains(output, "server_route_name_id") {
-		t.Fatalf("invalid output, missing 'server_route_name_id':\n%v\n", output)
-	}
-	if !strings.Contains(output, "nats_survey_surveyed_count 1") {
-		t.Fatalf("invalid output, missing 'nats_survey_surveyed_count 1':\n%v\n", output)
-	}
-
 }
 
 func TestStatzCollector_WithStats_Account(t *testing.T) {
-	statsRaw, err := os.ReadFile("testdata/networks/accstatzs.json")
+	statsRaw, err := os.ReadFile("testdata/stats/accstatzs.json")
 	if err != nil {
 		t.Fatalf("error reading testdata: %v", err)
 	}
@@ -101,6 +89,7 @@ func TestStatzCollector_WithStats_Account(t *testing.T) {
 
 	output := gatherStatzCollectorMetrics(t, sc)
 
+	// Based on TestSurveyor_Account
 	want := []string{
 		"nats_core_account_count",
 		"nats_core_account_conn_count",
@@ -117,8 +106,99 @@ func TestStatzCollector_WithStats_Account(t *testing.T) {
 	}
 	for _, m := range want {
 		if !strings.Contains(output, m) {
-			t.Logf("output: %s", output)
-			t.Fatalf("missing: %s", m)
+			t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
+		}
+	}
+}
+
+func TestStatzCollector_WithStats_Gatewayz(t *testing.T) {
+	statsRaw, err := os.ReadFile("testdata/stats/gatewayzs.json")
+	if err != nil {
+		t.Fatalf("error reading testdata: %v", err)
+	}
+	stats := &server.ServerAPIGatewayzResponse{}
+	err = json.Unmarshal(statsRaw, stats)
+	if err != nil {
+		t.Fatalf("error unmarshalling stats: %v", err)
+	}
+
+	sc, err := NewStatzCollectorOpts(
+		WithStats(WithStatsBatch{
+			GatewayStatzs: []*server.ServerAPIGatewayzResponse{stats},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("error creating statz collector: %v", err)
+	}
+
+	output := gatherStatzCollectorMetrics(t, sc)
+
+	// Based on TestSurveyor_Gatewayz
+	want := []string{
+		"nats_core_gatewayz_inbound_gateway_configured",
+		"nats_core_gatewayz_inbound_gateway_conn_idle_seconds",
+		"nats_core_gatewayz_inbound_gateway_conn_in_bytes",
+		"nats_core_gatewayz_inbound_gateway_conn_in_msgs",
+		"nats_core_gatewayz_inbound_gateway_conn_last_activity_seconds",
+		"nats_core_gatewayz_inbound_gateway_conn_out_bytes",
+		"nats_core_gatewayz_inbound_gateway_conn_out_msgs",
+		"nats_core_gatewayz_inbound_gateway_conn_pending_bytes",
+		"nats_core_gatewayz_inbound_gateway_conn_rtt",
+		"nats_core_gatewayz_inbound_gateway_conn_subscriptions",
+		"nats_core_gatewayz_inbound_gateway_conn_uptime_seconds",
+		"nats_core_gatewayz_outbound_gateway_configured",
+		"nats_core_gatewayz_outbound_gateway_conn_idle_seconds",
+		"nats_core_gatewayz_outbound_gateway_conn_in_bytes",
+		"nats_core_gatewayz_outbound_gateway_conn_in_msgs",
+		"nats_core_gatewayz_outbound_gateway_conn_last_activity_seconds",
+		"nats_core_gatewayz_outbound_gateway_conn_out_bytes",
+		"nats_core_gatewayz_outbound_gateway_conn_out_msgs",
+		"nats_core_gatewayz_outbound_gateway_conn_pending_bytes",
+		"nats_core_gatewayz_outbound_gateway_conn_rtt",
+		"nats_core_gatewayz_outbound_gateway_conn_subscriptions",
+		"nats_core_gatewayz_outbound_gateway_conn_uptime_seconds",
+	}
+	for _, m := range want {
+		if !strings.Contains(output, m) {
+			t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
+		}
+	}
+}
+
+func TestStatzCollector_WithStats_Jsz(t *testing.T) {
+	statsRaw, err := os.ReadFile("testdata/stats/jsz.json")
+	if err != nil {
+		t.Fatalf("error reading testdata: %v", err)
+	}
+	stats := &server.ServerAPIJszResponse{}
+	err = json.Unmarshal(statsRaw, stats)
+	if err != nil {
+		t.Fatalf("error unmarshalling stats: %v", err)
+	}
+
+	sc, err := NewStatzCollectorOpts(
+		WithStats(WithStatsBatch{
+			JsStatzs: []*server.ServerAPIJszResponse{stats},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("error creating statz collector: %v", err)
+	}
+
+	output := gatherStatzCollectorMetrics(t, sc)
+
+	want := []string{
+		"nats_core_jetstream_server_jetstream_disabled",
+		"nats_core_jetstream_server_total_streams",
+		"nats_core_jetstream_server_total_consumers",
+		"nats_core_jetstream_server_total_messages",
+		"nats_core_jetstream_server_total_message_bytes",
+		"nats_core_jetstream_server_max_memory",
+		"nats_core_jetstream_server_max_storage",
+	}
+	for _, m := range want {
+		if !strings.Contains(output, m) {
+			t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
 		}
 	}
 }
