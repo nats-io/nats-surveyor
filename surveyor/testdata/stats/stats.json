@@ -1,0 +1,131 @@
+{
+  "server": {
+    "name": "server1",
+    "host": "0.0.0.0",
+    "id": "server1",
+    "version": "2.11.0",
+    "jetstream": true,
+    "flags": 1
+  },
+  "statsz": {
+    "start": "2025-01-01T00:00:00Z",
+    "mem": 1024,
+    "cores": 2,
+    "cpu": 0.5,
+    "connections": 10,
+    "total_connections": 100,
+    "active_accounts": 10,
+    "num_subs": 100,
+    "sent": {
+      "bytes": 1024,
+      "msgs": 100
+    },
+    "received": {
+      "bytes": 1024,
+      "msgs": 100
+    },
+    "routes": [
+      {
+        "rid": 2,
+        "name": "server-2",
+        "sent": {
+          "bytes": 1024,
+          "msgs": 100
+        },
+        "received": {
+          "bytes": 1024,
+          "msgs": 100
+        },
+        "pending": 1
+      },
+      {
+        "rid": 3,
+        "name": "server-3",
+        "sent": {
+          "bytes": 1024,
+          "msgs": 100
+        },
+        "received": {
+          "bytes": 1024,
+          "msgs": 100
+        },
+        "pending": 1
+      }
+    ],
+    "gateways": [
+      {
+        "gwid": 1,
+        "name": "gateway1",
+        "sent": {
+          "bytes": 1024,
+          "msgs": 100
+        },
+        "received": {
+          "bytes": 1024,
+          "msgs": 100
+        },
+        "inbound_connections": 1
+      },
+      {
+        "gwid": 2,
+        "name": "gateway2",
+        "sent": {
+          "bytes": 1024,
+          "msgs": 100
+        },
+        "received": {
+          "bytes": 1024,
+          "msgs": 100
+        },
+        "inbound_connections": 1
+      }
+    ],
+    "active_servers": 3,
+    "jetstream": {
+      "config": {
+        "max_memory": 1024,
+        "max_storage": 1024,
+        "sync_interval": 1000,
+        "sync_always": true
+      },
+      "stats": {
+        "memory": 1024,
+        "storage": 1024,
+        "reserved_memory": 512,
+        "reserved_storage": 512,
+        "accounts": 10,
+        "ha_assets": 10,
+        "api": {
+          "level": 1,
+          "total": 1,
+          "errors": 0
+        }
+      },
+      "meta": {
+        "name": "meta",
+        "leader": "server1",
+        "peer": "server2",
+        "replicas": [
+          {
+            "name": "server2",
+            "current": true,
+            "offline": false,
+            "active": 1000,
+            "lag": 100,
+            "peer": "server2"
+          },
+          {
+            "name": "server3",
+            "current": false,
+            "offline": true,
+            "active": 1000,
+            "lag": 100,
+            "peer": "server3"
+          }
+        ],
+        "size": 3,
+        "pending": 0
+      }
+    }
+  }
+}

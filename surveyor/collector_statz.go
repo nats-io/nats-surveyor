@@ -35,6 +35,14 @@ import (
 // skip reporting account on a server after this many subsequent polls with 0 conns
 const accStatZeroConnSkip = 3
 
+type CollectJsz string
+
+const (
+	CollectJszAll       CollectJsz = "all"
+	CollectJszStreams   CollectJsz = "streams"
+	CollectJszConsumers CollectJsz = "consumers"
+)
+
 // statzDescs holds the metric descriptions
 type statzDescs struct {
 	Info             *prometheus.Desc
@@ -211,7 +219,7 @@ type StatzCollector struct {
 	collectAccounts         bool
 	collectAccountsDetailed bool
 	collectGatewayz         bool
-	collectJsz              string
+	collectJsz              CollectJsz
 	jszLeadersOnly          bool
 	jszFilterSet            map[JszFilter]bool
 	sysReqPrefix            string
@@ -606,34 +614,243 @@ func (sc *StatzCollector) buildDescs() {
 	}, []string{"expected"})
 }
 
+type StatzCollectorOpt func(sc *StatzCollector) error
+
+// ServerAPIAccstatzResponse is the response type for accstatz, defined here since nats-server doesn't export it
+type ServerAPIAccstatzResponse struct {
+	server.ServerAPIResponse
+	Data server.AccountStatz `json:"data,omitempty"`
+}
+
+func WithNATSConnection(nc *nats.Conn) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.nc = nc
+		if nc != nil {
+			sc.reply = nc.NewRespInbox()
+		}
+		return nil
+	}
+}
+
+func WithLogger(logger *logrus.Logger) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.logger = logger
+		return nil
+	}
+}
+
+func WithNumServers(numServers int) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.numServers = numServers
+		return nil
+	}
+}
+
+func WithServerDiscoveryWait(serverDiscoveryWait time.Duration) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.serverDiscoveryWait = serverDiscoveryWait
+		return nil
+	}
+}
+
+func WithPollTimeout(pollTimeout time.Duration) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.pollTimeout = pollTimeout
+		return nil
+	}
+}
+
+func WithCollectAccounts(collectAccounts bool, collectAccountsDetailed bool) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.collectAccounts = collectAccounts
+		sc.collectAccountsDetailed = collectAccountsDetailed
+		return nil
+	}
+}
+
+func WithCollectGatewayz(collectGatewayz bool) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.collectGatewayz = collectGatewayz
+		return nil
+	}
+}
+
+func WithCollectJsz(jsz CollectJsz, jszLeadersOnly bool, jszFilters []JszFilter) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.collectJsz = jsz
+		sc.jszLeadersOnly = jszLeadersOnly
+		for i := range jszFilters {
+			sc.jszFilterSet[jszFilters[i]] = true
+		}
+		return nil
+	}
+}
+
+func WithConstantLabels(constLabels prometheus.Labels) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.constLabels = constLabels
+		return nil
+	}
+}
+
+func WithSysRequestPrefix(prefix string) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		// Remove the potential wildcard users might place
+		// since we are simply prepending the string
+		prefix = strings.TrimSuffix(prefix, ".>")
+		if prefix == "" {
+			prefix = DefaultSysReqPrefix
+		}
+		sc.sysReqPrefix = prefix
+		return nil
+	}
+}
+
+type WithStatsBatch struct {
+	Stats         []*server.ServerStatsMsg
+	AccStatzs     []*ServerAPIAccstatzResponse
+	JsStatzs      []*server.ServerAPIJszResponse
+	GatewayStatzs []*server.ServerAPIGatewayzResponse
+}
+
+// WithStats lets you provide your own NATS Server responses for generating metrics.
+// If a NATS connection is provided, the collector will still poll for the stats and override the provided stats.
+func WithStats(batch WithStatsBatch) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		// Automatically set the collect flags for batch fields
+		if batch.AccStatzs != nil {
+			sc.collectAccounts = true
+			sc.collectAccountsDetailed = true
+		}
+		if batch.JsStatzs != nil {
+			sc.collectJsz = CollectJsz("all")
+		}
+		if batch.GatewayStatzs != nil {
+			sc.collectGatewayz = true
+		}
+
+		// statz
+		sc.stats = batch.Stats
+
+		// accstatz
+		accs := make(map[string][]*accStat)
+		for _, statz := range batch.AccStatzs {
+			for _, acc := range statz.Data.Accounts {
+				accInfo := accs[acc.Account]
+				accs[acc.Account] = append(accInfo, &accStat{
+					Server: statz.Server,
+					Data:   acc,
+				})
+			}
+		}
+
+		accStats := make(map[string]*accountStats)
+		for accID, stats := range accs {
+			sts := mapAccountStat(accID, stats)
+			accStats[accID] = sts
+		}
+
+		// js statz
+		sc.jsStats = make([]*jsStat, 0)
+		for _, statz := range batch.JsStatzs {
+			if statz.Data == nil {
+				continue
+			}
+			s := &jsStat{
+				Server: statz.Server,
+				Data:   statz.Data,
+			}
+			sc.jsStats = append(sc.jsStats, s)
+		}
+
+		// Combine jsz account, stream, and consumer details from all stats
+		jsAccInfos := make(map[string]*server.AccountDetail)
+		for _, jsStat := range sc.jsStats {
+			for _, acc := range jsStat.Data.AccountDetails {
+				accInfo, ok := jsAccInfos[acc.Id]
+				if !ok {
+					jsAccInfos[acc.Id] = acc
+					continue
+				}
+				mergeStreamDetails(accInfo, acc)
+				jsAccInfos[acc.Id] = acc
+			}
+		}
+
+		// Add jsz account details to accstatz
+		for accID, accDetail := range jsAccInfos {
+			sts := accStats[accID]
+			sts = mapJSAccountDetailToStats(accID, accDetail, sts)
+			accStats[accID] = sts
+		}
+
+		// Add jsz stream details to accstatz
+		for _, jsStat := range sc.jsStats {
+			for _, accDetail := range jsStat.Data.AccountDetails {
+				sts, ok := accStats[accDetail.Id]
+				if !ok {
+					continue
+				}
+				sts = mapJSStreamDetailToStats(jsStat.Server, accDetail, sts)
+				accStats[accDetail.Id] = sts
+			}
+		}
+
+		sc.accStats = make([]*accountStats, 0)
+		for _, acc := range accStats {
+			sc.accStats = append(sc.accStats, acc)
+		}
+
+		// gateway statz
+		sc.gatewayStatz = make([]*gatewayStatz, 0)
+		for _, statz := range batch.GatewayStatzs {
+			g := &gatewayStatz{
+				ServerAPIResponse: server.ServerAPIResponse{Server: statz.Server},
+				Data:              statz.Data,
+			}
+			sc.gatewayStatz = append(sc.gatewayStatz, g)
+		}
+
+		return nil
+	}
+}
+
 // NewStatzCollector creates a NATS Statz Collector.
+// Deprecated: NewStatzCollector is deprecated. Use NewStatzCollectorOpts instead.
 func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 	serverDiscoveryWait, pollTimeout time.Duration, accounts, accountsDetailed bool, gatewayz bool,
 	jsz string, jszLeadersOnly bool, jszFilters []JszFilter, sysReqPrefix string,
-	constLabels prometheus.Labels) *StatzCollector {
-	// Remove the potential wildcard users might place
-	// since we are simply prepending the string
-	sysReqPrefix = strings.TrimSuffix(sysReqPrefix, ".>")
-	if sysReqPrefix == "" {
-		sysReqPrefix = DefaultSysReqPrefix
-	}
+	constLabels prometheus.Labels,
+) *StatzCollector {
+	sc, _ := NewStatzCollectorOpts(
+		WithNATSConnection(nc),
+		WithLogger(logger),
+		WithNumServers(numServers),
+		WithServerDiscoveryWait(serverDiscoveryWait),
+		WithPollTimeout(pollTimeout),
+		WithCollectAccounts(accounts, accountsDetailed),
+		WithCollectGatewayz(gatewayz),
+		WithCollectJsz(CollectJsz(jsz), jszLeadersOnly, jszFilters),
+		WithConstantLabels(constLabels),
+		WithSysRequestPrefix(sysReqPrefix),
+	)
+	return sc
+}
 
+// NewStatzCollectorOpts creates a NATS Statz Collector with the given options.
+// It bubbles up the first error from the options.
+func NewStatzCollectorOpts(opts ...StatzCollectorOpt) (*StatzCollector, error) {
 	sc := &StatzCollector{
-		nc:                      nc,
-		logger:                  logger,
-		numServers:              numServers,
-		serverDiscoveryWait:     serverDiscoveryWait,
-		reply:                   nc.NewRespInbox(),
-		pollTimeout:             pollTimeout,
-		servers:                 make(map[string]bool),
-		doneCh:                  make(chan struct{}, 1),
-		collectAccounts:         accounts,
-		collectAccountsDetailed: accountsDetailed,
-		collectGatewayz:         gatewayz,
-		collectJsz:              jsz,
-		jszLeadersOnly:          jszLeadersOnly,
-		sysReqPrefix:            sysReqPrefix,
-		accStatZeroConn:         make(map[string]int),
+		// initialize
+		servers:         make(map[string]bool),
+		doneCh:          make(chan struct{}, 1),
+		accStatZeroConn: make(map[string]int),
+		jszFilterSet:    make(map[JszFilter]bool),
+
+		// defaults
+		numServers:          DefaultExpectedServers,
+		serverDiscoveryWait: DefaultServerResponseWait,
+		pollTimeout:         DefaultPollTimeout,
 
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
 		serverLabels:       []string{"server_cluster", "server_name", "server_id"},
@@ -643,18 +860,30 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 		gatewayzLabels:     []string{"server_id", "server_name", "gateway_name", "remote_gateway_name", "gateway_id", "cid"},
 		jsServerLabels:     []string{"server_id", "server_name", "cluster_name"},
 		jsServerInfoLabels: []string{"server_name", "server_host", "server_id", "server_cluster", "server_domain", "server_version", "server_jetstream"},
-		constLabels:        constLabels,
-		jszFilterSet:       make(map[JszFilter]bool),
 	}
-	for i := range jszFilters {
-		sc.jszFilterSet[jszFilters[i]] = true
+
+	for _, opt := range opts {
+		if err := opt(sc); err != nil {
+			return nil, err
+		}
 	}
+
+	if sc.nc != nil && len(sc.stats) > 0 {
+		return nil, fmt.Errorf("WithStats and WithNATSConnection are mutually exclusive")
+	}
+
 	sc.buildDescs()
+	sc.expectedCnt.WithLabelValues().Set(float64(sc.numServers))
 
-	sc.expectedCnt.WithLabelValues().Set(float64(numServers))
+	if sc.nc != nil {
+		sc.nc.Subscribe(sc.reply+".*", sc.handleStatzResponse)
+	}
 
-	nc.Subscribe(sc.reply+".*", sc.handleStatzResponse)
-	return sc
+	if sc.logger == nil {
+		sc.logger = logrus.New()
+	}
+
+	return sc, nil
 }
 
 func (sc *StatzCollector) newGatewayzDescs(gwType string, newPromDesc func(name, help string, labels []string) *prometheus.Desc) *gatewayzDescs {
@@ -836,10 +1065,10 @@ func (sc *StatzCollector) poll() error {
 	return nil
 }
 
-func shouldCollectJsz(setting string) (string, bool) {
-	jsz := strings.TrimSpace(strings.ToLower(setting))
+func shouldCollectJsz(setting CollectJsz) (CollectJsz, bool) {
+	jsz := strings.TrimSpace(strings.ToLower(string(setting)))
 	enabled := jsz == "all" || jsz == "streams" || jsz == "consumers"
-	return jsz, enabled
+	return CollectJsz(jsz), enabled
 }
 
 func (sc *StatzCollector) pollAccountInfo() error {
@@ -851,144 +1080,30 @@ func (sc *StatzCollector) pollAccountInfo() error {
 
 	accStats := make(map[string]*accountStats, len(accs))
 	for accID, stats := range accs {
-		accountName := ""
-		if len(stats) > 0 && stats[0].Data != nil {
-			accountName = stats[0].Data.Name
-		}
-		sts := &accountStats{
-			accountID:   accID,
-			accountName: accountName,
-			stats:       stats,
-		}
-
+		sts := mapAccountStat(accID, stats)
 		accStats[accID] = sts
 	}
 
-	accDetails, jsStats, jsData := sc.getJSInfos(nc)
+	accDetails, jsStats := sc.getJSInfos(nc)
 	for accID, accDetail := range accDetails {
-		sts, ok := accStats[accID]
-		// If no account stats returned, still report JS metrics
-		if !ok {
-			sts = &accountStats{
-				accountID:   accID,
-				accountName: accDetail.Name,
-			}
-		}
-		sts.jetstreamEnabled = 1.0
-		sts.jetstreamMemoryUsed = float64(accDetail.Memory)
-		sts.jetstreamStorageUsed = float64(accDetail.Store)
-		sts.jetstreamMemoryReserved = float64(accDetail.ReservedMemory)
-		sts.jetstreamStorageReserved = float64(accDetail.ReservedStore)
-		sts.jetstreamTieredMemoryUsed = make(map[int]float64)
-		sts.jetstreamTieredStorageUsed = make(map[int]float64)
-		sts.jetstreamTieredMemoryReserved = make(map[int]float64)
-		sts.jetstreamTieredStorageReserved = make(map[int]float64)
-
-		sts.jetstreamStreamCount = float64(len(accDetail.Streams))
-		for _, stream := range accDetail.Streams {
-			sts.jetstreamStreams = append(sts.jetstreamStreams, streamAccountStats{
-				streamName:    stream.Name,
-				raftGroup:     stream.RaftGroup,
-				consumerCount: float64(len(stream.Consumer)),
-				replicaCount:  float64(stream.Config.Replicas),
-			})
-
-			// computed tiered storage usage
-			used := float64(stream.State.Bytes)
-			var reserved float64
-			if stream.Config.MaxBytes > 0 {
-				reserved = float64(stream.Config.MaxBytes)
-			}
-			if stream.Config.Storage == server.MemoryStorage {
-				if _, ok = sts.jetstreamTieredMemoryUsed[stream.Config.Replicas]; ok {
-					sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] += used
-					sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] += reserved
-				} else {
-					sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] = used
-					sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] = reserved
-				}
-			} else if stream.Config.Storage == server.FileStorage {
-				if _, ok = sts.jetstreamTieredStorageUsed[stream.Config.Replicas]; ok {
-					sts.jetstreamTieredStorageUsed[stream.Config.Replicas] += used
-					sts.jetstreamTieredStorageReserved[stream.Config.Replicas] += reserved
-				} else {
-					sts.jetstreamTieredStorageUsed[stream.Config.Replicas] = used
-					sts.jetstreamTieredStorageReserved[stream.Config.Replicas] = reserved
-				}
-			}
-		}
+		sts := accStats[accID]
+		sts = mapJSAccountDetailToStats(accID, accDetail, sts)
 		accStats[accID] = sts
 	}
-	for _, jsz := range jsData {
-		for _, accDetail := range jsz.AccountDetails {
+	for _, jsStat := range jsStats {
+		for _, accDetail := range jsStat.Data.AccountDetails {
 			sts, ok := accStats[accDetail.Id]
 			if !ok {
 				continue
 			}
-			for _, stream := range accDetail.Streams {
-				var streamLeader string
-				if stream.Cluster != nil {
-					streamLeader = stream.Cluster.Leader
-				}
-				sas := streamAccountStats{
-					accountID:          accDetail.Id,
-					accountName:        accDetail.Name,
-					serverID:           jsz.ServerID,
-					serverName:         jsz.ServerName,
-					clusterName:        jsz.ClusterName,
-					streamName:         stream.Name,
-					raftGroup:          stream.RaftGroup,
-					consumerCount:      float64(stream.State.Consumers),
-					replicaCount:       float64(stream.Config.Replicas),
-					streamMessages:     float64(stream.State.Msgs),
-					streamBytes:        float64(stream.State.Bytes),
-					streamFirstSeq:     float64(stream.State.FirstSeq),
-					streamLastSeq:      float64(stream.State.LastSeq),
-					streamSubjectCount: float64(stream.State.NumSubjects),
-					streamLeader:       streamLeader,
-					consumerStats:      make([]*consumerStats, 0),
-				}
-
-				for _, consumer := range stream.Consumer {
-					var consumerLeader, raftGroup string
-					if consumer.Cluster != nil {
-						consumerLeader = consumer.Cluster.Leader
-						raftGroup = consumer.Cluster.RaftGroup
-					}
-					if raftGroup == "" {
-						// For R1 may need to find manually within the complete list
-						// of raft groups.
-						for _, cr := range stream.ConsumerRaftGroups {
-							if cr.Name == consumer.Name {
-								raftGroup = cr.RaftGroup
-								break
-							}
-						}
-					}
-					cs := consumerStats{
-						consumerName:                 consumer.Name,
-						consumerLeader:               consumerLeader,
-						consumerRaftGroup:            raftGroup,
-						consumerDeliveredConsumerSeq: float64(consumer.Delivered.Consumer),
-						consumerDeliveredStreamSeq:   float64(consumer.Delivered.Stream),
-						consumerNumAckPending:        float64(consumer.NumAckPending),
-						consumerNumRedelivered:       float64(consumer.NumRedelivered),
-						consumerNumWaiting:           float64(consumer.NumWaiting),
-						consumerNumPending:           float64(consumer.NumPending),
-						consumerAckFloorStreamSeq:    float64(consumer.AckFloor.Stream),
-						consumerAckFloorConsumerSeq:  float64(consumer.AckFloor.Consumer),
-					}
-					sas.consumerStats = append(sas.consumerStats, &cs)
-				}
-				sts.jszData = append(sts.jszData, sas)
-			}
+			sts = mapJSStreamDetailToStats(jsStat.Server, accDetail, sts)
 			accStats[accDetail.Id] = sts
 		}
 	}
 
 	sc.Lock()
 	sc.jsStats = jsStats
-	sc.accStats = make([]*accountStats, 0, len(accStats))
+	sc.accStats = make([]*accountStats, 0)
 	for _, acc := range accStats {
 		sc.accStats = append(sc.accStats, acc)
 	}
@@ -1010,17 +1125,10 @@ func (sc *StatzCollector) pollGatewayInfo() error {
 	return nil
 }
 
-type jsInfoData struct {
-	ServerID    string
-	ServerName  string
-	ClusterName string
-	*server.JSInfo
-}
-
-func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountDetail, []*jsStat, []*jsInfoData) {
+func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountDetail, []*jsStat) {
 	var opts server.JSzOptions
 	jsz, collectJsz := shouldCollectJsz(sc.collectJsz)
-	getConsumers := jsz == "consumers" || jsz == "all"
+	getConsumers := jsz == CollectJszConsumers || jsz == CollectJszAll
 	if sc.collectAccounts {
 		opts = server.JSzOptions{
 			Accounts:   true,
@@ -1040,8 +1148,6 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 	}
 
 	jss := make([]*jsStat, 0)
-	res := make([]*server.JSInfo, 0)
-	infos := make([]*jsInfoData, 0)
 	req, err := json.Marshal(opts)
 	if err != nil {
 		sc.logger.Warnf("Error marshaling request: %s", err)
@@ -1064,7 +1170,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 		if r.Error != nil {
 			if strings.Contains(r.Error.Description, "jetstream not enabled") {
 				// jetstream is not enabled on server
-				return nil, nil, nil
+				return nil, nil
 			}
 			continue
 		}
@@ -1072,16 +1178,14 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 			Server: r.Server,
 			Data:   &d,
 		})
-		res = append(res, &d)
-		infos = append(infos, &jsInfoData{r.Server.ID, r.Server.Name, r.Server.Cluster, &d})
-		if sc.numServers != -1 && len(res) == sc.numServers {
+		if sc.numServers != -1 && len(jss) == sc.numServers {
 			break
 		}
 	}
 
 	jsAccInfos := make(map[string]*server.AccountDetail)
-	for _, jsInfo := range res {
-		for _, acc := range jsInfo.AccountDetails {
+	for _, jsStat := range jss {
+		for _, acc := range jsStat.Data.AccountDetails {
 			accInfo, ok := jsAccInfos[acc.Id]
 			if !ok {
 				jsAccInfos[acc.Id] = acc
@@ -1092,7 +1196,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 		}
 	}
 
-	return jsAccInfos, jss, infos
+	return jsAccInfos, jss
 }
 
 type accStatz struct {
@@ -1416,11 +1520,13 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		timer := prometheus.NewTimer(sc.pollTime.WithLabelValues())
 
 		// poll the servers
-		if err := sc.poll(); err != nil {
-			sc.logger.Warnf("Error polling NATS server: %v", err)
-			sc.pollErrCnt.WithLabelValues().Inc()
-			metrics.newGaugeMetric(sc.natsUp, 0, nil)
-			return metrics.metrics, nil
+		if sc.nc != nil {
+			if err := sc.poll(); err != nil {
+				sc.logger.Warnf("Error polling NATS server: %v", err)
+				sc.pollErrCnt.WithLabelValues().Inc()
+				metrics.newGaugeMetric(sc.natsUp, 0, nil)
+				return metrics.metrics, nil
+			}
 		}
 
 		// lock the stats
@@ -1914,4 +2020,139 @@ func unmarshalMsg(msg *nats.Msg, v any) error {
 	}
 
 	return json.Unmarshal(data, v)
+}
+
+// mapAccountStat creates account stats from the server account statz response.
+func mapAccountStat(accID string, stats []*accStat) *accountStats {
+	accountName := ""
+	if len(stats) > 0 && stats[0].Data != nil {
+		accountName = stats[0].Data.Name
+	}
+	sts := &accountStats{
+		accountID:   accID,
+		accountName: accountName,
+		stats:       stats,
+	}
+	return sts
+}
+
+// mapJSAccountDetail creates or updates account stats from the server JS Info response.
+func mapJSAccountDetailToStats(accID string, accDetail *server.AccountDetail, sts *accountStats) *accountStats {
+	// If no account stats returned, still report JS metrics
+	if sts == nil {
+		sts = &accountStats{
+			accountID:   accID,
+			accountName: accDetail.Name,
+		}
+	}
+
+	sts.jetstreamEnabled = 1.0
+	sts.jetstreamMemoryUsed = float64(accDetail.Memory)
+	sts.jetstreamStorageUsed = float64(accDetail.Store)
+	sts.jetstreamMemoryReserved = float64(accDetail.ReservedMemory)
+	sts.jetstreamStorageReserved = float64(accDetail.ReservedStore)
+	sts.jetstreamTieredMemoryUsed = make(map[int]float64)
+	sts.jetstreamTieredStorageUsed = make(map[int]float64)
+	sts.jetstreamTieredMemoryReserved = make(map[int]float64)
+	sts.jetstreamTieredStorageReserved = make(map[int]float64)
+
+	sts.jetstreamStreamCount = float64(len(accDetail.Streams))
+	for _, stream := range accDetail.Streams {
+		sts.jetstreamStreams = append(sts.jetstreamStreams, streamAccountStats{
+			streamName:    stream.Name,
+			raftGroup:     stream.RaftGroup,
+			consumerCount: float64(len(stream.Consumer)),
+			replicaCount:  float64(stream.Config.Replicas),
+		})
+
+		// computed tiered storage usage
+		used := float64(stream.State.Bytes)
+		var reserved float64
+		if stream.Config.MaxBytes > 0 {
+			reserved = float64(stream.Config.MaxBytes)
+		}
+		if stream.Config.Storage == server.MemoryStorage {
+			if _, ok := sts.jetstreamTieredMemoryUsed[stream.Config.Replicas]; ok {
+				sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] += used
+				sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] += reserved
+			} else {
+				sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] = used
+				sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] = reserved
+			}
+		} else if stream.Config.Storage == server.FileStorage {
+			if _, ok := sts.jetstreamTieredStorageUsed[stream.Config.Replicas]; ok {
+				sts.jetstreamTieredStorageUsed[stream.Config.Replicas] += used
+				sts.jetstreamTieredStorageReserved[stream.Config.Replicas] += reserved
+			} else {
+				sts.jetstreamTieredStorageUsed[stream.Config.Replicas] = used
+				sts.jetstreamTieredStorageReserved[stream.Config.Replicas] = reserved
+			}
+		}
+	}
+	return sts
+}
+
+// mapJSStreamDetailToStats updates account stats with JS stream detail from the server response.
+func mapJSStreamDetailToStats(server *server.ServerInfo, accDetail *server.AccountDetail, sts *accountStats) *accountStats {
+	if sts == nil {
+		return nil
+	}
+	for _, stream := range accDetail.Streams {
+		var streamLeader string
+		if stream.Cluster != nil {
+			streamLeader = stream.Cluster.Leader
+		}
+		sas := streamAccountStats{
+			accountID:          accDetail.Id,
+			accountName:        accDetail.Name,
+			serverID:           server.ID,
+			serverName:         server.Name,
+			clusterName:        server.Cluster,
+			streamName:         stream.Name,
+			raftGroup:          stream.RaftGroup,
+			consumerCount:      float64(stream.State.Consumers),
+			replicaCount:       float64(stream.Config.Replicas),
+			streamMessages:     float64(stream.State.Msgs),
+			streamBytes:        float64(stream.State.Bytes),
+			streamFirstSeq:     float64(stream.State.FirstSeq),
+			streamLastSeq:      float64(stream.State.LastSeq),
+			streamSubjectCount: float64(stream.State.NumSubjects),
+			streamLeader:       streamLeader,
+			consumerStats:      make([]*consumerStats, 0),
+		}
+
+		for _, consumer := range stream.Consumer {
+			var consumerLeader, raftGroup string
+			if consumer.Cluster != nil {
+				consumerLeader = consumer.Cluster.Leader
+				raftGroup = consumer.Cluster.RaftGroup
+			}
+			if raftGroup == "" {
+				// For R1 may need to find manually within the complete list
+				// of raft groups.
+				for _, cr := range stream.ConsumerRaftGroups {
+					if cr.Name == consumer.Name {
+						raftGroup = cr.RaftGroup
+						break
+					}
+				}
+			}
+			cs := consumerStats{
+				consumerName:                 consumer.Name,
+				consumerLeader:               consumerLeader,
+				consumerRaftGroup:            raftGroup,
+				consumerDeliveredConsumerSeq: float64(consumer.Delivered.Consumer),
+				consumerDeliveredStreamSeq:   float64(consumer.Delivered.Stream),
+				consumerNumAckPending:        float64(consumer.NumAckPending),
+				consumerNumRedelivered:       float64(consumer.NumRedelivered),
+				consumerNumWaiting:           float64(consumer.NumWaiting),
+				consumerNumPending:           float64(consumer.NumPending),
+				consumerAckFloorStreamSeq:    float64(consumer.AckFloor.Stream),
+				consumerAckFloorConsumerSeq:  float64(consumer.AckFloor.Consumer),
+			}
+			sas.consumerStats = append(sas.consumerStats, &cs)
+		}
+		sts.jszData = append(sts.jszData, sas)
+	}
+	return sts
 }
