@@ -145,10 +145,10 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 	}
 
 	serviceObsMetrics := NewServiceObservationMetrics(promRegistry, opts.ConstLabels)
-	serviceObsManager := newServiceObservationManager(opts.Provider, opts.Logger, serviceObsMetrics)
+	serviceObsManager := NewServiceObservationManager(opts.Provider, opts.Logger, serviceObsMetrics)
 	serviceFsWatcher := newServiceObservationFSWatcher(opts.Logger, serviceObsManager)
 	jsAdvisoryMetrics := NewJetStreamAdvisoryMetrics(promRegistry, opts.ConstLabels)
-	jsAdvisoryManager := newJetStreamAdvisoryManager(opts.Provider, opts.Logger, jsAdvisoryMetrics)
+	jsAdvisoryManager := NewJetStreamAdvisoryManager(opts.Provider, opts.Logger, jsAdvisoryMetrics)
 	jsFsWatcher := newJetStreamAdvisoryFSWatcher(opts.Logger, jsAdvisoryManager)
 
 	return &Surveyor{
@@ -397,7 +397,7 @@ func (s *Surveyor) startJetStreamAdvisories() {
 		return
 	}
 
-	s.jsAdvisoryManager.start()
+	s.jsAdvisoryManager.Start()
 	dir := s.opts.JetStreamConfigDir
 	if dir == "" {
 		s.logger.Debugln("skipping JetStream advisory startup, no directory configured")
@@ -431,7 +431,7 @@ func (s *Surveyor) startServiceObservations() {
 		return
 	}
 
-	s.serviceObsManager.start()
+	s.serviceObsManager.Start()
 	dir := s.opts.ObservationConfigDir
 	if dir == "" {
 		s.logger.Debugln("skipping service observation startup, no directory configured")
@@ -547,10 +547,10 @@ func (s *Surveyor) Stop() {
 	}
 
 	s.serviceObsFSWatcher.stop()
-	s.serviceObsManager.stop()
+	s.serviceObsManager.Stop()
 
 	s.jsAdvisoryFSWatcher.stop()
-	s.jsAdvisoryManager.stop()
+	s.jsAdvisoryManager.Stop()
 
 	s.connProvider.Close(true)
 	s.running = false
