@@ -607,8 +607,8 @@ type JSAdvisoryManager struct {
 	metrics     *JSAdvisoryMetrics
 }
 
-// newJetStreamAdvisoryManager creates a JSAdvisoryManager for managing JetStream advisories
-func newJetStreamAdvisoryManager(provider ConnProvider, logger *logrus.Logger, metrics *JSAdvisoryMetrics) *JSAdvisoryManager {
+// NewJetStreamAdvisoryManager creates a JSAdvisoryManager for managing JetStream advisories
+func NewJetStreamAdvisoryManager(provider ConnProvider, logger *logrus.Logger, metrics *JSAdvisoryMetrics) *JSAdvisoryManager {
 	return &JSAdvisoryManager{
 		provider: provider,
 		logger:   logger,
@@ -616,7 +616,7 @@ func newJetStreamAdvisoryManager(provider ConnProvider, logger *logrus.Logger, m
 	}
 }
 
-func (am *JSAdvisoryManager) start() {
+func (am *JSAdvisoryManager) Start() {
 	am.Lock()
 	defer am.Unlock()
 	if am.listenerMap != nil {
@@ -634,7 +634,7 @@ func (am *JSAdvisoryManager) IsRunning() bool {
 	return am.listenerMap != nil
 }
 
-func (am *JSAdvisoryManager) stop() {
+func (am *JSAdvisoryManager) Stop() {
 	am.Lock()
 	defer am.Unlock()
 	if am.listenerMap == nil {

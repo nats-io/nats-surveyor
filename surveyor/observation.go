@@ -408,8 +408,8 @@ type ServiceObsManager struct {
 	metrics     *ServiceObsMetrics
 }
 
-// newServiceObservationManager creates a ServiceObsManager for managing Service Observations
-func newServiceObservationManager(provider ConnProvider, logger *logrus.Logger, metrics *ServiceObsMetrics) *ServiceObsManager {
+// NewServiceObservationManager creates a ServiceObsManager for managing Service Observations
+func NewServiceObservationManager(provider ConnProvider, logger *logrus.Logger, metrics *ServiceObsMetrics) *ServiceObsManager {
 	return &ServiceObsManager{
 		provider: provider,
 		logger:   logger,
@@ -417,7 +417,7 @@ func newServiceObservationManager(provider ConnProvider, logger *logrus.Logger, 
 	}
 }
 
-func (om *ServiceObsManager) start() {
+func (om *ServiceObsManager) Start() {
 	om.Lock()
 	defer om.Unlock()
 	if om.listenerMap != nil {
@@ -435,7 +435,7 @@ func (om *ServiceObsManager) IsRunning() bool {
 	return om.listenerMap != nil
 }
 
-func (om *ServiceObsManager) stop() {
+func (om *ServiceObsManager) Stop() {
 	om.Lock()
 	defer om.Unlock()
 	if om.listenerMap == nil {
