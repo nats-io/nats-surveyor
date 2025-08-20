@@ -220,6 +220,7 @@ type StatzCollector struct {
 	collectAccountsDetailed bool
 	collectGatewayz         bool
 	collectJsz              CollectJsz
+	jszLimit                int
 	jszLeadersOnly          bool
 	jszFilterSet            map[JszFilter]bool
 	sysReqPrefix            string
@@ -686,6 +687,13 @@ func WithCollectJsz(jsz CollectJsz, jszLeadersOnly bool, jszFilters []JszFilter)
 	}
 }
 
+func WithJszLimit(jszLimit int) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.jszLimit = jszLimit
+		return nil
+	}
+}
+
 func WithConstantLabels(constLabels prometheus.Labels) StatzCollectorOpt {
 	return func(sc *StatzCollector) error {
 		sc.constLabels = constLabels
@@ -851,6 +859,7 @@ func NewStatzCollectorOpts(opts ...StatzCollectorOpt) (*StatzCollector, error) {
 		numServers:          DefaultExpectedServers,
 		serverDiscoveryWait: DefaultServerResponseWait,
 		pollTimeout:         DefaultPollTimeout,
+		jszLimit:            -1,
 
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
 		serverLabels:       []string{"server_cluster", "server_name", "server_id"},
@@ -1135,6 +1144,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 			Streams:    true,
 			Consumer:   true,
 			Config:     true,
+			Limit:      sc.jszLimit,
 			RaftGroups: true,
 		}
 	} else if collectJsz {
@@ -1143,6 +1153,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 			Streams:    true,
 			Consumer:   getConsumers,
 			Config:     true,
+			Limit:      sc.jszLimit,
 			RaftGroups: true,
 		}
 	}
