@@ -919,3 +919,11 @@ func TestSurveyor_AdvisoriesWatcher(t *testing.T) {
 		waitForAdvUpdate(t, am, expectedAdvisories)
 	})
 }
+
+func TestSurveyor_AdvisoriesMetrics(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	metrics := NewJetStreamAdvisoryMetrics(registry, testMetricInfoLabels)
+
+	infos := metrics.MetricInfos()
+	assertMetricInfos(t, infos)
+}

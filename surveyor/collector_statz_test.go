@@ -203,6 +203,24 @@ func TestStatzCollector_WithStats_Jsz(t *testing.T) {
 	}
 }
 
+func TestStatzCollector_MetricInfos(t *testing.T) {
+	sc, err := NewStatzCollectorOpts(
+		WithStats(WithStatsBatch{
+			Stats:         []*server.ServerStatsMsg{},
+			GatewayStatzs: []*server.ServerAPIGatewayzResponse{},
+			JsStatzs:      []*server.ServerAPIJszResponse{},
+			AccStatzs:     []*ServerAPIAccstatzResponse{},
+		}),
+		WithConstantLabels(testMetricInfoLabels),
+	)
+	if err != nil {
+		t.Fatalf("error creating statz collector: %v", err)
+	}
+
+	infos := sc.MetricInfos()
+	assertMetricInfos(t, infos)
+}
+
 func gatherStatzCollectorMetrics(t *testing.T, sc *StatzCollector) string {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(sc)
