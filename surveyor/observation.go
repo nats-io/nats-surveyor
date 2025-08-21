@@ -58,57 +58,57 @@ func NewServiceObservationMetrics(registry *prometheus.Registry, constLabels pro
 		observationsReceived: newCounterVec(
 			prometheus.BuildFQName("nats", "latency", "observations_received_count"),
 			"Number of observations received by this surveyor across all services",
-			[]string{"service", "app", "account"},
 			constLabels,
+			[]string{"service", "app", "account"},
 		),
 
 		serviceRequestStatus: newCounterVec(
 			prometheus.BuildFQName("nats", "latency", "observation_status_count"),
 			"The status result codes for requests to a service",
-			[]string{"service", "status", "account"},
 			constLabels,
+			[]string{"service", "status", "account"},
 		),
 
 		invalidObservationsReceived: newCounterVec(
 			prometheus.BuildFQName("nats", "latency", "observation_error_count"),
 			"Number of observations received by this surveyor across all services that could not be handled",
-			[]string{"service", "account"},
 			constLabels,
+			[]string{"service", "account"},
 		),
 
 		serviceLatency: newHistogramVec(
 			prometheus.BuildFQName("nats", "latency", "service_duration"),
 			"Time spent serving the request in the service",
-			[]string{"service", "app", "account"},
 			constLabels,
+			[]string{"service", "app", "account"},
 		),
 
 		totalLatency: newHistogramVec(
 			prometheus.BuildFQName("nats", "latency", "total_duration"),
 			"Total time spent serving a service including network overheads",
-			[]string{"service", "app", "account"},
 			constLabels,
+			[]string{"service", "app", "account"},
 		),
 
 		requestorRTT: newHistogramVec(
 			prometheus.BuildFQName("nats", "latency", "requestor_rtt"),
 			"The RTT to the client making a request",
-			[]string{"service", "app", "account"},
 			constLabels,
+			[]string{"service", "app", "account"},
 		),
 
 		responderRTT: newHistogramVec(
 			prometheus.BuildFQName("nats", "latency", "responder_rtt"),
 			"The RTT to the service serving the request",
-			[]string{"service", "app", "account"},
 			constLabels,
+			[]string{"service", "app", "account"},
 		),
 
 		systemRTT: newHistogramVec(
 			prometheus.BuildFQName("nats", "latency", "system_rtt"),
 			"The RTT within the NATS system - time traveling clusters, gateways and leaf nodes",
-			[]string{"service", "app", "account"},
 			constLabels,
+			[]string{"service", "app", "account"},
 		),
 	}
 

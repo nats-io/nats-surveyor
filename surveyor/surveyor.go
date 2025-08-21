@@ -164,6 +164,14 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 	}, nil
 }
 
+func (s *Surveyor) MetricInfos() []MetricInfo {
+	infos := make([]MetricInfo, 0)
+	infos = append(infos, s.statzC.MetricInfos()...)
+	infos = append(infos, s.serviceObsManager.metrics.MetricInfos()...)
+	infos = append(infos, s.jsAdvisoryManager.metrics.MetricInfos()...)
+	return infos
+}
+
 func newSurveyorConnPool(opts *Options, registry *prometheus.Registry) *natsConnPool {
 	natsDefaults := &natsContextDefaults{
 		Name:    opts.Name,
