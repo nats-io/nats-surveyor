@@ -35,72 +35,81 @@ import (
 )
 
 type ServiceObsMetrics struct {
-	observationsGauge           prometheus.Gauge
-	observationsReceived        *prometheus.CounterVec
-	serviceRequestStatus        *prometheus.CounterVec
-	invalidObservationsReceived *prometheus.CounterVec
-	serviceLatency              *prometheus.HistogramVec
-	totalLatency                *prometheus.HistogramVec
-	requestorRTT                *prometheus.HistogramVec
-	responderRTT                *prometheus.HistogramVec
-	systemRTT                   *prometheus.HistogramVec
+	observationsGauge *Gauge
+
+	observationsReceived        *CounterVec
+	serviceRequestStatus        *CounterVec
+	invalidObservationsReceived *CounterVec
+	serviceLatency              *HistogramVec
+	totalLatency                *HistogramVec
+	requestorRTT                *HistogramVec
+	responderRTT                *HistogramVec
+	systemRTT                   *HistogramVec
 }
 
 func NewServiceObservationMetrics(registry *prometheus.Registry, constLabels prometheus.Labels) *ServiceObsMetrics {
 	metrics := &ServiceObsMetrics{
-		observationsGauge: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name:        prometheus.BuildFQName("nats", "latency", "observations_count"),
-			Help:        "Number of Service Latency listeners that are running",
-			ConstLabels: constLabels,
-		}),
+		observationsGauge: newGauge(
+			prometheus.BuildFQName("nats", "latency", "observations_count"),
+			"Number of Service Latency listeners that are running",
+			constLabels,
+		),
 
-		observationsReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name:        prometheus.BuildFQName("nats", "latency", "observations_received_count"),
-			Help:        "Number of observations received by this surveyor across all services",
-			ConstLabels: constLabels,
-		}, []string{"service", "app", "account"}),
+		observationsReceived: newCounterVec(
+			prometheus.BuildFQName("nats", "latency", "observations_received_count"),
+			"Number of observations received by this surveyor across all services",
+			[]string{"service", "app", "account"},
+			constLabels,
+		),
 
-		serviceRequestStatus: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name:        prometheus.BuildFQName("nats", "latency", "observation_status_count"),
-			Help:        "The status result codes for requests to a service",
-			ConstLabels: constLabels,
-		}, []string{"service", "status", "account"}),
+		serviceRequestStatus: newCounterVec(
+			prometheus.BuildFQName("nats", "latency", "observation_status_count"),
+			"The status result codes for requests to a service",
+			[]string{"service", "status", "account"},
+			constLabels,
+		),
 
-		invalidObservationsReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name:        prometheus.BuildFQName("nats", "latency", "observation_error_count"),
-			Help:        "Number of observations received by this surveyor across all services that could not be handled",
-			ConstLabels: constLabels,
-		}, []string{"service", "account"}),
+		invalidObservationsReceived: newCounterVec(
+			prometheus.BuildFQName("nats", "latency", "observation_error_count"),
+			"Number of observations received by this surveyor across all services that could not be handled",
+			[]string{"service", "account"},
+			constLabels,
+		),
 
-		serviceLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:        prometheus.BuildFQName("nats", "latency", "service_duration"),
-			Help:        "Time spent serving the request in the service",
-			ConstLabels: constLabels,
-		}, []string{"service", "app", "account"}),
+		serviceLatency: newHistogramVec(
+			prometheus.BuildFQName("nats", "latency", "service_duration"),
+			"Time spent serving the request in the service",
+			[]string{"service", "app", "account"},
+			constLabels,
+		),
 
-		totalLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:        prometheus.BuildFQName("nats", "latency", "total_duration"),
-			Help:        "Total time spent serving a service including network overheads",
-			ConstLabels: constLabels,
-		}, []string{"service", "app", "account"}),
+		totalLatency: newHistogramVec(
+			prometheus.BuildFQName("nats", "latency", "total_duration"),
+			"Total time spent serving a service including network overheads",
+			[]string{"service", "app", "account"},
+			constLabels,
+		),
 
-		requestorRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:        prometheus.BuildFQName("nats", "latency", "requestor_rtt"),
-			Help:        "The RTT to the client making a request",
-			ConstLabels: constLabels,
-		}, []string{"service", "app", "account"}),
+		requestorRTT: newHistogramVec(
+			prometheus.BuildFQName("nats", "latency", "requestor_rtt"),
+			"The RTT to the client making a request",
+			[]string{"service", "app", "account"},
+			constLabels,
+		),
 
-		responderRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:        prometheus.BuildFQName("nats", "latency", "responder_rtt"),
-			Help:        "The RTT to the service serving the request",
-			ConstLabels: constLabels,
-		}, []string{"service", "app", "account"}),
+		responderRTT: newHistogramVec(
+			prometheus.BuildFQName("nats", "latency", "responder_rtt"),
+			"The RTT to the service serving the request",
+			[]string{"service", "app", "account"},
+			constLabels,
+		),
 
-		systemRTT: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:        prometheus.BuildFQName("nats", "latency", "system_rtt"),
-			Help:        "The RTT within the NATS system - time traveling clusters, gateways and leaf nodes",
-			ConstLabels: constLabels,
-		}, []string{"service", "app", "account"}),
+		systemRTT: newHistogramVec(
+			prometheus.BuildFQName("nats", "latency", "system_rtt"),
+			"The RTT within the NATS system - time traveling clusters, gateways and leaf nodes",
+			[]string{"service", "app", "account"},
+			constLabels,
+		),
 	}
 
 	registry.MustRegister(metrics.invalidObservationsReceived)
@@ -114,6 +123,21 @@ func NewServiceObservationMetrics(registry *prometheus.Registry, constLabels pro
 	registry.MustRegister(metrics.observationsGauge)
 
 	return metrics
+}
+
+// MetricInfos returns metadata about the metrics used by ServiceObsMetrics
+func (s *ServiceObsMetrics) MetricInfos() []MetricInfo {
+	return []MetricInfo{
+		s.observationsGauge,
+		s.observationsReceived,
+		s.serviceRequestStatus,
+		s.invalidObservationsReceived,
+		s.serviceLatency,
+		s.totalLatency,
+		s.requestorRTT,
+		s.responderRTT,
+		s.systemRTT,
+	}
 }
 
 // ServiceObsConfig is used to configure service observations
