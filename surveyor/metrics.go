@@ -74,53 +74,6 @@ func (m *genericMetric) Desc() *prometheus.Desc {
 	return prometheus.NewDesc(m.name, m.help, nil, m.constLabels)
 }
 
-type Counter struct {
-	prometheus.Counter
-	name        string
-	help        string
-	constLabels prometheus.Labels
-}
-
-var _ Metric = &Counter{}
-
-func newCounter(name string, help string, constLabels prometheus.Labels) *Counter {
-	metric := prometheus.NewCounter(prometheus.CounterOpts{
-		Name:        name,
-		Help:        help,
-		ConstLabels: constLabels,
-	})
-	return &Counter{
-		Counter:     metric,
-		name:        name,
-		help:        help,
-		constLabels: constLabels,
-	}
-}
-
-func (c *Counter) Metric() prometheus.Metric {
-	return c.Counter
-}
-
-func (c *Counter) Name() string {
-	return c.name
-}
-
-func (c *Counter) Help() string {
-	return c.help
-}
-
-func (c *Counter) Type() dto.MetricType {
-	return dto.MetricType_COUNTER
-}
-
-func (c *Counter) ConstLabels() prometheus.Labels {
-	return c.constLabels
-}
-
-func (c *Counter) Desc() *prometheus.Desc {
-	return prometheus.NewDesc(c.name, c.help, nil, c.constLabels)
-}
-
 type Gauge struct {
 	prometheus.Gauge
 	name        string

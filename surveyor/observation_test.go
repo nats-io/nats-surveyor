@@ -29,7 +29,6 @@ import (
 	"github.com/nats-io/nuid"
 	"github.com/prometheus/client_golang/prometheus"
 	ptu "github.com/prometheus/client_golang/prometheus/testutil"
-	dto "github.com/prometheus/client_model/go"
 )
 
 func TestServiceObservation_Load(t *testing.T) {
@@ -848,33 +847,8 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 
 func TestSurveyor_ObservationMetrics(t *testing.T) {
 	registry := prometheus.NewRegistry()
-	metrics := NewServiceObservationMetrics(registry, prometheus.Labels{"foo": "bar"})
+	metrics := NewServiceObservationMetrics(registry, testMetricInfoLabels)
 
 	infos := metrics.MetricInfos()
-	if len(infos) == 0 {
-		t.Fatal("error getting metric infos: infos is empty")
-	}
-
-	for _, info := range infos {
-		if info.Name() == "" {
-			t.Fatalf("error getting metric infos: name is empty: %s", info.Name())
-		}
-		if info.Help() == "" {
-			t.Fatalf("error getting metric infos: help is empty: %s", info.Name())
-		}
-		if info.Type() == dto.MetricType_UNTYPED {
-			t.Fatalf("error getting metric infos: type is untyped: %s", info.Name())
-		}
-		if info.Desc() == nil {
-			t.Fatalf("error getting metric infos: desc is nil: %s", info.Name())
-		}
-
-		labels := info.ConstLabels()
-		if len(labels) != 1 {
-			t.Fatalf("error getting metric infos: expected 1 label, got %d: %s", len(labels), info.Name())
-		}
-		if labels["foo"] != "bar" {
-			t.Fatalf("error getting metric infos: expected label foo=bar, got %+v: %s", labels, info.Name())
-		}
-	}
+	assertMetricInfos(t, infos)
 }
