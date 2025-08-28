@@ -53,7 +53,7 @@ type statzDescs struct {
 	CPU              *GaugeVec
 	Connections      *GaugeVec
 	TotalConnections *CounterVec
-	ActiveAccounts   *CounterVec
+	ActiveAccounts   *GaugeVec
 	NumSubs          *GaugeVec
 	SentMsgs         *CounterVec
 	SentBytes        *CounterVec
@@ -116,12 +116,12 @@ type statzDescs struct {
 	JetstreamServerMaxStorage *GaugeVec
 
 	// Account scope metrics
-	accCount             *CounterVec
-	accConnCount         *CounterVec
-	accTotalConnCount    *CounterVec
-	accLeafCount         *CounterVec
-	accSubCount          *CounterVec
-	accSlowConsumerCount *CounterVec
+	accCount             *GaugeVec
+	accConnCount         *GaugeVec
+	accTotalConnCount    *GaugeVec
+	accLeafCount         *GaugeVec
+	accSubCount          *GaugeVec
+	accSlowConsumerCount *GaugeVec
 
 	// Bytes and messages sent and received
 	accBytesSent        *CounterVec
@@ -356,7 +356,7 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.CPU = newGaugeVec(newName("cpu_percentage"), "Server cpu utilization gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.Connections = newGaugeVec(newName("connection_count"), "Current number of client connections gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.TotalConnections = newCounterVec(newName("total_connection_count"), "Total number of client connections serviced counter", sc.constLabels, sc.serverLabels)
-	sc.descs.ActiveAccounts = newCounterVec(newName("active_account_count"), "Number of active accounts gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.ActiveAccounts = newGaugeVec(newName("active_account_count"), "Number of active accounts gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.NumSubs = newGaugeVec(newName("subs_count"), "Current number of subscriptions gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.SentMsgs = newCounterVec(newName("sent_msgs_count"), "Number of messages sent counter", sc.constLabels, sc.serverLabels)
 	sc.descs.SentBytes = newCounterVec(newName("sent_bytes"), "Number of bytes sent counter", sc.constLabels, sc.serverLabels)
@@ -436,14 +436,14 @@ func (sc *StatzCollector) buildDescs() {
 	if sc.collectAccounts || collectJsz {
 		accLabel := []string{"account", "account_name"}
 		serverAndAccLabel := append(sc.serverLabels, accLabel...)
-		sc.descs.accCount = newCounterVec(newName("account_count"), "The number of accounts detected", sc.constLabels, nil)
+		sc.descs.accCount = newGaugeVec(newName("account_count"), "The number of accounts detected", sc.constLabels, nil)
 
 		// Metrics reported per-server
-		sc.descs.accConnCount = newCounterVec(newName("account_conn_count"), "The number of client connections to this account", sc.constLabels, serverAndAccLabel)
-		sc.descs.accTotalConnCount = newCounterVec(newName("account_total_conn_count"), "The combined current number of client and leafnode connections to this account", sc.constLabels, serverAndAccLabel)
-		sc.descs.accLeafCount = newCounterVec(newName("account_leaf_count"), "The number of leafnode connections to this account", sc.constLabels, serverAndAccLabel)
-		sc.descs.accSubCount = newCounterVec(newName("account_sub_count"), "The number of subscriptions on this account", sc.constLabels, serverAndAccLabel)
-		sc.descs.accSlowConsumerCount = newCounterVec(newName("account_slow_consumer_count"), "The number of slow consumers detected in this account", sc.constLabels, serverAndAccLabel)
+		sc.descs.accConnCount = newGaugeVec(newName("account_conn_count"), "The number of client connections to this account", sc.constLabels, serverAndAccLabel)
+		sc.descs.accTotalConnCount = newGaugeVec(newName("account_total_conn_count"), "The combined current number of client and leafnode connections to this account", sc.constLabels, serverAndAccLabel)
+		sc.descs.accLeafCount = newGaugeVec(newName("account_leaf_count"), "The number of leafnode connections to this account", sc.constLabels, serverAndAccLabel)
+		sc.descs.accSubCount = newGaugeVec(newName("account_sub_count"), "The number of subscriptions on this account", sc.constLabels, serverAndAccLabel)
+		sc.descs.accSlowConsumerCount = newGaugeVec(newName("account_slow_consumer_count"), "The number of slow consumers detected in this account", sc.constLabels, serverAndAccLabel)
 
 		sc.descs.accBytesSent = newCounterVec(newName("account_bytes_sent"), "The number of bytes sent on this account across all connections", sc.constLabels, serverAndAccLabel)
 		sc.descs.accBytesRecv = newCounterVec(newName("account_bytes_recv"), "The number of bytes received on this account across all connections", sc.constLabels, serverAndAccLabel)
@@ -1611,7 +1611,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			metrics.newGaugeMetric(sc.descs.CPU, sm.Stats.CPU, labels)
 			metrics.newGaugeMetric(sc.descs.Connections, float64(sm.Stats.Connections), labels)
 			metrics.newCounterMetric(sc.descs.TotalConnections, float64(sm.Stats.TotalConnections), labels)
-			metrics.newCounterMetric(sc.descs.ActiveAccounts, float64(sm.Stats.ActiveAccounts), labels)
+			metrics.newGaugeMetric(sc.descs.ActiveAccounts, float64(sm.Stats.ActiveAccounts), labels)
 			metrics.newGaugeMetric(sc.descs.NumSubs, float64(sm.Stats.NumSubs), labels)
 			metrics.newCounterMetric(sc.descs.SentMsgs, float64(sm.Stats.Sent.Msgs), labels)
 			metrics.newCounterMetric(sc.descs.SentBytes, float64(sm.Stats.Sent.Bytes), labels)
@@ -1710,16 +1710,16 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		// Account scope metrics
 		_, collectJsz := shouldCollectJsz(sc.collectJsz)
 		if sc.collectAccounts || collectJsz {
-			metrics.newCounterMetric(sc.descs.accCount, float64(len(sc.accStats)), nil)
+			metrics.newGaugeMetric(sc.descs.accCount, float64(len(sc.accStats)), nil)
 			for _, stat := range sc.accStats {
 				accLabels := []string{stat.accountID, stat.accountName}
 				for _, as := range stat.stats {
 					serverAndAccLabels := append(sc.serverLabelValues(as.Server), accLabels...)
-					metrics.newCounterMetric(sc.descs.accConnCount, float64(as.Data.Conns), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accTotalConnCount, float64(as.Data.TotalConns), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accLeafCount, float64(as.Data.LeafNodes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accSubCount, float64(as.Data.NumSubs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accSlowConsumerCount, float64(as.Data.SlowConsumers), serverAndAccLabels)
+					metrics.newGaugeMetric(sc.descs.accConnCount, float64(as.Data.Conns), serverAndAccLabels)
+					metrics.newGaugeMetric(sc.descs.accTotalConnCount, float64(as.Data.TotalConns), serverAndAccLabels)
+					metrics.newGaugeMetric(sc.descs.accLeafCount, float64(as.Data.LeafNodes), serverAndAccLabels)
+					metrics.newGaugeMetric(sc.descs.accSubCount, float64(as.Data.NumSubs), serverAndAccLabels)
+					metrics.newGaugeMetric(sc.descs.accSlowConsumerCount, float64(as.Data.SlowConsumers), serverAndAccLabels)
 					metrics.newCounterMetric(sc.descs.accBytesSent, float64(as.Data.Sent.Bytes), serverAndAccLabels)
 					metrics.newCounterMetric(sc.descs.accBytesRecv, float64(as.Data.Received.Bytes), serverAndAccLabels)
 					metrics.newCounterMetric(sc.descs.accMsgsSent, float64(as.Data.Sent.Msgs), serverAndAccLabels)
