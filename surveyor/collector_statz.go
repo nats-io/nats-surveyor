@@ -45,152 +45,152 @@ const (
 
 // statzDescs holds the metric descriptions
 type statzDescs struct {
-	Info             *prometheus.Desc
-	Start            *prometheus.Desc
-	Uptime           *prometheus.Desc
-	Mem              *prometheus.Desc
-	Cores            *prometheus.Desc
-	CPU              *prometheus.Desc
-	Connections      *prometheus.Desc
-	TotalConnections *prometheus.Desc
-	ActiveAccounts   *prometheus.Desc
-	NumSubs          *prometheus.Desc
-	SentMsgs         *prometheus.Desc
-	SentBytes        *prometheus.Desc
-	RecvMsgs         *prometheus.Desc
-	RecvBytes        *prometheus.Desc
-	SlowConsumers    *prometheus.Desc
-	RTT              *prometheus.Desc
-	Routes           *prometheus.Desc
-	Gateways         *prometheus.Desc
+	Info             *GaugeVec
+	Start            *GaugeVec
+	Uptime           *GaugeVec
+	Mem              *GaugeVec
+	Cores            *GaugeVec
+	CPU              *GaugeVec
+	Connections      *GaugeVec
+	TotalConnections *CounterVec
+	ActiveAccounts   *CounterVec
+	NumSubs          *GaugeVec
+	SentMsgs         *CounterVec
+	SentBytes        *CounterVec
+	RecvMsgs         *CounterVec
+	RecvBytes        *CounterVec
+	SlowConsumers    *GaugeVec
+	RTT              *GaugeVec
+	Routes           *GaugeVec
+	Gateways         *GaugeVec
 
 	// Routes
-	RouteSentMsgs  *prometheus.Desc
-	RouteSentBytes *prometheus.Desc
-	RouteRecvMsgs  *prometheus.Desc
-	RouteRecvBytes *prometheus.Desc
-	RoutePending   *prometheus.Desc
+	RouteSentMsgs  *CounterVec
+	RouteSentBytes *CounterVec
+	RouteRecvMsgs  *CounterVec
+	RouteRecvBytes *CounterVec
+	RoutePending   *GaugeVec
 
 	// Gateways
-	GatewaySentMsgs   *prometheus.Desc
-	GatewaySentBytes  *prometheus.Desc
-	GatewayRecvMsgs   *prometheus.Desc
-	GatewayRecvBytes  *prometheus.Desc
-	GatewayNumInbound *prometheus.Desc
+	GatewaySentMsgs   *CounterVec
+	GatewaySentBytes  *CounterVec
+	GatewayRecvMsgs   *CounterVec
+	GatewayRecvBytes  *CounterVec
+	GatewayNumInbound *GaugeVec
 	OutboundGateways  *gatewayzDescs
 	InboundGateways   *gatewayzDescs
 
 	// Jetstream Info
-	JetstreamInfo *prometheus.Desc
+	JetstreamInfo *GaugeVec
 	// Jetstream Server
-	JetstreamEnabled                    *prometheus.Desc
-	JetstreamFilestoreSizeBytes         *prometheus.Desc
-	JetstreamMemstoreSizeBytes          *prometheus.Desc
-	JetstreamFilestoreUsedBytes         *prometheus.Desc
-	JetstreamFilestoreReservedBytes     *prometheus.Desc
-	JetstreamFilestoreReservedUsedBytes *prometheus.Desc
-	JetstreamMemstoreUsedBytes          *prometheus.Desc
-	JetstreamMemstoreReservedBytes      *prometheus.Desc
-	JetstreamMemstoreReservedUsedBytes  *prometheus.Desc
-	JetstreamAccounts                   *prometheus.Desc
-	JetstreamHAAssets                   *prometheus.Desc
-	JetstreamAPIRequests                *prometheus.Desc
-	JetstreamAPIPending                 *prometheus.Desc
-	JetstreamAPIErrors                  *prometheus.Desc
+	JetstreamEnabled                    *GaugeVec
+	JetstreamFilestoreSizeBytes         *GaugeVec
+	JetstreamMemstoreSizeBytes          *GaugeVec
+	JetstreamFilestoreUsedBytes         *GaugeVec
+	JetstreamFilestoreReservedBytes     *GaugeVec
+	JetstreamFilestoreReservedUsedBytes *GaugeVec
+	JetstreamMemstoreUsedBytes          *GaugeVec
+	JetstreamMemstoreReservedBytes      *GaugeVec
+	JetstreamMemstoreReservedUsedBytes  *GaugeVec
+	JetstreamAccounts                   *GaugeVec
+	JetstreamHAAssets                   *GaugeVec
+	JetstreamAPIRequests                *CounterVec
+	JetstreamAPIPending                 *GaugeVec
+	JetstreamAPIErrors                  *CounterVec
 	// Jetstream Cluster
-	JetstreamClusterRaftGroupInfo     *prometheus.Desc
-	JetstreamClusterRaftGroupSize     *prometheus.Desc
-	JetstreamClusterRaftGroupLeader   *prometheus.Desc
-	JetstreamClusterRaftGroupReplicas *prometheus.Desc
+	JetstreamClusterRaftGroupInfo     *GaugeVec
+	JetstreamClusterRaftGroupSize     *GaugeVec
+	JetstreamClusterRaftGroupLeader   *GaugeVec
+	JetstreamClusterRaftGroupReplicas *GaugeVec
 	// Jetstream Cluster Replicas
-	JetstreamClusterRaftGroupReplicaActive  *prometheus.Desc
-	JetstreamClusterRaftGroupReplicaCurrent *prometheus.Desc
-	JetstreamClusterRaftGroupReplicaOffline *prometheus.Desc
+	JetstreamClusterRaftGroupReplicaActive  *GaugeVec
+	JetstreamClusterRaftGroupReplicaCurrent *GaugeVec
+	JetstreamClusterRaftGroupReplicaOffline *GaugeVec
 	// JetStream server stats
-	JetstreamServerDisabled   *prometheus.Desc
-	JetstreamServerStreams    *prometheus.Desc
-	JetstreamServerConsumers  *prometheus.Desc
-	JetstreamServerMessages   *prometheus.Desc
-	JetstreamServerBytes      *prometheus.Desc
-	JetstreamServerMaxMemory  *prometheus.Desc
-	JetstreamServerMaxStorage *prometheus.Desc
+	JetstreamServerDisabled   *GaugeVec
+	JetstreamServerStreams    *GaugeVec
+	JetstreamServerConsumers  *GaugeVec
+	JetstreamServerMessages   *GaugeVec
+	JetstreamServerBytes      *GaugeVec
+	JetstreamServerMaxMemory  *GaugeVec
+	JetstreamServerMaxStorage *GaugeVec
 
 	// Account scope metrics
-	accCount             *prometheus.Desc
-	accConnCount         *prometheus.Desc
-	accTotalConnCount    *prometheus.Desc
-	accLeafCount         *prometheus.Desc
-	accSubCount          *prometheus.Desc
-	accSlowConsumerCount *prometheus.Desc
+	accCount             *CounterVec
+	accConnCount         *CounterVec
+	accTotalConnCount    *CounterVec
+	accLeafCount         *CounterVec
+	accSubCount          *CounterVec
+	accSlowConsumerCount *CounterVec
 
 	// Bytes and messages sent and received
-	accBytesSent        *prometheus.Desc
-	accBytesRecv        *prometheus.Desc
-	accMsgsSent         *prometheus.Desc
-	accMsgsRecv         *prometheus.Desc
-	accClientBytesSent  *prometheus.Desc
-	accClientBytesRecv  *prometheus.Desc
-	accClientMsgsSent   *prometheus.Desc
-	accClientMsgsRecv   *prometheus.Desc
-	accLeafBytesSent    *prometheus.Desc
-	accLeafBytesRecv    *prometheus.Desc
-	accLeafMsgsSent     *prometheus.Desc
-	accLeafMsgsRecv     *prometheus.Desc
-	accRouteBytesSent   *prometheus.Desc
-	accRouteBytesRecv   *prometheus.Desc
-	accRouteMsgsSent    *prometheus.Desc
-	accRouteMsgsRecv    *prometheus.Desc
-	accGatewayBytesSent *prometheus.Desc
-	accGatewayBytesRecv *prometheus.Desc
-	accGatewayMsgsSent  *prometheus.Desc
-	accGatewayMsgsRecv  *prometheus.Desc
+	accBytesSent        *CounterVec
+	accBytesRecv        *CounterVec
+	accMsgsSent         *CounterVec
+	accMsgsRecv         *CounterVec
+	accClientBytesSent  *CounterVec
+	accClientBytesRecv  *CounterVec
+	accClientMsgsSent   *CounterVec
+	accClientMsgsRecv   *CounterVec
+	accLeafBytesSent    *CounterVec
+	accLeafBytesRecv    *CounterVec
+	accLeafMsgsSent     *CounterVec
+	accLeafMsgsRecv     *CounterVec
+	accRouteBytesSent   *CounterVec
+	accRouteBytesRecv   *CounterVec
+	accRouteMsgsSent    *CounterVec
+	accRouteMsgsRecv    *CounterVec
+	accGatewayBytesSent *CounterVec
+	accGatewayBytesRecv *CounterVec
+	accGatewayMsgsSent  *CounterVec
+	accGatewayMsgsRecv  *CounterVec
 
-	accJetstreamEnabled               *prometheus.Desc
-	accJetstreamMemoryUsed            *prometheus.Desc
-	accJetstreamStorageUsed           *prometheus.Desc
-	accJetstreamMemoryReserved        *prometheus.Desc
-	accJetstreamStorageReserved       *prometheus.Desc
-	accJetstreamTieredMemoryUsed      *prometheus.Desc
-	accJetstreamTieredStorageUsed     *prometheus.Desc
-	accJetstreamTieredMemoryReserved  *prometheus.Desc
-	accJetstreamTieredStorageReserved *prometheus.Desc
-	accJetstreamStreamCount           *prometheus.Desc
-	accJetstreamConsumerCount         *prometheus.Desc
-	accJetstreamReplicaCount          *prometheus.Desc
+	accJetstreamEnabled               *GaugeVec
+	accJetstreamMemoryUsed            *GaugeVec
+	accJetstreamStorageUsed           *GaugeVec
+	accJetstreamMemoryReserved        *GaugeVec
+	accJetstreamStorageReserved       *GaugeVec
+	accJetstreamTieredMemoryUsed      *GaugeVec
+	accJetstreamTieredStorageUsed     *GaugeVec
+	accJetstreamTieredMemoryReserved  *GaugeVec
+	accJetstreamTieredStorageReserved *GaugeVec
+	accJetstreamStreamCount           *GaugeVec
+	accJetstreamConsumerCount         *GaugeVec
+	accJetstreamReplicaCount          *GaugeVec
 
 	// JSZ Stream metrics.
-	accJszStreamMsgs          *prometheus.Desc
-	accJszStreamBytes         *prometheus.Desc
-	accJszStreamFirstSeq      *prometheus.Desc
-	accJszStreamLastSeq       *prometheus.Desc
-	accJszStreamConsumerCount *prometheus.Desc
-	accJszStreamSubjectCount  *prometheus.Desc
+	accJszStreamMsgs          *GaugeVec
+	accJszStreamBytes         *GaugeVec
+	accJszStreamFirstSeq      *GaugeVec
+	accJszStreamLastSeq       *GaugeVec
+	accJszStreamConsumerCount *GaugeVec
+	accJszStreamSubjectCount  *GaugeVec
 
 	// JSZ Consumer metrics.
-	accJszConsumerDeliveredStreamSeq   *prometheus.Desc
-	accJszConsumerDeliveredConsumerSeq *prometheus.Desc
-	accJszConsumerNumAckPending        *prometheus.Desc
-	accJszConsumerNumRedelivered       *prometheus.Desc
-	accJszConsumerNumWaiting           *prometheus.Desc
-	accJszConsumerNumPending           *prometheus.Desc
-	accJszConsumerAckFloorStreamSeq    *prometheus.Desc
-	accJszConsumerAckFloorConsumerSeq  *prometheus.Desc
+	accJszConsumerDeliveredStreamSeq   *GaugeVec
+	accJszConsumerDeliveredConsumerSeq *GaugeVec
+	accJszConsumerNumAckPending        *GaugeVec
+	accJszConsumerNumRedelivered       *GaugeVec
+	accJszConsumerNumWaiting           *GaugeVec
+	accJszConsumerNumPending           *GaugeVec
+	accJszConsumerAckFloorStreamSeq    *GaugeVec
+	accJszConsumerAckFloorConsumerSeq  *GaugeVec
 }
 
 // gatewayzDescs holds the gateway metric descriptions
 type gatewayzDescs struct {
-	configured        *prometheus.Desc
-	connStart         *prometheus.Desc
-	connLastActivity  *prometheus.Desc
-	connUptime        *prometheus.Desc
-	connIdle          *prometheus.Desc
-	connRtt           *prometheus.Desc
-	connPendingBytes  *prometheus.Desc
-	connInMsgs        *prometheus.Desc
-	connOutMsgs       *prometheus.Desc
-	connInBytes       *prometheus.Desc
-	connOutBytes      *prometheus.Desc
-	connSubscriptions *prometheus.Desc
+	configured        *GaugeVec
+	connStart         *GaugeVec
+	connLastActivity  *GaugeVec
+	connUptime        *GaugeVec
+	connIdle          *GaugeVec
+	connRtt           *GaugeVec
+	connPendingBytes  *GaugeVec
+	connInMsgs        *GaugeVec
+	connOutMsgs       *GaugeVec
+	connInBytes       *GaugeVec
+	connOutBytes      *GaugeVec
+	connSubscriptions *GaugeVec
 }
 
 // StatzCollector collects statz from a server deployment
@@ -225,7 +225,7 @@ type StatzCollector struct {
 	jszFilterSet            map[JszFilter]bool
 	sysReqPrefix            string
 	accStatZeroConn         map[string]int
-	natsUp                  *prometheus.Desc
+	natsUp                  *Gauge
 
 	serverLabels       []string
 	serverInfoLabels   []string
@@ -236,12 +236,12 @@ type StatzCollector struct {
 	jsServerInfoLabels []string
 	constLabels        prometheus.Labels
 
-	surveyedCnt *prometheus.GaugeVec
-	expectedCnt *prometheus.GaugeVec
-	pollErrCnt  *prometheus.CounterVec
-	pollTime    *prometheus.SummaryVec
-	lateReplies *prometheus.CounterVec
-	noReplies   *prometheus.CounterVec
+	surveyedCnt *GaugeVec
+	expectedCnt *GaugeVec
+	pollErrCnt  *CounterVec
+	pollTime    *SummaryVec
+	lateReplies *CounterVec
+	noReplies   *CounterVec
 }
 
 type accountStats struct {
@@ -341,96 +341,94 @@ func (sc *StatzCollector) gatewayLabelValues(sm *server.ServerInfo, gStat *serve
 
 // Up/Down on servers - look at discovery mechanisms in Prometheus - aging out, how does it work?
 func (sc *StatzCollector) buildDescs() {
-	newPromDesc := func(name, help string, labels []string) *prometheus.Desc {
-		return prometheus.NewDesc(
-			prometheus.BuildFQName("nats", "core", name), help, labels, sc.constLabels)
+	newName := func(name string) string {
+		return prometheus.BuildFQName("nats", "core", name)
 	}
 
 	// A unlabelled description for the up/down
-	sc.natsUp = prometheus.NewDesc(prometheus.BuildFQName("nats", "core", "nats_up"),
-		"1 if connected to NATS, 0 otherwise.  A gauge.", nil, sc.constLabels)
+	sc.natsUp = newGauge("nats_up", "1 if connected to NATS, 0 otherwise.  A gauge.", sc.constLabels)
 
-	sc.descs.Info = newPromDesc("info", "General Server information Summary gauge", sc.serverInfoLabels)
-	sc.descs.Start = newPromDesc("start_time", "Server start time gauge", sc.serverLabels)
-	sc.descs.Uptime = newPromDesc("uptime", "Server uptime gauge", sc.serverLabels)
-	sc.descs.Mem = newPromDesc("mem_bytes", "Server memory gauge", sc.serverLabels)
-	sc.descs.Cores = newPromDesc("core_count", "Machine cores gauge", sc.serverLabels)
-	sc.descs.CPU = newPromDesc("cpu_percentage", "Server cpu utilization gauge", sc.serverLabels)
-	sc.descs.Connections = newPromDesc("connection_count", "Current number of client connections gauge", sc.serverLabels)
-	sc.descs.TotalConnections = newPromDesc("total_connection_count", "Total number of client connections serviced counter", sc.serverLabels)
-	sc.descs.ActiveAccounts = newPromDesc("active_account_count", "Number of active accounts gauge", sc.serverLabels)
-	sc.descs.NumSubs = newPromDesc("subs_count", "Current number of subscriptions gauge", sc.serverLabels)
-	sc.descs.SentMsgs = newPromDesc("sent_msgs_count", "Number of messages sent counter", sc.serverLabels)
-	sc.descs.SentBytes = newPromDesc("sent_bytes", "Number of bytes sent counter", sc.serverLabels)
-	sc.descs.RecvMsgs = newPromDesc("recv_msgs_count", "Number of messages received counter", sc.serverLabels)
-	sc.descs.RecvBytes = newPromDesc("recv_bytes", "Number of bytes received counter", sc.serverLabels)
-	sc.descs.SlowConsumers = newPromDesc("slow_consumer_count", "Number of slow consumers gauge", sc.serverLabels)
-	sc.descs.RTT = newPromDesc("rtt_nanoseconds", "RTT in nanoseconds gauge", sc.serverLabels)
-	sc.descs.Routes = newPromDesc("route_count", "Number of active routes gauge", sc.serverLabels)
-	sc.descs.Gateways = newPromDesc("gateway_count", "Number of active gateways gauge", sc.serverLabels)
+	sc.descs.Info = newGaugeVec(newName("info"), "General Server information Summary gauge", sc.constLabels, sc.serverInfoLabels)
+	sc.descs.Start = newGaugeVec(newName("start_time"), "Server start time gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.Uptime = newGaugeVec(newName("uptime"), "Server uptime gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.Mem = newGaugeVec(newName("mem_bytes"), "Server memory gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.Cores = newGaugeVec(newName("core_count"), "Machine cores gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.CPU = newGaugeVec(newName("cpu_percentage"), "Server cpu utilization gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.Connections = newGaugeVec(newName("connection_count"), "Current number of client connections gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.TotalConnections = newCounterVec(newName("total_connection_count"), "Total number of client connections serviced counter", sc.constLabels, sc.serverLabels)
+	sc.descs.ActiveAccounts = newCounterVec(newName("active_account_count"), "Number of active accounts gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.NumSubs = newGaugeVec(newName("subs_count"), "Current number of subscriptions gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.SentMsgs = newCounterVec(newName("sent_msgs_count"), "Number of messages sent counter", sc.constLabels, sc.serverLabels)
+	sc.descs.SentBytes = newCounterVec(newName("sent_bytes"), "Number of bytes sent counter", sc.constLabels, sc.serverLabels)
+	sc.descs.RecvMsgs = newCounterVec(newName("recv_msgs_count"), "Number of messages received counter", sc.constLabels, sc.serverLabels)
+	sc.descs.RecvBytes = newCounterVec(newName("recv_bytes"), "Number of bytes received counter", sc.constLabels, sc.serverLabels)
+	sc.descs.SlowConsumers = newGaugeVec(newName("slow_consumer_count"), "Number of slow consumers gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.RTT = newGaugeVec(newName("rtt_nanoseconds"), "RTT in nanoseconds gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.Routes = newGaugeVec(newName("route_count"), "Number of active routes gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.Gateways = newGaugeVec(newName("gateway_count"), "Number of active gateways gauge", sc.constLabels, sc.serverLabels)
 
 	// Routes
-	sc.descs.RouteSentMsgs = newPromDesc("route_sent_msg_count", "Number of messages sent over the route counter", sc.routeLabels)
-	sc.descs.RouteSentBytes = newPromDesc("route_sent_bytes", "Number of bytes sent over the route counter", sc.routeLabels)
-	sc.descs.RouteRecvMsgs = newPromDesc("route_recv_msg_count", "Number of messages received over the route counter", sc.routeLabels)
-	sc.descs.RouteRecvBytes = newPromDesc("route_recv_bytes", "Number of bytes received over the route counter", sc.routeLabels)
-	sc.descs.RoutePending = newPromDesc("route_pending_bytes", "Number of bytes pending in the route gauge", sc.routeLabels)
+	sc.descs.RouteSentMsgs = newCounterVec(newName("route_sent_msg_count"), "Number of messages sent over the route counter", sc.constLabels, sc.routeLabels)
+	sc.descs.RouteSentBytes = newCounterVec(newName("route_sent_bytes"), "Number of bytes sent over the route counter", sc.constLabels, sc.routeLabels)
+	sc.descs.RouteRecvMsgs = newCounterVec(newName("route_recv_msg_count"), "Number of messages received over the route counter", sc.constLabels, sc.routeLabels)
+	sc.descs.RouteRecvBytes = newCounterVec(newName("route_recv_bytes"), "Number of bytes received over the route counter", sc.constLabels, sc.routeLabels)
+	sc.descs.RoutePending = newGaugeVec(newName("route_pending_bytes"), "Number of bytes pending in the route gauge", sc.constLabels, sc.routeLabels)
 
 	// Gateways
-	sc.descs.GatewaySentMsgs = newPromDesc("gateway_sent_msgs_count", "Number of messages sent over the gateway counter", sc.gatewayLabels)
-	sc.descs.GatewaySentBytes = newPromDesc("gateway_sent_bytes", "Number of messages sent over the gateway counter", sc.gatewayLabels)
-	sc.descs.GatewayRecvMsgs = newPromDesc("gateway_recv_msg_count", "Number of messages sent over the gateway counter", sc.gatewayLabels)
-	sc.descs.GatewayRecvBytes = newPromDesc("gateway_recv_bytes", "Number of messages sent over the gateway counter", sc.gatewayLabels)
-	sc.descs.GatewayNumInbound = newPromDesc("gateway_inbound_msg_count", "Number inbound messages through the gateway gauge", sc.gatewayLabels)
+	sc.descs.GatewaySentMsgs = newCounterVec(newName("gateway_sent_msgs_count"), "Number of messages sent over the gateway counter", sc.constLabels, sc.gatewayLabels)
+	sc.descs.GatewaySentBytes = newCounterVec(newName("gateway_sent_bytes"), "Number of messages sent over the gateway counter", sc.constLabels, sc.gatewayLabels)
+	sc.descs.GatewayRecvMsgs = newCounterVec(newName("gateway_recv_msg_count"), "Number of messages sent over the gateway counter", sc.constLabels, sc.gatewayLabels)
+	sc.descs.GatewayRecvBytes = newCounterVec(newName("gateway_recv_bytes"), "Number of messages sent over the gateway counter", sc.constLabels, sc.gatewayLabels)
+	sc.descs.GatewayNumInbound = newGaugeVec(newName("gateway_inbound_msg_count"), "Number inbound messages through the gateway gauge", sc.constLabels, sc.gatewayLabels)
 
 	// Gatewayz
 	if sc.collectGatewayz {
-		sc.descs.OutboundGateways = sc.newGatewayzDescs("gatewayz_outbound_gateway", newPromDesc)
-		sc.descs.InboundGateways = sc.newGatewayzDescs("gatewayz_inbound_gateway", newPromDesc)
+		sc.descs.OutboundGateways = sc.newGatewayzDescs("gatewayz_outbound_gateway", newName)
+		sc.descs.InboundGateways = sc.newGatewayzDescs("gatewayz_inbound_gateway", newName)
 	}
 
 	// Jetstream Info
-	sc.descs.JetstreamInfo = newPromDesc("jetstream_info", " Always 1. Contains metadata for cross-reference from other time-series", sc.jsServerInfoLabels)
+	sc.descs.JetstreamInfo = newGaugeVec(newName("jetstream_info"), " Always 1. Contains metadata for cross-reference from other time-series", sc.constLabels, sc.jsServerInfoLabels)
 
 	// Jetstream Server
-	sc.descs.JetstreamEnabled = newPromDesc("jetstream_enabled", "1 if Jetstream is enabled, 0 otherwise.  A gauge.", sc.jsServerLabels)
-	sc.descs.JetstreamFilestoreSizeBytes = newPromDesc("jetstream_filestore_size_bytes", "Capacity of jetstream filesystem storage in bytes", sc.jsServerLabels)
-	sc.descs.JetstreamMemstoreSizeBytes = newPromDesc("jetstream_memstore_size_bytes", "Capacity of jetstream in-memory store in bytes", sc.jsServerLabels)
-	sc.descs.JetstreamFilestoreUsedBytes = newPromDesc("jetstream_filestore_used_bytes", "Consumption of jetstream filesystem storage in bytes", sc.jsServerLabels)
-	sc.descs.JetstreamFilestoreReservedBytes = newPromDesc("jetstream_filestore_reserved_bytes", "Account Reservations of jetstream filesystem storage in bytes", sc.jsServerLabels)
-	sc.descs.JetstreamFilestoreReservedUsedBytes = newPromDesc("jetstream_filestore_reserved_used_bytes", "Consumption of Account Reservation of jetstream filesystem storage in bytes", sc.jsServerLabels)
-	sc.descs.JetstreamMemstoreUsedBytes = newPromDesc("jetstream_memstore_used_bytes", "Consumption of jetstream in-memory store in bytes", sc.jsServerLabels)
-	sc.descs.JetstreamMemstoreReservedBytes = newPromDesc("jetstream_memstore_reserved_bytes", "Account Reservations of  jetstream in-memory store in bytes", sc.jsServerLabels)
-	sc.descs.JetstreamMemstoreReservedUsedBytes = newPromDesc("jetstream_memstore_reserved_used_bytes", "Consumption of Account Reservation of jetstream in-memory store in bytes. ", sc.jsServerLabels)
-	sc.descs.JetstreamAccounts = newPromDesc("jetstream_accounts", "Number of NATS Accounts present on a Jetstream server", sc.jsServerLabels)
-	sc.descs.JetstreamHAAssets = newPromDesc("jetstream_ha_assets", "Number of HA (R>1) assets used by NATS", sc.jsServerLabels)
-	sc.descs.JetstreamAPIRequests = newPromDesc("jetstream_api_requests", "Number of Jetstream API Requests processed. Value is 0 when server starts", sc.jsServerLabels)
-	sc.descs.JetstreamAPIPending = newPromDesc("jetstream_api_pending", "Number of Jetstream API in the queue waiting to be processed", sc.jsServerLabels)
-	sc.descs.JetstreamAPIErrors = newPromDesc("jetstream_api_errors", "Number of Jetstream API Errors. Value is 0 when server starts", sc.jsServerLabels)
+	sc.descs.JetstreamEnabled = newGaugeVec(newName("jetstream_enabled"), "1 if Jetstream is enabled, 0 otherwise.  A gauge.", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamFilestoreSizeBytes = newGaugeVec(newName("jetstream_filestore_size_bytes"), "Capacity of jetstream filesystem storage in bytes", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamMemstoreSizeBytes = newGaugeVec(newName("jetstream_memstore_size_bytes"), "Capacity of jetstream in-memory store in bytes", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamFilestoreUsedBytes = newGaugeVec(newName("jetstream_filestore_used_bytes"), "Consumption of jetstream filesystem storage in bytes", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamFilestoreReservedBytes = newGaugeVec(newName("jetstream_filestore_reserved_bytes"), "Account Reservations of jetstream filesystem storage in bytes", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamFilestoreReservedUsedBytes = newGaugeVec(newName("jetstream_filestore_reserved_used_bytes"), "Consumption of Account Reservation of jetstream filesystem storage in bytes", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamMemstoreUsedBytes = newGaugeVec(newName("jetstream_memstore_used_bytes"), "Consumption of jetstream in-memory store in bytes", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamMemstoreReservedBytes = newGaugeVec(newName("jetstream_memstore_reserved_bytes"), "Account Reservations of  jetstream in-memory store in bytes", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamMemstoreReservedUsedBytes = newGaugeVec(newName("jetstream_memstore_reserved_used_bytes"), "Consumption of Account Reservation of jetstream in-memory store in bytes. ", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamAccounts = newGaugeVec(newName("jetstream_accounts"), "Number of NATS Accounts present on a Jetstream server", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamHAAssets = newGaugeVec(newName("jetstream_ha_assets"), "Number of HA (R>1) assets used by NATS", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamAPIRequests = newCounterVec(newName("jetstream_api_requests"), "Number of Jetstream API Requests processed. Value is 0 when server starts", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamAPIPending = newGaugeVec(newName("jetstream_api_pending"), "Number of Jetstream API in the queue waiting to be processed", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamAPIErrors = newCounterVec(newName("jetstream_api_errors"), "Number of Jetstream API Errors. Value is 0 when server starts", sc.constLabels, sc.jsServerLabels)
 
 	// JetStream Raft Groups
 	jsRaftGroupInfoLabelKeys := []string{"jetstream_domain", "raft_group", "server_id", "server_name", "cluster_name", "leader"}
-	sc.descs.JetstreamClusterRaftGroupInfo = newPromDesc("jetstream_cluster_raft_group_info", "Provides metadata about a RAFT Group", jsRaftGroupInfoLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupInfo = newGaugeVec(newName("jetstream_cluster_raft_group_info"), "Provides metadata about a RAFT Group", sc.constLabels, jsRaftGroupInfoLabelKeys)
 	jsRaftGroupLabelKeys := []string{"server_id", "server_name", "cluster_name"}
-	sc.descs.JetstreamClusterRaftGroupSize = newPromDesc("jetstream_cluster_raft_group_size", "Number of peers in a RAFT group", jsRaftGroupLabelKeys)
-	sc.descs.JetstreamClusterRaftGroupLeader = newPromDesc("jetstream_cluster_raft_group_leader", "1 if this server is leader of raft group, 0 otherwise", jsRaftGroupLabelKeys)
-	sc.descs.JetstreamClusterRaftGroupReplicas = newPromDesc("jetstream_cluster_raft_group_replicas", "Info about replicas from leaders perspective", jsRaftGroupLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupSize = newGaugeVec(newName("jetstream_cluster_raft_group_size"), "Number of peers in a RAFT group", sc.constLabels, jsRaftGroupLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupLeader = newGaugeVec(newName("jetstream_cluster_raft_group_leader"), "1 if this server is leader of raft group, 0 otherwise", sc.constLabels, jsRaftGroupLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupReplicas = newGaugeVec(newName("jetstream_cluster_raft_group_replicas"), "Info about replicas from leaders perspective", sc.constLabels, jsRaftGroupLabelKeys)
 
 	// Jetstream Cluster Replicas
 	jsClusterReplicaLabelKeys := []string{"server_id", "server_name", "peer", "cluster_name"}
 	// FIXME: help could use some work...
-	sc.descs.JetstreamClusterRaftGroupReplicaActive = newPromDesc("jetstream_cluster_raft_group_replica_peer_active", "Jetstream RAFT Group Peer last Active time. Very large values may imply raft is stalled", jsClusterReplicaLabelKeys)
-	sc.descs.JetstreamClusterRaftGroupReplicaCurrent = newPromDesc("jetstream_cluster_raft_group_replica_peer_current", "Jetstream RAFT Group Peer is current: 1 or not: 0", jsClusterReplicaLabelKeys)
-	sc.descs.JetstreamClusterRaftGroupReplicaOffline = newPromDesc("jetstream_cluster_raft_group_replica_peer_offline", "Jetstream RAFT Group Peer is offline: 1 or online: 0", jsClusterReplicaLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupReplicaActive = newGaugeVec(newName("jetstream_cluster_raft_group_replica_peer_active"), "Jetstream RAFT Group Peer last Active time. Very large values may imply raft is stalled", sc.constLabels, jsClusterReplicaLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupReplicaCurrent = newGaugeVec(newName("jetstream_cluster_raft_group_replica_peer_current"), "Jetstream RAFT Group Peer is current: 1 or not: 0", sc.constLabels, jsClusterReplicaLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupReplicaOffline = newGaugeVec(newName("jetstream_cluster_raft_group_replica_peer_offline"), "Jetstream RAFT Group Peer is offline: 1 or online: 0", sc.constLabels, jsClusterReplicaLabelKeys)
 
 	jsServerLabelKeys := []string{"server_id", "server_name", "cluster_name"}
-	sc.descs.JetstreamServerDisabled = newPromDesc("jetstream_server_jetstream_disabled", "JetStream disabled or not", jsServerLabelKeys)
-	sc.descs.JetstreamServerStreams = newPromDesc("jetstream_server_total_streams", "Total number of streams in JetStream", jsServerLabelKeys)
-	sc.descs.JetstreamServerConsumers = newPromDesc("jetstream_server_total_consumers", "Total number of consumers in JetStream", jsServerLabelKeys)
-	sc.descs.JetstreamServerMessages = newPromDesc("jetstream_server_total_messages", "Total number of stored messages in JetStream", jsServerLabelKeys)
-	sc.descs.JetstreamServerBytes = newPromDesc("jetstream_server_total_message_bytes", "Total number of bytes stored in JetStream", jsServerLabelKeys)
-	sc.descs.JetstreamServerMaxMemory = newPromDesc("jetstream_server_max_memory", "JetStream Max Memory", jsServerLabelKeys)
-	sc.descs.JetstreamServerMaxStorage = newPromDesc("jetstream_server_max_storage", "JetStream Max Storage", jsServerLabelKeys)
+	sc.descs.JetstreamServerDisabled = newGaugeVec(newName("jetstream_server_jetstream_disabled"), "JetStream disabled or not", sc.constLabels, jsServerLabelKeys)
+	sc.descs.JetstreamServerStreams = newGaugeVec(newName("jetstream_server_total_streams"), "Total number of streams in JetStream", sc.constLabels, jsServerLabelKeys)
+	sc.descs.JetstreamServerConsumers = newGaugeVec(newName("jetstream_server_total_consumers"), "Total number of consumers in JetStream", sc.constLabels, jsServerLabelKeys)
+	sc.descs.JetstreamServerMessages = newGaugeVec(newName("jetstream_server_total_messages"), "Total number of stored messages in JetStream", sc.constLabels, jsServerLabelKeys)
+	sc.descs.JetstreamServerBytes = newGaugeVec(newName("jetstream_server_total_message_bytes"), "Total number of bytes stored in JetStream", sc.constLabels, jsServerLabelKeys)
+	sc.descs.JetstreamServerMaxMemory = newGaugeVec(newName("jetstream_server_max_memory"), "JetStream Max Memory", sc.constLabels, jsServerLabelKeys)
+	sc.descs.JetstreamServerMaxStorage = newGaugeVec(newName("jetstream_server_max_storage"), "JetStream Max Storage", sc.constLabels, jsServerLabelKeys)
 
 	_, collectJsz := shouldCollectJsz(sc.collectJsz)
 
@@ -438,52 +436,52 @@ func (sc *StatzCollector) buildDescs() {
 	if sc.collectAccounts || collectJsz {
 		accLabel := []string{"account", "account_name"}
 		serverAndAccLabel := append(sc.serverLabels, accLabel...)
-		sc.descs.accCount = newPromDesc("account_count", "The number of accounts detected", nil)
+		sc.descs.accCount = newCounterVec(newName("account_count"), "The number of accounts detected", sc.constLabels, nil)
 
 		// Metrics reported per-server
-		sc.descs.accConnCount = newPromDesc("account_conn_count", "The number of client connections to this account", serverAndAccLabel)
-		sc.descs.accTotalConnCount = newPromDesc("account_total_conn_count", "The combined current number of client and leafnode connections to this account", serverAndAccLabel)
-		sc.descs.accLeafCount = newPromDesc("account_leaf_count", "The number of leafnode connections to this account", serverAndAccLabel)
-		sc.descs.accSubCount = newPromDesc("account_sub_count", "The number of subscriptions on this account", serverAndAccLabel)
-		sc.descs.accSlowConsumerCount = newPromDesc("account_slow_consumer_count", "The number of slow consumers detected in this account", serverAndAccLabel)
+		sc.descs.accConnCount = newCounterVec(newName("account_conn_count"), "The number of client connections to this account", sc.constLabels, serverAndAccLabel)
+		sc.descs.accTotalConnCount = newCounterVec(newName("account_total_conn_count"), "The combined current number of client and leafnode connections to this account", sc.constLabels, serverAndAccLabel)
+		sc.descs.accLeafCount = newCounterVec(newName("account_leaf_count"), "The number of leafnode connections to this account", sc.constLabels, serverAndAccLabel)
+		sc.descs.accSubCount = newCounterVec(newName("account_sub_count"), "The number of subscriptions on this account", sc.constLabels, serverAndAccLabel)
+		sc.descs.accSlowConsumerCount = newCounterVec(newName("account_slow_consumer_count"), "The number of slow consumers detected in this account", sc.constLabels, serverAndAccLabel)
 
-		sc.descs.accBytesSent = newPromDesc("account_bytes_sent", "The number of bytes sent on this account across all connections", serverAndAccLabel)
-		sc.descs.accBytesRecv = newPromDesc("account_bytes_recv", "The number of bytes received on this account across all connections", serverAndAccLabel)
-		sc.descs.accMsgsSent = newPromDesc("account_msgs_sent", "The number of messages sent on this account across all connections", serverAndAccLabel)
-		sc.descs.accMsgsRecv = newPromDesc("account_msgs_recv", "The number of messages received on this account across all connections", serverAndAccLabel)
+		sc.descs.accBytesSent = newCounterVec(newName("account_bytes_sent"), "The number of bytes sent on this account across all connections", sc.constLabels, serverAndAccLabel)
+		sc.descs.accBytesRecv = newCounterVec(newName("account_bytes_recv"), "The number of bytes received on this account across all connections", sc.constLabels, serverAndAccLabel)
+		sc.descs.accMsgsSent = newCounterVec(newName("account_msgs_sent"), "The number of messages sent on this account across all connections", sc.constLabels, serverAndAccLabel)
+		sc.descs.accMsgsRecv = newCounterVec(newName("account_msgs_recv"), "The number of messages received on this account across all connections", sc.constLabels, serverAndAccLabel)
 
 		if sc.collectAccountsDetailed {
-			sc.descs.accClientBytesSent = newPromDesc("account_client_bytes_sent", "The number of bytes sent on this account via a client connection", serverAndAccLabel)
-			sc.descs.accClientBytesRecv = newPromDesc("account_client_bytes_recv", "The number of bytes received on this account via a client connection", serverAndAccLabel)
-			sc.descs.accClientMsgsSent = newPromDesc("account_client_msgs_sent", "The number of messages sent on this account via a client connection", serverAndAccLabel)
-			sc.descs.accClientMsgsRecv = newPromDesc("account_client_msgs_recv", "The number of messages received on this account via a client connection", serverAndAccLabel)
-			sc.descs.accLeafBytesSent = newPromDesc("account_leaf_bytes_sent", "The number of bytes sent on this account via a leafnode connection", serverAndAccLabel)
-			sc.descs.accLeafBytesRecv = newPromDesc("account_leaf_bytes_recv", "The number of bytes received on this account via a leafnode connection", serverAndAccLabel)
-			sc.descs.accLeafMsgsSent = newPromDesc("account_leaf_msgs_sent", "The number of messages sent on this account via a leafnode connection", serverAndAccLabel)
-			sc.descs.accLeafMsgsRecv = newPromDesc("account_leaf_msgs_recv", "The number of messages received on this account via a leafnode connection", serverAndAccLabel)
-			sc.descs.accRouteBytesSent = newPromDesc("account_route_bytes_sent", "The number of bytes sent on this account via a route connection", serverAndAccLabel)
-			sc.descs.accRouteBytesRecv = newPromDesc("account_route_bytes_recv", "The number of bytes received on this account via a route connection", serverAndAccLabel)
-			sc.descs.accRouteMsgsSent = newPromDesc("account_route_msgs_sent", "The number of messages sent on this account via a route connection", serverAndAccLabel)
-			sc.descs.accRouteMsgsRecv = newPromDesc("account_route_msgs_recv", "The number of messages received on this account via a route connection", serverAndAccLabel)
-			sc.descs.accGatewayBytesSent = newPromDesc("account_gateway_bytes_sent", "The number of bytes sent on this account via a gateway connection", serverAndAccLabel)
-			sc.descs.accGatewayBytesRecv = newPromDesc("account_gateway_bytes_recv", "The number of bytes received on this account via a gateway connection", serverAndAccLabel)
-			sc.descs.accGatewayMsgsSent = newPromDesc("account_gateway_msgs_sent", "The number of messages sent on this account via a gateway connection", serverAndAccLabel)
-			sc.descs.accGatewayMsgsRecv = newPromDesc("account_gateway_msgs_recv", "The number of messages received on this account via a gateway connection", serverAndAccLabel)
+			sc.descs.accClientBytesSent = newCounterVec(newName("account_client_bytes_sent"), "The number of bytes sent on this account via a client connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accClientBytesRecv = newCounterVec(newName("account_client_bytes_recv"), "The number of bytes received on this account via a client connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accClientMsgsSent = newCounterVec(newName("account_client_msgs_sent"), "The number of messages sent on this account via a client connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accClientMsgsRecv = newCounterVec(newName("account_client_msgs_recv"), "The number of messages received on this account via a client connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accLeafBytesSent = newCounterVec(newName("account_leaf_bytes_sent"), "The number of bytes sent on this account via a leafnode connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accLeafBytesRecv = newCounterVec(newName("account_leaf_bytes_recv"), "The number of bytes received on this account via a leafnode connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accLeafMsgsSent = newCounterVec(newName("account_leaf_msgs_sent"), "The number of messages sent on this account via a leafnode connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accLeafMsgsRecv = newCounterVec(newName("account_leaf_msgs_recv"), "The number of messages received on this account via a leafnode connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accRouteBytesSent = newCounterVec(newName("account_route_bytes_sent"), "The number of bytes sent on this account via a route connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accRouteBytesRecv = newCounterVec(newName("account_route_bytes_recv"), "The number of bytes received on this account via a route connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accRouteMsgsSent = newCounterVec(newName("account_route_msgs_sent"), "The number of messages sent on this account via a route connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accRouteMsgsRecv = newCounterVec(newName("account_route_msgs_recv"), "The number of messages received on this account via a route connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accGatewayBytesSent = newCounterVec(newName("account_gateway_bytes_sent"), "The number of bytes sent on this account via a gateway connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accGatewayBytesRecv = newCounterVec(newName("account_gateway_bytes_recv"), "The number of bytes received on this account via a gateway connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accGatewayMsgsSent = newCounterVec(newName("account_gateway_msgs_sent"), "The number of messages sent on this account via a gateway connection", sc.constLabels, serverAndAccLabel)
+			sc.descs.accGatewayMsgsRecv = newCounterVec(newName("account_gateway_msgs_recv"), "The number of messages received on this account via a gateway connection", sc.constLabels, serverAndAccLabel)
 		}
 
 		// Aggregated metrics
-		sc.descs.accJetstreamEnabled = newPromDesc("account_jetstream_enabled", "Whether JetStream is enabled or not for this account", accLabel)
-		sc.descs.accJetstreamMemoryUsed = newPromDesc("account_jetstream_memory_used", "The number of bytes used by JetStream memory", accLabel)
-		sc.descs.accJetstreamStorageUsed = newPromDesc("account_jetstream_storage_used", "The number of bytes used by JetStream storage", accLabel)
-		sc.descs.accJetstreamMemoryReserved = newPromDesc("account_jetstream_memory_reserved", "The number of bytes reserved by JetStream memory", accLabel)
-		sc.descs.accJetstreamStorageReserved = newPromDesc("account_jetstream_storage_reserved", "The number of bytes reserved by JetStream storage", accLabel)
-		sc.descs.accJetstreamTieredMemoryUsed = newPromDesc("account_jetstream_tiered_memory_used", "The number of bytes used by JetStream memory tier", append(accLabel, "tier"))
-		sc.descs.accJetstreamTieredStorageUsed = newPromDesc("account_jetstream_tiered_storage_used", "The number of bytes used by JetStream storage tier", append(accLabel, "tier"))
-		sc.descs.accJetstreamTieredMemoryReserved = newPromDesc("account_jetstream_tiered_memory_reserved", "The number of bytes reserved by JetStream memory tier", append(accLabel, "tier"))
-		sc.descs.accJetstreamTieredStorageReserved = newPromDesc("account_jetstream_tiered_storage_reserved", "The number of bytes reserved by JetStream storage tier", append(accLabel, "tier"))
-		sc.descs.accJetstreamStreamCount = newPromDesc("account_jetstream_stream_count", "The number of streams in this account", accLabel)
-		sc.descs.accJetstreamConsumerCount = newPromDesc("account_jetstream_consumer_count", "The number of consumers per stream for this account", append(accLabel, "stream", "raft_group"))
-		sc.descs.accJetstreamReplicaCount = newPromDesc("account_jetstream_replica_count", "The number of replicas per stream for this account", append(accLabel, "stream", "raft_group"))
+		sc.descs.accJetstreamEnabled = newGaugeVec(newName("account_jetstream_enabled"), "Whether JetStream is enabled or not for this account", sc.constLabels, accLabel)
+		sc.descs.accJetstreamMemoryUsed = newGaugeVec(newName("account_jetstream_memory_used"), "The number of bytes used by JetStream memory", sc.constLabels, accLabel)
+		sc.descs.accJetstreamStorageUsed = newGaugeVec(newName("account_jetstream_storage_used"), "The number of bytes used by JetStream storage", sc.constLabels, accLabel)
+		sc.descs.accJetstreamMemoryReserved = newGaugeVec(newName("account_jetstream_memory_reserved"), "The number of bytes reserved by JetStream memory", sc.constLabels, accLabel)
+		sc.descs.accJetstreamStorageReserved = newGaugeVec(newName("account_jetstream_storage_reserved"), "The number of bytes reserved by JetStream storage", sc.constLabels, accLabel)
+		sc.descs.accJetstreamTieredMemoryUsed = newGaugeVec(newName("account_jetstream_tiered_memory_used"), "The number of bytes used by JetStream memory tier", sc.constLabels, append(accLabel, "tier"))
+		sc.descs.accJetstreamTieredStorageUsed = newGaugeVec(newName("account_jetstream_tiered_storage_used"), "The number of bytes used by JetStream storage tier", sc.constLabels, append(accLabel, "tier"))
+		sc.descs.accJetstreamTieredMemoryReserved = newGaugeVec(newName("account_jetstream_tiered_memory_reserved"), "The number of bytes reserved by JetStream memory tier", sc.constLabels, append(accLabel, "tier"))
+		sc.descs.accJetstreamTieredStorageReserved = newGaugeVec(newName("account_jetstream_tiered_storage_reserved"), "The number of bytes reserved by JetStream storage tier", sc.constLabels, append(accLabel, "tier"))
+		sc.descs.accJetstreamStreamCount = newGaugeVec(newName("account_jetstream_stream_count"), "The number of streams in this account", sc.constLabels, accLabel)
+		sc.descs.accJetstreamConsumerCount = newGaugeVec(newName("account_jetstream_consumer_count"), "The number of consumers per stream for this account", sc.constLabels, append(accLabel, "stream", "raft_group"))
+		sc.descs.accJetstreamReplicaCount = newGaugeVec(newName("account_jetstream_replica_count"), "The number of replicas per stream for this account", sc.constLabels, append(accLabel, "stream", "raft_group"))
 
 		jszLabels := append(accLabel, []string{"cluster_name", "raft_group", "server_id", "server_name", "stream", "stream_leader"}...)
 		var consumerLabels []string
@@ -491,128 +489,134 @@ func (sc *StatzCollector) buildDescs() {
 		consumerLabels = append(consumerLabels, "consumer_name")
 		consumerLabels = append(consumerLabels, "consumer_leader")
 
-		sc.descs.accJszStreamMsgs = prometheus.NewDesc(
+		sc.descs.accJszStreamMsgs = newGaugeVec(
 			prometheus.BuildFQName("nats", "stream", "total_messages"),
 			"Total number of messages from a stream",
+			sc.constLabels,
 			jszLabels,
-			nil,
 		)
-		sc.descs.accJszStreamBytes = prometheus.NewDesc(
+		sc.descs.accJszStreamBytes = newGaugeVec(
 			prometheus.BuildFQName("nats", "stream", "total_bytes"),
 			"Total stored bytes from a stream",
+			sc.constLabels,
 			jszLabels,
-			nil,
 		)
-		sc.descs.accJszStreamFirstSeq = prometheus.NewDesc(
+		sc.descs.accJszStreamFirstSeq = newGaugeVec(
 			prometheus.BuildFQName("nats", "stream", "first_seq"),
 			"First sequence from a stream",
+			sc.constLabels,
 			jszLabels,
-			nil,
 		)
-		sc.descs.accJszStreamLastSeq = prometheus.NewDesc(
+		sc.descs.accJszStreamLastSeq = newGaugeVec(
 			prometheus.BuildFQName("nats", "stream", "last_seq"),
 			"Last sequence from a stream",
+			sc.constLabels,
 			jszLabels,
-			nil,
 		)
-		sc.descs.accJszStreamConsumerCount = prometheus.NewDesc(
+		sc.descs.accJszStreamConsumerCount = newGaugeVec(
 			prometheus.BuildFQName("nats", "stream", "consumer_count"),
 			"Total number of consumers from a stream",
+			sc.constLabels,
 			jszLabels,
-			nil,
 		)
-		sc.descs.accJszStreamSubjectCount = prometheus.NewDesc(
+		sc.descs.accJszStreamSubjectCount = newGaugeVec(
 			prometheus.BuildFQName("nats", "stream", "subject_count"),
 			"Total number of subjects in a stream",
+			sc.constLabels,
 			jszLabels,
-			nil,
 		)
-		sc.descs.accJszConsumerDeliveredConsumerSeq = prometheus.NewDesc(
+		sc.descs.accJszConsumerDeliveredConsumerSeq = newGaugeVec(
 			prometheus.BuildFQName("nats", "consumer", "delivered_consumer_seq"),
 			"Latest consumer sequence number of a stream consumer",
+			sc.constLabels,
 			consumerLabels,
-			nil,
 		)
-		sc.descs.accJszConsumerDeliveredStreamSeq = prometheus.NewDesc(
+		sc.descs.accJszConsumerDeliveredStreamSeq = newGaugeVec(
 			prometheus.BuildFQName("nats", "consumer", "delivered_stream_seq"),
 			"Latest stream sequence number of a stream",
+			sc.constLabels,
 			consumerLabels,
-			nil,
 		)
-		sc.descs.accJszConsumerNumAckPending = prometheus.NewDesc(
+		sc.descs.accJszConsumerNumAckPending = newGaugeVec(
 			prometheus.BuildFQName("nats", "consumer", "num_ack_pending"),
 			"Number of pending acks from a consumer",
+			sc.constLabels,
 			consumerLabels,
-			nil,
 		)
-		sc.descs.accJszConsumerNumRedelivered = prometheus.NewDesc(
+		sc.descs.accJszConsumerNumRedelivered = newGaugeVec(
 			prometheus.BuildFQName("nats", "consumer", "num_redelivered"),
 			"Number of redelivered messages from a consumer",
+			sc.constLabels,
 			consumerLabels,
-			nil,
 		)
-		sc.descs.accJszConsumerNumWaiting = prometheus.NewDesc(
+		sc.descs.accJszConsumerNumWaiting = newGaugeVec(
 			prometheus.BuildFQName("nats", "consumer", "num_waiting"),
 			"Number of inflight fetch requests from a pull consumer",
+			sc.constLabels,
 			consumerLabels,
-			nil,
 		)
-		sc.descs.accJszConsumerNumPending = prometheus.NewDesc(
+		sc.descs.accJszConsumerNumPending = newGaugeVec(
 			prometheus.BuildFQName("nats", "consumer", "num_pending"),
 			"Number of pending messages from a consumer",
+			sc.constLabels,
 			consumerLabels,
-			nil,
 		)
-		sc.descs.accJszConsumerAckFloorStreamSeq = prometheus.NewDesc(
+		sc.descs.accJszConsumerAckFloorStreamSeq = newGaugeVec(
 			prometheus.BuildFQName("nats", "consumer", "ack_floor_stream_seq"),
 			"Number of ack floor stream seq from a consumer",
+			sc.constLabels,
 			consumerLabels,
-			nil,
 		)
-		sc.descs.accJszConsumerAckFloorConsumerSeq = prometheus.NewDesc(
+		sc.descs.accJszConsumerAckFloorConsumerSeq = newGaugeVec(
 			prometheus.BuildFQName("nats", "consumer", "ack_floor_consumer_seq"),
 			"Number of ack floor consumer seq from a consumer",
+			sc.constLabels,
 			consumerLabels,
-			nil,
 		)
 	}
 
 	// Surveyor
-	sc.surveyedCnt = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name:        prometheus.BuildFQName("nats", "survey", "surveyed_count"),
-		Help:        "Number of remote hosts successfully surveyed gauge",
-		ConstLabels: sc.constLabels,
-	}, []string{})
+	sc.surveyedCnt = newGaugeVec(
+		prometheus.BuildFQName("nats", "survey", "surveyed_count"),
+		"Number of remote hosts successfully surveyed gauge",
+		sc.constLabels,
+		[]string{},
+	)
 
-	sc.expectedCnt = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name:        prometheus.BuildFQName("nats", "survey", "expected_count"),
-		Help:        "Number of remote hosts expected to responded gauge",
-		ConstLabels: sc.constLabels,
-	}, []string{})
+	sc.expectedCnt = newGaugeVec(
+		prometheus.BuildFQName("nats", "survey", "expected_count"),
+		"Number of remote hosts expected to responded gauge",
+		sc.constLabels,
+		[]string{},
+	)
 
-	sc.pollTime = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name:        prometheus.BuildFQName("nats", "survey", "duration_seconds"),
-		Help:        "Time it took to gather the surveyed data histogram",
-		ConstLabels: sc.constLabels,
-	}, []string{})
+	sc.pollTime = newSummaryVec(
+		prometheus.BuildFQName("nats", "survey", "duration_seconds"),
+		"Time it took to gather the surveyed data histogram",
+		sc.constLabels,
+		[]string{},
+	)
 
-	sc.pollErrCnt = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name:        prometheus.BuildFQName("nats", "survey", "poll_error_count"),
-		Help:        "The number of times the poller encountered errors counter",
-		ConstLabels: sc.constLabels,
-	}, []string{})
+	sc.pollErrCnt = newCounterVec(
+		prometheus.BuildFQName("nats", "survey", "poll_error_count"),
+		"The number of times the poller encountered errors counter",
+		sc.constLabels,
+		[]string{},
+	)
 
-	sc.lateReplies = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name:        prometheus.BuildFQName("nats", "survey", "late_replies_count"),
-		Help:        "Number of times a reply was received too late counter",
-		ConstLabels: sc.constLabels,
-	}, []string{"timeout"})
+	sc.lateReplies = newCounterVec(
+		prometheus.BuildFQName("nats", "survey", "late_replies_count"),
+		"Number of times a reply was received too late counter",
+		sc.constLabels,
+		[]string{"timeout"},
+	)
 
-	sc.noReplies = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name:        prometheus.BuildFQName("nats", "survey", "no_replies_count"),
-		Help:        "Number of nodes that did not reply in poll cycle",
-		ConstLabels: sc.constLabels,
-	}, []string{"expected"})
+	sc.noReplies = newCounterVec(
+		prometheus.BuildFQName("nats", "survey", "no_replies_count"),
+		"Number of nodes that did not reply in poll cycle",
+		sc.constLabels,
+		[]string{"expected"},
+	)
 }
 
 type StatzCollectorOpt func(sc *StatzCollector) error
@@ -895,20 +899,20 @@ func NewStatzCollectorOpts(opts ...StatzCollectorOpt) (*StatzCollector, error) {
 	return sc, nil
 }
 
-func (sc *StatzCollector) newGatewayzDescs(gwType string, newPromDesc func(name, help string, labels []string) *prometheus.Desc) *gatewayzDescs {
+func (sc *StatzCollector) newGatewayzDescs(gwType string, newName func(name string) string) *gatewayzDescs {
 	return &gatewayzDescs{
-		configured:        newPromDesc(gwType+"_configured", "configured", sc.gatewayzLabels),
-		connStart:         newPromDesc(gwType+"_conn_start_time_seconds", "conn_start_time_seconds", sc.gatewayzLabels),
-		connLastActivity:  newPromDesc(gwType+"_conn_last_activity_seconds", "conn_last_activity_seconds", sc.gatewayzLabels),
-		connUptime:        newPromDesc(gwType+"_conn_uptime_seconds", "conn_uptime_seconds", sc.gatewayzLabels),
-		connIdle:          newPromDesc(gwType+"_conn_idle_seconds", "conn_idle_seconds", sc.gatewayzLabels),
-		connRtt:           newPromDesc(gwType+"_conn_rtt", "rtt", sc.gatewayzLabels),
-		connPendingBytes:  newPromDesc(gwType+"_conn_pending_bytes", "pending_bytes", sc.gatewayzLabels),
-		connInMsgs:        newPromDesc(gwType+"_conn_in_msgs", "in_msgs", sc.gatewayzLabels),
-		connOutMsgs:       newPromDesc(gwType+"_conn_out_msgs", "out_msgs", sc.gatewayzLabels),
-		connInBytes:       newPromDesc(gwType+"_conn_in_bytes", "in_bytes", sc.gatewayzLabels),
-		connOutBytes:      newPromDesc(gwType+"_conn_out_bytes", "out_bytes", sc.gatewayzLabels),
-		connSubscriptions: newPromDesc(gwType+"_conn_subscriptions", "subscriptions", sc.gatewayzLabels),
+		configured:        newGaugeVec(newName(gwType+"_configured"), "configured", sc.constLabels, sc.gatewayzLabels),
+		connStart:         newGaugeVec(newName(gwType+"_conn_start_time_seconds"), "conn_start_time_seconds", sc.constLabels, sc.gatewayzLabels),
+		connLastActivity:  newGaugeVec(newName(gwType+"_conn_last_activity_seconds"), "conn_last_activity_seconds", sc.constLabels, sc.gatewayzLabels),
+		connUptime:        newGaugeVec(newName(gwType+"_conn_uptime_seconds"), "conn_uptime_seconds", sc.constLabels, sc.gatewayzLabels),
+		connIdle:          newGaugeVec(newName(gwType+"_conn_idle_seconds"), "conn_idle_seconds", sc.constLabels, sc.gatewayzLabels),
+		connRtt:           newGaugeVec(newName(gwType+"_conn_rtt"), "rtt", sc.constLabels, sc.gatewayzLabels),
+		connPendingBytes:  newGaugeVec(newName(gwType+"_conn_pending_bytes"), "pending_bytes", sc.constLabels, sc.gatewayzLabels),
+		connInMsgs:        newGaugeVec(newName(gwType+"_conn_in_msgs"), "in_msgs", sc.constLabels, sc.gatewayzLabels),
+		connOutMsgs:       newGaugeVec(newName(gwType+"_conn_out_msgs"), "out_msgs", sc.constLabels, sc.gatewayzLabels),
+		connInBytes:       newGaugeVec(newName(gwType+"_conn_in_bytes"), "in_bytes", sc.constLabels, sc.gatewayzLabels),
+		connOutBytes:      newGaugeVec(newName(gwType+"_conn_out_bytes"), "out_bytes", sc.constLabels, sc.gatewayzLabels),
+		connSubscriptions: newGaugeVec(newName(gwType+"_conn_subscriptions"), "subscriptions", sc.constLabels, sc.gatewayzLabels),
 	}
 }
 
@@ -1359,132 +1363,177 @@ Outer:
 	}
 }
 
-// Describe is the Prometheus interface to describe metrics for
-// the prometheus system
-func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
-	// Server Descriptions
-	ch <- sc.natsUp
-	ch <- sc.descs.Info
-	ch <- sc.descs.Start
-	ch <- sc.descs.Uptime
-	ch <- sc.descs.Mem
-	ch <- sc.descs.Cores
-	ch <- sc.descs.CPU
-	ch <- sc.descs.Connections
-	ch <- sc.descs.TotalConnections
-	ch <- sc.descs.ActiveAccounts
-	ch <- sc.descs.NumSubs
-	ch <- sc.descs.SentMsgs
-	ch <- sc.descs.SentBytes
-	ch <- sc.descs.RecvMsgs
-	ch <- sc.descs.RecvBytes
-	ch <- sc.descs.SlowConsumers
-	ch <- sc.descs.Routes
-	ch <- sc.descs.Gateways
+func (sc *StatzCollector) MetricInfos() []MetricInfo {
+	metrics := []MetricInfo{
+		// surveyor
+		sc.natsUp,
+		sc.surveyedCnt,
+		sc.expectedCnt,
+		sc.pollErrCnt,
+		sc.pollTime,
+		sc.lateReplies,
+		sc.noReplies,
 
-	// Route Descriptions
-	ch <- sc.descs.RouteSentMsgs
-	ch <- sc.descs.RouteSentBytes
-	ch <- sc.descs.RouteRecvMsgs
-	ch <- sc.descs.RouteRecvBytes
-	ch <- sc.descs.RoutePending
+		// Server Descriptions
+		sc.descs.Info,
+		sc.descs.Start,
+		sc.descs.Uptime,
+		sc.descs.Mem,
+		sc.descs.Cores,
+		sc.descs.CPU,
+		sc.descs.Connections,
+		sc.descs.TotalConnections,
+		sc.descs.ActiveAccounts,
+		sc.descs.NumSubs,
+		sc.descs.SentMsgs,
+		sc.descs.SentBytes,
+		sc.descs.RecvMsgs,
+		sc.descs.RecvBytes,
+		sc.descs.SlowConsumers,
+		sc.descs.RTT,
+		sc.descs.Routes,
+		sc.descs.Gateways,
 
-	// Gateway Descriptions
-	ch <- sc.descs.GatewaySentMsgs
-	ch <- sc.descs.GatewaySentBytes
-	ch <- sc.descs.GatewayRecvMsgs
-	ch <- sc.descs.GatewayRecvBytes
-	ch <- sc.descs.GatewayNumInbound
+		// Route Descriptions
+		sc.descs.RouteSentMsgs,
+		sc.descs.RouteSentBytes,
+		sc.descs.RouteRecvMsgs,
+		sc.descs.RouteRecvBytes,
+		sc.descs.RoutePending,
 
-	// Jetstream Descriptions
-	// Jetstream Info
-	ch <- sc.descs.JetstreamInfo
-	// Jetstream Server
-	ch <- sc.descs.JetstreamEnabled
-	ch <- sc.descs.JetstreamFilestoreSizeBytes
-	ch <- sc.descs.JetstreamMemstoreSizeBytes
-	ch <- sc.descs.JetstreamFilestoreUsedBytes
-	ch <- sc.descs.JetstreamFilestoreReservedBytes
-	ch <- sc.descs.JetstreamFilestoreReservedUsedBytes
-	ch <- sc.descs.JetstreamMemstoreUsedBytes
-	ch <- sc.descs.JetstreamMemstoreReservedBytes
-	ch <- sc.descs.JetstreamMemstoreReservedUsedBytes
-	ch <- sc.descs.JetstreamAccounts
-	ch <- sc.descs.JetstreamAPIRequests
-	ch <- sc.descs.JetstreamAPIPending
-	ch <- sc.descs.JetstreamAPIErrors
-	// Jetstream Cluster
-	ch <- sc.descs.JetstreamClusterRaftGroupInfo
-	ch <- sc.descs.JetstreamClusterRaftGroupSize
-	ch <- sc.descs.JetstreamClusterRaftGroupLeader
-	ch <- sc.descs.JetstreamClusterRaftGroupReplicas
-	// Jetstream Cluster Replicas
-	ch <- sc.descs.JetstreamClusterRaftGroupReplicaActive
-	ch <- sc.descs.JetstreamClusterRaftGroupReplicaCurrent
-	ch <- sc.descs.JetstreamClusterRaftGroupReplicaOffline
+		// Gateway Descriptions
+		sc.descs.GatewaySentMsgs,
+		sc.descs.GatewaySentBytes,
+		sc.descs.GatewayRecvMsgs,
+		sc.descs.GatewayRecvBytes,
+		sc.descs.GatewayNumInbound,
+
+		// Jetstream Descriptions
+		// Jetstream Info
+		sc.descs.JetstreamInfo,
+		// Jetstream Server
+		sc.descs.JetstreamEnabled,
+		sc.descs.JetstreamFilestoreSizeBytes,
+		sc.descs.JetstreamMemstoreSizeBytes,
+		sc.descs.JetstreamFilestoreUsedBytes,
+		sc.descs.JetstreamFilestoreReservedBytes,
+		sc.descs.JetstreamFilestoreReservedUsedBytes,
+		sc.descs.JetstreamMemstoreUsedBytes,
+		sc.descs.JetstreamMemstoreReservedBytes,
+		sc.descs.JetstreamMemstoreReservedUsedBytes,
+		sc.descs.JetstreamAccounts,
+		sc.descs.JetstreamHAAssets,
+		sc.descs.JetstreamAPIRequests,
+		sc.descs.JetstreamAPIPending,
+		sc.descs.JetstreamAPIErrors,
+		// Jetstream Cluster
+		sc.descs.JetstreamClusterRaftGroupInfo,
+		sc.descs.JetstreamClusterRaftGroupSize,
+		sc.descs.JetstreamClusterRaftGroupLeader,
+		sc.descs.JetstreamClusterRaftGroupReplicas,
+		// Jetstream Cluster Replicas
+		sc.descs.JetstreamClusterRaftGroupReplicaActive,
+		sc.descs.JetstreamClusterRaftGroupReplicaCurrent,
+		sc.descs.JetstreamClusterRaftGroupReplicaOffline,
+	}
 
 	// Account scope metrics
 	_, collectJsz := shouldCollectJsz(sc.collectJsz)
 	if sc.collectAccounts || collectJsz {
-		ch <- sc.descs.accCount
-		ch <- sc.descs.accConnCount
-		ch <- sc.descs.accTotalConnCount
-		ch <- sc.descs.accLeafCount
-		ch <- sc.descs.accSubCount
-		ch <- sc.descs.accSlowConsumerCount
+		metrics = append(metrics,
+			sc.descs.accCount,
+			sc.descs.accConnCount,
+			sc.descs.accTotalConnCount,
+			sc.descs.accLeafCount,
+			sc.descs.accSubCount,
+			sc.descs.accSlowConsumerCount,
 
-		ch <- sc.descs.accBytesSent
-		ch <- sc.descs.accBytesRecv
-		ch <- sc.descs.accMsgsSent
-		ch <- sc.descs.accMsgsRecv
+			sc.descs.accBytesSent,
+			sc.descs.accBytesRecv,
+			sc.descs.accMsgsSent,
+			sc.descs.accMsgsRecv,
+		)
 
 		if sc.collectAccountsDetailed {
-			ch <- sc.descs.accClientBytesSent
-			ch <- sc.descs.accClientBytesRecv
-			ch <- sc.descs.accClientMsgsSent
-			ch <- sc.descs.accClientMsgsRecv
-			ch <- sc.descs.accLeafBytesSent
-			ch <- sc.descs.accLeafBytesRecv
-			ch <- sc.descs.accLeafMsgsSent
-			ch <- sc.descs.accLeafMsgsRecv
-			ch <- sc.descs.accRouteBytesSent
-			ch <- sc.descs.accRouteBytesRecv
-			ch <- sc.descs.accRouteMsgsSent
-			ch <- sc.descs.accRouteMsgsRecv
-			ch <- sc.descs.accGatewayBytesSent
-			ch <- sc.descs.accGatewayBytesRecv
-			ch <- sc.descs.accGatewayMsgsSent
-			ch <- sc.descs.accGatewayMsgsRecv
+			metrics = append(metrics,
+				sc.descs.accClientBytesSent,
+				sc.descs.accClientBytesRecv,
+				sc.descs.accClientMsgsSent,
+				sc.descs.accClientMsgsRecv,
+				sc.descs.accLeafBytesSent,
+				sc.descs.accLeafBytesRecv,
+				sc.descs.accLeafMsgsSent,
+				sc.descs.accLeafMsgsRecv,
+				sc.descs.accRouteBytesSent,
+				sc.descs.accRouteBytesRecv,
+				sc.descs.accRouteMsgsSent,
+				sc.descs.accRouteMsgsRecv,
+				sc.descs.accGatewayBytesSent,
+				sc.descs.accGatewayBytesRecv,
+				sc.descs.accGatewayMsgsSent,
+				sc.descs.accGatewayMsgsRecv,
+			)
 		}
 
-		ch <- sc.descs.accJetstreamEnabled
-		ch <- sc.descs.accJetstreamMemoryUsed
-		ch <- sc.descs.accJetstreamStorageUsed
-		ch <- sc.descs.accJetstreamMemoryReserved
-		ch <- sc.descs.accJetstreamStorageReserved
-		ch <- sc.descs.accJetstreamStreamCount
-		ch <- sc.descs.accJetstreamConsumerCount
-		ch <- sc.descs.accJetstreamReplicaCount
+		metrics = append(metrics,
+			// Jetstream Server
+			sc.descs.JetstreamServerDisabled,
+			sc.descs.JetstreamServerStreams,
+			sc.descs.JetstreamServerConsumers,
+			sc.descs.JetstreamServerMessages,
+			sc.descs.JetstreamServerBytes,
+			sc.descs.JetstreamServerMaxMemory,
+			sc.descs.JetstreamServerMaxStorage,
+
+			// Account Jetstream
+			sc.descs.accJetstreamEnabled,
+			sc.descs.accJetstreamMemoryUsed,
+			sc.descs.accJetstreamStorageUsed,
+			sc.descs.accJetstreamMemoryReserved,
+			sc.descs.accJetstreamStorageReserved,
+			sc.descs.accJetstreamTieredMemoryUsed,
+			sc.descs.accJetstreamTieredStorageUsed,
+			sc.descs.accJetstreamTieredMemoryReserved,
+			sc.descs.accJetstreamTieredStorageReserved,
+			sc.descs.accJetstreamStreamCount,
+			sc.descs.accJetstreamConsumerCount,
+			sc.descs.accJetstreamReplicaCount,
+		)
 
 		if collectJsz {
-			// JSZ Stream metrics.
-			ch <- sc.descs.accJszStreamMsgs
-			ch <- sc.descs.accJszStreamBytes
-			ch <- sc.descs.accJszStreamFirstSeq
-			ch <- sc.descs.accJszStreamLastSeq
-			ch <- sc.descs.accJszStreamConsumerCount
-			ch <- sc.descs.accJszStreamSubjectCount
+			metrics = append(metrics,
+				// JSZ Stream metrics.
+				sc.descs.accJszStreamMsgs,
+				sc.descs.accJszStreamBytes,
+				sc.descs.accJszStreamFirstSeq,
+				sc.descs.accJszStreamLastSeq,
+				sc.descs.accJszStreamConsumerCount,
+				sc.descs.accJszStreamSubjectCount,
 
-			// JSZ Consumer metrics.
-			ch <- sc.descs.accJszConsumerDeliveredConsumerSeq
-			ch <- sc.descs.accJszConsumerDeliveredStreamSeq
-			ch <- sc.descs.accJszConsumerNumAckPending
-			ch <- sc.descs.accJszConsumerNumRedelivered
-			ch <- sc.descs.accJszConsumerNumWaiting
-			ch <- sc.descs.accJszConsumerNumPending
-			ch <- sc.descs.accJszConsumerAckFloorStreamSeq
-			ch <- sc.descs.accJszConsumerAckFloorConsumerSeq
+				// JSZ Consumer metrics.
+				sc.descs.accJszConsumerDeliveredConsumerSeq,
+				sc.descs.accJszConsumerDeliveredStreamSeq,
+				sc.descs.accJszConsumerNumAckPending,
+				sc.descs.accJszConsumerNumRedelivered,
+				sc.descs.accJszConsumerNumWaiting,
+				sc.descs.accJszConsumerNumPending,
+				sc.descs.accJszConsumerAckFloorStreamSeq,
+				sc.descs.accJszConsumerAckFloorConsumerSeq,
+			)
 		}
+	}
+
+	return metrics
+}
+
+// Describe is the Prometheus interface to describe metrics for
+// the prometheus system
+func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- sc.natsUp.Desc()
+
+	infos := sc.MetricInfos()
+	for _, info := range infos {
+		ch <- info.Desc()
 	}
 
 	// Surveyor
@@ -1498,25 +1547,27 @@ func (sc *StatzCollector) Describe(ch chan<- *prometheus.Desc) {
 
 type metricSlice struct {
 	sync.Mutex
-	metrics []prometheus.Metric
+	metrics []Metric
 }
 
-func (ms *metricSlice) appendMetric(m prometheus.Metric) {
+func (ms *metricSlice) appendMetric(m Metric) {
 	ms.Lock()
 	defer ms.Unlock()
 	ms.metrics = append(ms.metrics, m)
 }
 
-func (ms *metricSlice) newGaugeMetric(desc *prometheus.Desc, value float64, labels []string) {
-	m := prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, value, labels...)
-
-	ms.appendMetric(m)
+func (ms *metricSlice) newMetric(info MetricInfo, value float64, valueType prometheus.ValueType, labels []string) {
+	m := prometheus.MustNewConstMetric(info.Desc(), valueType, value, labels...)
+	metric := newMetric(m, info.Name(), info.Help(), info.Type(), info.ConstLabels())
+	ms.appendMetric(metric)
 }
 
-func (ms *metricSlice) newCounterMetric(desc *prometheus.Desc, value float64, labels []string) {
-	m := prometheus.MustNewConstMetric(desc, prometheus.CounterValue, value, labels...)
+func (ms *metricSlice) newGaugeMetric(gauge *GaugeVec, value float64, labels []string) {
+	ms.newMetric(gauge, value, prometheus.GaugeValue, labels)
+}
 
-	ms.appendMetric(m)
+func (ms *metricSlice) newCounterMetric(counter *CounterVec, value float64, labels []string) {
+	ms.newMetric(counter, value, prometheus.CounterValue, labels)
 }
 
 // Collect gathers the streaming server serverz metrics.
@@ -1524,7 +1575,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 	// Run in flightgroup to allow simultaneous query
 	result, err, _ := sc.flightGroup.Do("collect", func() (interface{}, error) {
 		metrics := &metricSlice{
-			metrics: make([]prometheus.Metric, 0),
+			metrics: make([]Metric, 0),
 			Mutex:   sync.Mutex{},
 		}
 
@@ -1535,7 +1586,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			if err := sc.poll(); err != nil {
 				sc.logger.Warnf("Error polling NATS server: %v", err)
 				sc.pollErrCnt.WithLabelValues().Inc()
-				metrics.newGaugeMetric(sc.natsUp, 0, nil)
+				metrics.newMetric(sc.natsUp, 0, prometheus.GaugeValue, nil)
 				return metrics.metrics, nil
 			}
 		}
@@ -1544,7 +1595,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		sc.Lock()
 		defer sc.Unlock()
 
-		metrics.newGaugeMetric(sc.natsUp, 1, nil)
+		metrics.newMetric(sc.natsUp, 1, prometheus.GaugeValue, nil)
 		sc.surveyedCnt.WithLabelValues().Set(0)
 
 		for _, sm := range sc.stats {
@@ -1560,7 +1611,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			metrics.newGaugeMetric(sc.descs.CPU, sm.Stats.CPU, labels)
 			metrics.newGaugeMetric(sc.descs.Connections, float64(sm.Stats.Connections), labels)
 			metrics.newCounterMetric(sc.descs.TotalConnections, float64(sm.Stats.TotalConnections), labels)
-			metrics.newGaugeMetric(sc.descs.ActiveAccounts, float64(sm.Stats.ActiveAccounts), labels)
+			metrics.newCounterMetric(sc.descs.ActiveAccounts, float64(sm.Stats.ActiveAccounts), labels)
 			metrics.newGaugeMetric(sc.descs.NumSubs, float64(sm.Stats.NumSubs), labels)
 			metrics.newCounterMetric(sc.descs.SentMsgs, float64(sm.Stats.Sent.Msgs), labels)
 			metrics.newCounterMetric(sc.descs.SentBytes, float64(sm.Stats.Sent.Bytes), labels)
@@ -1659,16 +1710,16 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		// Account scope metrics
 		_, collectJsz := shouldCollectJsz(sc.collectJsz)
 		if sc.collectAccounts || collectJsz {
-			metrics.newGaugeMetric(sc.descs.accCount, float64(len(sc.accStats)), nil)
+			metrics.newCounterMetric(sc.descs.accCount, float64(len(sc.accStats)), nil)
 			for _, stat := range sc.accStats {
 				accLabels := []string{stat.accountID, stat.accountName}
 				for _, as := range stat.stats {
 					serverAndAccLabels := append(sc.serverLabelValues(as.Server), accLabels...)
-					metrics.newGaugeMetric(sc.descs.accConnCount, float64(as.Data.Conns), serverAndAccLabels)
-					metrics.newGaugeMetric(sc.descs.accTotalConnCount, float64(as.Data.TotalConns), serverAndAccLabels)
-					metrics.newGaugeMetric(sc.descs.accLeafCount, float64(as.Data.LeafNodes), serverAndAccLabels)
-					metrics.newGaugeMetric(sc.descs.accSubCount, float64(as.Data.NumSubs), serverAndAccLabels)
-					metrics.newGaugeMetric(sc.descs.accSlowConsumerCount, float64(as.Data.SlowConsumers), serverAndAccLabels)
+					metrics.newCounterMetric(sc.descs.accConnCount, float64(as.Data.Conns), serverAndAccLabels)
+					metrics.newCounterMetric(sc.descs.accTotalConnCount, float64(as.Data.TotalConns), serverAndAccLabels)
+					metrics.newCounterMetric(sc.descs.accLeafCount, float64(as.Data.LeafNodes), serverAndAccLabels)
+					metrics.newCounterMetric(sc.descs.accSubCount, float64(as.Data.NumSubs), serverAndAccLabels)
+					metrics.newCounterMetric(sc.descs.accSlowConsumerCount, float64(as.Data.SlowConsumers), serverAndAccLabels)
 					metrics.newCounterMetric(sc.descs.accBytesSent, float64(as.Data.Sent.Bytes), serverAndAccLabels)
 					metrics.newCounterMetric(sc.descs.accBytesRecv, float64(as.Data.Received.Bytes), serverAndAccLabels)
 					metrics.newCounterMetric(sc.descs.accMsgsSent, float64(as.Data.Sent.Msgs), serverAndAccLabels)
@@ -1886,25 +1937,35 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 
 		collectCh := make(chan prometheus.Metric)
 
+		surveyorMetrics := []MetricVec{
+			sc.pollTime,
+			sc.pollErrCnt,
+			sc.surveyedCnt,
+			sc.expectedCnt,
+			sc.lateReplies,
+			sc.noReplies,
+		}
+
 		// We want to collect these before we exit the flight group
 		// but they should still be sent to every caller
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
+			var i int
 			for m := range collectCh {
-				metrics.appendMetric(m)
+				sm := surveyorMetrics[i]
+				metric := newMetric(m, sm.Name(), sm.Help(), sm.Type(), sm.ConstLabels())
+				metrics.appendMetric(metric)
+				i++
 			}
 
 			wg.Done()
 		}()
 
 		timer.ObserveDuration()
-		sc.pollTime.Collect(collectCh)
-		sc.pollErrCnt.Collect(collectCh)
-		sc.surveyedCnt.Collect(collectCh)
-		sc.expectedCnt.Collect(collectCh)
-		sc.lateReplies.Collect(collectCh)
-		sc.noReplies.Collect(collectCh)
+		for _, m := range surveyorMetrics {
+			m.Vec().Collect(collectCh)
+		}
 
 		close(collectCh)
 
@@ -1917,8 +1978,10 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	if m, ok := result.([]prometheus.Metric); !ok || m == nil {
-		if m == nil {
+	var metrics []Metric
+	var ok bool
+	if metrics, ok = result.([]Metric); !ok || metrics == nil {
+		if metrics == nil {
 			sc.logger.Error("no metrics collected")
 		} else {
 			sc.logger.Error("unexpected collect response type")
@@ -1926,8 +1989,8 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	for _, m := range result.([]prometheus.Metric) {
-		ch <- m
+	for _, m := range metrics {
+		ch <- m.Metric()
 	}
 }
 
@@ -2016,7 +2079,6 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte,
 
 // Performs JSON Unmarshal, decompressing snappy encoding if necessary
 func unmarshalMsg(msg *nats.Msg, v any) error {
-
 	if msg.Header.Get("Status") == "503" && len(msg.Data) == 0 {
 		return fmt.Errorf("got a message with status 503: No responders available: %v", msg)
 	}

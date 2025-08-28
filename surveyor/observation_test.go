@@ -844,3 +844,11 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 		waitForObsUpdate(t, om, expectedObservations)
 	})
 }
+
+func TestSurveyor_ObservationMetrics(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	metrics := NewServiceObservationMetrics(registry, testMetricInfoLabels)
+
+	infos := metrics.MetricInfos()
+	assertMetricInfos(t, infos)
+}
