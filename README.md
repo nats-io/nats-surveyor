@@ -29,6 +29,7 @@ Flags:
       --seed string                         Private key (nkey seed). Use in conjunction with --jwt (NATS_SURVEYOR_SEED)
       --user string                         NATS user name or token (NATS_SURVEYOR_USER)
       --password string                     NATS user password (NATS_SURVEYOR_PASSWORD)
+      --token-file string                   Path to file containing a NATS token. The file is re-read on reconnects (NATS_SURVEYOR_TOKEN_FILE)
       --tlscert string                      Client certificate file for NATS connections. (NATS_SURVEYOR_TLSCERT)
       --tlskey string                       Client private key for NATS connections. (NATS_SURVEYOR_TLSKEY)
       --tlscacert string                    Client certificate CA on NATS connections. (NATS_SURVEYOR_TLSCACERT)
@@ -56,7 +57,7 @@ Flags:
   -v, --version                             version for nats-surveyor
 ```
 
-System account credentials can be provided in 3 ways:
+System account credentials can be provided in 4 ways:
 
 - using `--creds` option to supply chained credentials file (containing JWT and NKey seed):
 
@@ -74,6 +75,14 @@ System account credentials can be provided in 3 ways:
 2019/10/14 21:35:40 Connected to NATS Deployment: 127.0.0.1:4222
 2019/10/14 21:35:40 No certificate file specified; using http.
 2019/10/14 21:35:40 Prometheus exporter listening at http://0.0.0.0:7777/metrics
+```
+
+- using `--token-file` flag to point to a file containing the token:
+
+```sh
+./nats-surveyor --user sys --token-file /var/run/secrets/tokens/<token>
+  2025/08/29 22:14:20 Connected to NATS Deployment: 127.0.0.1:4222
+  2025/08/29 22:14:20 Prometheus exporter listening at http://0.0.0.0:7777/metrics
 ```
 
 - using `--user` and `--password` flags

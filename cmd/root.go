@@ -185,6 +185,10 @@ func init() {
 	rootCmd.Flags().String("password", "", "NATS user password")
 	_ = viper.BindPFlag("password", rootCmd.Flags().Lookup("password"))
 
+	// token-file
+	rootCmd.Flags().String("token-file", "", "Path to a file with a bearer token")
+	_ = viper.BindPFlag("token-file", rootCmd.Flags().Lookup("token-file"))
+
 	// tlscert
 	rootCmd.Flags().String("tlscert", "", "Client certificate file for NATS connections.")
 	_ = viper.BindPFlag("tlscert", rootCmd.Flags().Lookup("tlscert"))
@@ -321,6 +325,7 @@ func getSurveyorOpts() *surveyor.Options {
 
 	opts.SysReqPrefix = viper.GetString("sys-req-prefix")
 	opts.ServerResponseWait = viper.GetDuration("server-discovery-timeout")
+	opts.TokenFile = viper.GetString("token-file")
 
 	logLevel, err := logrus.ParseLevel(viper.GetString("log-level"))
 	if err == nil {
