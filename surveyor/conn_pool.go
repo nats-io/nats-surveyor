@@ -263,45 +263,24 @@ func (cp *natsConnPool) getPooledConn(key string, cfg *NatsContext) (*pooledNats
 		cp.cacheMu.Unlock()
 
 		opts := append(cp.natsOpts, cfg.NatsOpts...)
-		usedHandler := false
+
 		if cfg.TokenFile != "" && cfg.Username != "" {
 			opts = append(opts, nats.UserInfoHandler(func() (string, string) {
-				b, err := os.ReadFile(cfg.TokenFile)
-				if err != nil {
-					return cfg.Username, ""
-				}
-				return cfg.Username, strings.TrimSpace(string(b))
+				return cfg.Username, getTokenFromFile(cfg.TokenFile)
 			}))
-			usedHandler = true
 		} else if cfg.TokenFile != "" {
 			opts = append(opts, nats.TokenHandler(func() string {
-				b, err := os.ReadFile(cfg.TokenFile)
-				if err != nil {
-					return ""
-				}
-				return strings.TrimSpace(string(b))
+				return getTokenFromFile(cfg.TokenFile)
 			}))
-			usedHandler = true
 		} else if cfg.Token != "" {
 			opts = append(opts, nats.Token(cfg.Token))
 		} else if cfg.Username != "" || cfg.Password != "" {
 			opts = append(opts, nats.UserInfo(cfg.Username, cfg.Password))
 		}
 
-		opts = append(opts, func(options *nats.Options) error {
+		opts = append(opts, func(o *nats.Options) error {
 			if cfg.Name != "" {
-				options.Name = cfg.Name
-			}
-			if !usedHandler {
-				if cfg.Token != "" {
-					options.Token = cfg.Token
-				}
-				if cfg.Username != "" {
-					options.User = cfg.Username
-				}
-				if cfg.Password != "" {
-					options.Password = cfg.Password
-				}
+				o.Name = cfg.Name
 			}
 			return nil
 		})
@@ -358,4 +337,12 @@ func (cp *natsConnPool) getPooledConn(key string, cfg *NatsContext) (*pooledNats
 		return nil, fmt.Errorf("not a pooledNatsConn")
 	}
 	return connection, nil
+}
+
+func getTokenFromFile(tokenfile string) string {
+	b, err := os.ReadFile(tokenfile)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
