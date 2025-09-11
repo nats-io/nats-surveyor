@@ -4016,7 +4016,34 @@
               },
               "unit": "decbytes"
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".* \\(limit\\)"
+                },
+                "properties": [
+                  {
+                    "id": "custom.lineStyle",
+                    "value": {
+                      "dash": [
+                        10,
+                        10
+                      ],
+                      "fill": "dash"
+                    }
+                  },
+                  {
+                    "id": "custom.lineWidth",
+                    "value": 2
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
             "h": 7,
@@ -4043,8 +4070,13 @@
           "targets": [
             {
               "expr": "nats_core_mem_bytes{server_cluster=~\"$cluster\"}",
-              "legendFormat": "{{server_name}}",
+              "legendFormat": "{{server_name}} (usage)",
               "refId": "A"
+            },
+            {
+              "expr": "nats_core_go_memlimit_bytes{server_cluster=~\"$cluster\"}",
+              "legendFormat": "{{server_name}} (GOMEMLIMIT)",
+              "refId": "B"
             }
           ],
           "title": "Memory",
