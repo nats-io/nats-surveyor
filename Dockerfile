@@ -5,7 +5,7 @@ ENV GO111MODULE=on
 ENV CGO_ENABLED=0
 RUN go build
 
-FROM alpine:latest as osdeps
+FROM alpine:latest AS osdeps
 RUN apk add --no-cache ca-certificates
 
 FROM alpine:3.21
