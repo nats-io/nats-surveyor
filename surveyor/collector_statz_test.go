@@ -51,6 +51,7 @@ func TestStatzCollector_WithStats_Stats(t *testing.T) {
 	// Based on TestSurveyor_Basic
 	want := []string{
 		"nats_core_route_recv_msg_count",
+		"nats_core_go_memlimit_bytes",
 		"server_name",
 		"server_cluster",
 		"server_id",
@@ -200,6 +201,58 @@ func TestStatzCollector_WithStats_Jsz(t *testing.T) {
 		if !strings.Contains(output, m) {
 			t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
 		}
+	}
+}
+
+func TestStatzCollector_GoMemLimit(t *testing.T) {
+	tests := []struct {
+		name           string
+		gomemlimit     int64
+		expectedMetric string
+	}{
+		{
+			name:           "GOMEMLIMIT set to 1GB",
+			gomemlimit:     1073741824,
+			expectedMetric: "nats_core_go_memlimit_bytes{server_cluster=\"\",server_id=\"test-server\",server_name=\"test-server\"} 1.073741824e+09",
+		},
+		{
+			name:           "GOMEMLIMIT not set",
+			gomemlimit:     0,
+			expectedMetric: "nats_core_go_memlimit_bytes{server_cluster=\"\",server_id=\"test-server\",server_name=\"test-server\"} 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stats := &server.ServerStatsMsg{
+				Server: server.ServerInfo{
+					ID:   "test-server",
+					Name: "test-server",
+				},
+				Stats: server.ServerStats{
+					MemLimit: tt.gomemlimit,
+				},
+			}
+
+			sc, err := NewStatzCollectorOpts(
+				WithStats(WithStatsBatch{
+					Stats: []*server.ServerStatsMsg{stats},
+				}),
+			)
+			if err != nil {
+				t.Fatalf("error creating statz collector: %v", err)
+			}
+
+			output := gatherStatzCollectorMetrics(t, sc)
+			
+			if !strings.Contains(output, "nats_core_go_memlimit_bytes") {
+				t.Fatalf("missing GOMEMLIMIT metric in output:\n%v", output)
+			}
+			
+			if !strings.Contains(output, tt.expectedMetric) {
+				t.Fatalf("expected metric value not found. Expected: %s\nActual output:\n%v", tt.expectedMetric, output)
+			}
+		})
 	}
 }
 

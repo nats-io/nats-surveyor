@@ -353,7 +353,7 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.Start = newGaugeVec(newName("start_time"), "Server start time gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.Uptime = newGaugeVec(newName("uptime"), "Server uptime gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.Mem = newGaugeVec(newName("mem_bytes"), "Server memory gauge", sc.constLabels, sc.serverLabels)
-	sc.descs.GoMemLimit = newGaugeVec(newName("go_memlimit_bytes"), "GOMEMLIMIT setting in bytes (0 if not set)", sc.constLabels, sc.serverLabels)
+	sc.descs.GoMemLimit = newGaugeVec(newName("go_memlimit_bytes"), "Server GOMEMLIMIT gauge (0 if not set)", sc.constLabels, sc.serverLabels)
 	sc.descs.Cores = newGaugeVec(newName("core_count"), "Machine cores gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.CPU = newGaugeVec(newName("cpu_percentage"), "Server cpu utilization gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.Connections = newGaugeVec(newName("connection_count"), "Current number of client connections gauge", sc.constLabels, sc.serverLabels)
