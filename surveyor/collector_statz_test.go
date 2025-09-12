@@ -244,11 +244,11 @@ func TestStatzCollector_GoMemLimit(t *testing.T) {
 			}
 
 			output := gatherStatzCollectorMetrics(t, sc)
-			
+
 			if !strings.Contains(output, "nats_core_go_memlimit_bytes") {
 				t.Fatalf("missing GOMEMLIMIT metric in output:\n%v", output)
 			}
-			
+
 			if !strings.Contains(output, tt.expectedMetric) {
 				t.Fatalf("expected metric value not found. Expected: %s\nActual output:\n%v", tt.expectedMetric, output)
 			}
