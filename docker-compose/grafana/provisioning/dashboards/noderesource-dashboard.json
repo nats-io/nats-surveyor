@@ -215,7 +215,14 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
-      "seriesOverrides": [],
+      "seriesOverrides": [
+        {
+          "alias": "/.*\\(limit\\)/",
+          "dashes": true,
+          "fill": 0,
+          "linewidth": 2
+        }
+      ],
       "spaceLength": 10,
       "stack": false,
       "steppedLine": false,
@@ -224,6 +231,11 @@
           "expr": "nats_core_mem_bytes{server_cluster=~\"$cluster\"}",
           "legendFormat": "{{server_name}}",
           "refId": "A"
+        },
+        {
+          "expr": "nats_core_go_memlimit_bytes{server_cluster=~\"$cluster\"}",
+          "legendFormat": "{{server_name}} (limit)",
+          "refId": "B"
         }
       ],
       "thresholds": [],
@@ -231,6 +243,7 @@
       "timeRegions": [],
       "timeShift": null,
       "title": "Memory",
+      "description": "nats_core_mem_bytes: Server memory gauge (current usage) | nats_core_go_memlimit_bytes: GOMEMLIMIT setting in bytes (0 if not set)",
       "tooltip": {
         "shared": true,
         "sort": 2,
