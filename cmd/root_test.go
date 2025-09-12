@@ -15,6 +15,8 @@ package cmd
 import (
 	"strings"
 	"testing"
+
+	"github.com/spf13/viper"
 )
 
 func TestRootCmdArgs(t *testing.T) {
@@ -42,5 +44,46 @@ func TestRootCmdArgs(t *testing.T) {
 				t.Errorf("rootCmdArgs(%s) got '%s', want '%s'", tt.name, result, tt.out)
 			}
 		})
+	}
+}
+func TestTokenFileFlagExists(t *testing.T) {
+	f := rootCmd.Flags().Lookup("token-file")
+	if f == nil {
+		t.Fatalf("expected --token-file flag to be registered on rootCmd")
+	}
+}
+
+func TestTokenFileViper(t *testing.T) {
+	if f := rootCmd.Flags().Lookup("token-file"); f != nil {
+		_ = f.Value.Set("")
+		f.Changed = false
+	}
+	if err := rootCmd.Flags().Set("token-file", "/tmp/aaa"); err != nil {
+		t.Fatalf("failed setting flag: %v", err)
+	}
+	opts := getSurveyorOpts()
+	if got, want := opts.TokenFile, "/tmp/aaa"; got != want {
+		t.Fatalf("flag wiring failed: got %q, want %q", got, want)
+	}
+}
+
+func TestTokenFileEnvOverride(t *testing.T) {
+	if f := rootCmd.Flags().Lookup("token-file"); f != nil {
+		_ = f.Value.Set("")
+		f.Changed = false
+	}
+
+	viper.SetEnvPrefix("nats_surveyor")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.AutomaticEnv()
+	if err := viper.BindEnv("token-file"); err != nil {
+		t.Fatalf("BindEnv failed: %v", err)
+	}
+
+	t.Setenv("NATS_SURVEYOR_TOKEN_FILE", "/tmp/bbb")
+
+	opts := getSurveyorOpts()
+	if got, want := opts.TokenFile, "/tmp/bbb"; got != want {
+		t.Fatalf("env override failed: got %q, want %q", got, want)
 	}
 }

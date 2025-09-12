@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/nats-io/nats.go"
@@ -33,6 +34,7 @@ type NatsContext struct {
 	Credentials string `json:"credential"`
 	Nkey        string `json:"nkey"`
 	Token       string `json:"token"`
+	TokenFile   string `json:"token_file"`
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	TLSCA       string `json:"tls_ca"`
@@ -261,18 +263,24 @@ func (cp *natsConnPool) getPooledConn(key string, cfg *NatsContext) (*pooledNats
 		cp.cacheMu.Unlock()
 
 		opts := append(cp.natsOpts, cfg.NatsOpts...)
-		opts = append(opts, func(options *nats.Options) error {
+
+		if cfg.TokenFile != "" && cfg.Username != "" {
+			opts = append(opts, nats.UserInfoHandler(func() (string, string) {
+				return cfg.Username, getTokenFromFile(cfg.TokenFile)
+			}))
+		} else if cfg.TokenFile != "" {
+			opts = append(opts, nats.TokenHandler(func() string {
+				return getTokenFromFile(cfg.TokenFile)
+			}))
+		} else if cfg.Token != "" {
+			opts = append(opts, nats.Token(cfg.Token))
+		} else if cfg.Username != "" || cfg.Password != "" {
+			opts = append(opts, nats.UserInfo(cfg.Username, cfg.Password))
+		}
+
+		opts = append(opts, func(o *nats.Options) error {
 			if cfg.Name != "" {
-				options.Name = cfg.Name
-			}
-			if cfg.Token != "" {
-				options.Token = cfg.Token
-			}
-			if cfg.Username != "" {
-				options.User = cfg.Username
-			}
-			if cfg.Password != "" {
-				options.Password = cfg.Password
+				o.Name = cfg.Name
 			}
 			return nil
 		})
@@ -329,4 +337,12 @@ func (cp *natsConnPool) getPooledConn(key string, cfg *NatsContext) (*pooledNats
 		return nil, fmt.Errorf("not a pooledNatsConn")
 	}
 	return connection, nil
+}
+
+func getTokenFromFile(tokenfile string) string {
+	b, err := os.ReadFile(tokenfile)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }

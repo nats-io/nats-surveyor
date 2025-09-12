@@ -62,6 +62,7 @@ type Options struct {
 	Seed                 string
 	NATSUser             string
 	NATSPassword         string
+	TokenFile            string
 	PollTimeout          time.Duration
 	ExpectedServers      int
 	ServerResponseWait   time.Duration
@@ -500,6 +501,7 @@ func (s *Surveyor) Start() error {
 		Seed:        s.opts.Seed,
 		Username:    s.opts.NATSUser,
 		Password:    s.opts.NATSPassword,
+		TokenFile:   s.opts.TokenFile,
 	}
 
 	s.conn, err = s.connProvider.Get(natsCtx)
