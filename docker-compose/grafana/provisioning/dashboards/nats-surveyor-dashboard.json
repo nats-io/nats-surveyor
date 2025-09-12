@@ -4020,7 +4020,7 @@
               {
                 "matcher": {
                   "id": "byRegexp",
-                  "options": ".* \\(limit\\)"
+                  "options": ".*GOMEMLIMIT.*"
                 },
                 "properties": [
                   {
