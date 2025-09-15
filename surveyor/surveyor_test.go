@@ -30,6 +30,7 @@ import (
 	st "github.com/nats-io/nats-surveyor/test"
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 )
 
 // Testing constants
@@ -756,7 +757,7 @@ func TestSurveyor_Concurrent(t *testing.T) {
 				return
 			}
 
-			metricsParser := expfmt.TextParser{}
+			metricsParser := expfmt.NewTextParser(model.UTF8Validation)
 			metricFamilies, err := metricsParser.TextToMetricFamilies(strings.NewReader(output))
 			if err != nil {
 				t.Errorf("Error parsing metrics: %s", err)
