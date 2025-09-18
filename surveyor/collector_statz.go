@@ -38,6 +38,7 @@ const accStatZeroConnSkip = 3
 type CollectJsz string
 
 const (
+	CollectJszNone      CollectJsz = ""
 	CollectJszAll       CollectJsz = "all"
 	CollectJszStreams   CollectJsz = "streams"
 	CollectJszConsumers CollectJsz = "consumers"

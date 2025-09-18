@@ -209,8 +209,8 @@ func TestStatzCollector_WithStats_Jsz(t *testing.T) {
 	tests := []test{
 		// jsz type tests
 		{
-			name:           "collect nothing",
-			jsz:            CollectJsz(""),
+			name:           "collect none",
+			jsz:            CollectJszNone,
 			jszLeadersOnly: false,
 			jszFilters:     nil,
 			assert: func(t *testing.T, test *test, output string) {
