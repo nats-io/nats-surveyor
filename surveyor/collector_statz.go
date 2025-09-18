@@ -1771,9 +1771,9 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				for _, streamStat := range stat.jszData {
 					hasFilters := len(sc.jszFilterSet) > 0
 
-					showStreamMetrics := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == streamStat.streamLeader
+					isLeaderOrAll := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == streamStat.streamLeader
 					showJszStreams := collectJsz == CollectJszAll || collectJsz == CollectJszStreams
-					if showStreamMetrics && showJszStreams {
+					if isLeaderOrAll && showJszStreams {
 						if sc.jszFilterSet[StreamTotalMessages] || !hasFilters {
 							metrics.newGaugeMetric(sc.descs.accJszStreamMsgs,
 								streamStat.streamMessages,
@@ -1836,9 +1836,9 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					}
 
 					for _, consumerStat := range streamStat.consumerStats {
-						showConsumerMetrics := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == consumerStat.consumerLeader
+						isLeaderOrAll := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == consumerStat.consumerLeader
 						showJszConsumers := collectJsz == CollectJszAll || collectJsz == CollectJszConsumers
-						if showConsumerMetrics && showJszConsumers {
+						if isLeaderOrAll && showJszConsumers {
 							raftGroup := consumerStat.consumerRaftGroup
 
 							if sc.jszFilterSet[ConsumerDeliveredConsumerSeq] || !hasFilters {
