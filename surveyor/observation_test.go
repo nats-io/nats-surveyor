@@ -29,6 +29,7 @@ import (
 	"github.com/nats-io/nuid"
 	"github.com/prometheus/client_golang/prometheus"
 	ptu "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 func TestServiceObservation_Load(t *testing.T) {
@@ -409,17 +410,18 @@ nats_latency_observations_count 1
 				}
 			}
 
-			// sleep a bit just in case of slower delivery to the observer
-			time.Sleep(time.Second)
-			expected = `
+			waitFor := time.Second * 5
+			tick := time.Millisecond * 100
+
+			require.Eventually(t, func() bool {
+				expected = `
 	# HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
 	# TYPE nats_latency_observations_received_count counter
 	nats_latency_observations_received_count{account="a",app="testing_service",service="myservice"} 10
-	`
-			err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
-			if err != nil {
-				t.Fatalf("Invalid observations counter: %s", err)
-			}
+				`
+				err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
+				return err == nil
+			}, waitFor, tick, "Invalid observations counter: %s", err)
 		})
 	}
 }

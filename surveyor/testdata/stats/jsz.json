@@ -75,6 +75,173 @@
                 "name": "consumer1",
                 "raft_group": "raft"
               }
+            ],
+            "consumer_detail": [
+              {
+                "stream_name": "stream1",
+                "name": "consumer1",
+                "created": "2025-01-01T00:00:00Z",
+                "cluster": {
+                  "name": "cluster1",
+                  "raft_group": "raft",
+                  "leader": "server1",
+                  "leader_since": "2025-01-01T00:00:00Z"
+                },
+                "config": {
+                  "durable_name": "consumer1",
+                  "name": "consumer1",
+                  "description": "super cool consumer",
+                  "deliver_policy": "all",
+                  "ack_policy": "explicit",
+                  "ack_wait": 1000,
+                  "max_deliver": -1,
+                  "backoff": [
+                    1000,
+                    2000,
+                    3000
+                  ],
+                  "filter_subject": "foo",
+                  "filter_subjects": [
+                    "foo"
+                  ],
+                  "replay_policy": "instant",
+                  "sample_freq": "1s",
+                  "max_waiting": -1,
+                  "max_ack_pending": -1,
+                  "flow_control": true,
+                  "headers_only": false,
+                  "max_batch": -1,
+                  "max_expires": 1000,
+                  "max_bytes": 1000,
+                  "replicas": 3,
+                  "metadata": {
+                    "foo": "bar"
+                  }
+                },
+                "delivered": {
+                  "consumer_seq": 100,
+                  "stream_seq": 100
+                },
+                "ack_floor": {
+                  "consumer_seq": 100,
+                  "stream_seq": 100
+                },
+                "num_ack_pending": 100,
+                "num_redelivered": 100,
+                "num_waiting": 100,
+                "num_pending": 100,
+                "timestamp": "2025-01-01T00:00:00Z"
+              },
+              {
+                "stream_name": "stream1",
+                "name": "consumer2",
+                "created": "2025-01-01T00:00:00Z",
+                "cluster": {
+                  "name": "cluster1",
+                  "raft_group": "raft",
+                  "leader": "server2",
+                  "leader_since": "2025-01-01T00:00:00Z"
+                },
+                "config": {
+                  "durable_name": "consumer2",
+                  "name": "consumer2",
+                  "description": "super cool consumer",
+                  "deliver_policy": "all",
+                  "ack_policy": "explicit",
+                  "ack_wait": 1000,
+                  "max_deliver": -1,
+                  "backoff": [
+                    1000,
+                    2000,
+                    3000
+                  ],
+                  "filter_subject": "foo",
+                  "filter_subjects": [
+                    "foo"
+                  ],
+                  "replay_policy": "instant",
+                  "sample_freq": "1s",
+                  "max_waiting": -1,
+                  "max_ack_pending": -1,
+                  "flow_control": true,
+                  "headers_only": false,
+                  "max_batch": -1,
+                  "max_expires": 1000,
+                  "max_bytes": 1000,
+                  "replicas": 3,
+                  "metadata": {
+                    "foo": "bar"
+                  }
+                },
+                "delivered": {
+                  "consumer_seq": 100,
+                  "stream_seq": 100
+                },
+                "ack_floor": {
+                  "consumer_seq": 100,
+                  "stream_seq": 100
+                },
+                "num_ack_pending": 100,
+                "num_redelivered": 100,
+                "num_waiting": 100,
+                "num_pending": 100,
+                "timestamp": "2025-01-01T00:00:00Z"
+              },
+              {
+                "stream_name": "stream1",
+                "name": "consumer3",
+                "created": "2025-01-01T00:00:00Z",
+                "cluster": {
+                  "name": "cluster1",
+                  "raft_group": "raft",
+                  "leader": "server3",
+                  "leader_since": "2025-01-01T00:00:00Z"
+                },
+                "config": {
+                  "durable_name": "consumer3",
+                  "name": "consumer3",
+                  "description": "super cool consumer",
+                  "deliver_policy": "all",
+                  "ack_policy": "explicit",
+                  "ack_wait": 1000,
+                  "max_deliver": -1,
+                  "backoff": [
+                    1000,
+                    2000,
+                    3000
+                  ],
+                  "filter_subject": "foo",
+                  "filter_subjects": [
+                    "foo"
+                  ],
+                  "replay_policy": "instant",
+                  "sample_freq": "1s",
+                  "max_waiting": -1,
+                  "max_ack_pending": -1,
+                  "flow_control": true,
+                  "headers_only": false,
+                  "max_batch": -1,
+                  "max_expires": 1000,
+                  "max_bytes": 1000,
+                  "replicas": 3,
+                  "metadata": {
+                    "foo": "bar"
+                  }
+                },
+                "delivered": {
+                  "consumer_seq": 100,
+                  "stream_seq": 100
+                },
+                "ack_floor": {
+                  "consumer_seq": 100,
+                  "stream_seq": 100
+                },
+                "num_ack_pending": 100,
+                "num_redelivered": 100,
+                "num_waiting": 100,
+                "num_pending": 100,
+                "timestamp": "2025-01-01T00:00:00Z"
+              }
             ]
           }
         ]

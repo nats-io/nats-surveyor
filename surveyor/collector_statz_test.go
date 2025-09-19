@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -79,9 +80,8 @@ func TestStatzCollector_WithStats_Account(t *testing.T) {
 	}
 
 	sc, err := NewStatzCollectorOpts(
-		WithStats(WithStatsBatch{
-			AccStatzs: []*ServerAPIAccstatzResponse{stats},
-		}),
+		WithStats(WithStatsBatch{AccStatzs: []*ServerAPIAccstatzResponse{stats}}),
+		WithCollectAccounts(true, true),
 	)
 	if err != nil {
 		t.Fatalf("error creating statz collector: %v", err)
@@ -123,9 +123,8 @@ func TestStatzCollector_WithStats_Gatewayz(t *testing.T) {
 	}
 
 	sc, err := NewStatzCollectorOpts(
-		WithStats(WithStatsBatch{
-			GatewayStatzs: []*server.ServerAPIGatewayzResponse{stats},
-		}),
+		WithStats(WithStatsBatch{GatewayStatzs: []*server.ServerAPIGatewayzResponse{stats}}),
+		WithCollectGatewayz(true),
 	)
 	if err != nil {
 		t.Fatalf("error creating statz collector: %v", err)
@@ -176,30 +175,187 @@ func TestStatzCollector_WithStats_Jsz(t *testing.T) {
 		t.Fatalf("error unmarshalling stats: %v", err)
 	}
 
-	sc, err := NewStatzCollectorOpts(
-		WithStats(WithStatsBatch{
-			JsStatzs: []*server.ServerAPIJszResponse{stats},
-		}),
-	)
-	if err != nil {
-		t.Fatalf("error creating statz collector: %v", err)
+	streamMetrics := []string{
+		"nats_stream_consumer_count",
+		"nats_stream_first_seq",
+		"nats_stream_last_seq",
+		"nats_stream_subject_count",
+		"nats_stream_total_bytes",
+		"nats_stream_total_messages",
+	}
+	consumerMetrics := []string{
+		"nats_consumer_ack_floor_consumer_seq",
+		"nats_consumer_ack_floor_stream_seq",
+		"nats_consumer_delivered_consumer_seq",
+		"nats_consumer_delivered_stream_seq",
+		"nats_consumer_num_ack_pending",
+		"nats_consumer_num_pending",
+		"nats_consumer_num_redelivered",
+		"nats_consumer_num_waiting",
 	}
 
-	output := gatherStatzCollectorMetrics(t, sc)
+	allMetrics := []string{}
+	allMetrics = append(allMetrics, streamMetrics...)
+	allMetrics = append(allMetrics, consumerMetrics...)
 
-	want := []string{
-		"nats_core_jetstream_server_jetstream_disabled",
-		"nats_core_jetstream_server_total_streams",
-		"nats_core_jetstream_server_total_consumers",
-		"nats_core_jetstream_server_total_messages",
-		"nats_core_jetstream_server_total_message_bytes",
-		"nats_core_jetstream_server_max_memory",
-		"nats_core_jetstream_server_max_storage",
+	type test struct {
+		name           string
+		jsz            CollectJsz
+		jszLeadersOnly bool
+		jszFilters     []JszFilter
+		assert         func(t *testing.T, test *test, output string)
 	}
-	for _, m := range want {
-		if !strings.Contains(output, m) {
-			t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
-		}
+
+	tests := []test{
+		// jsz type tests
+		{
+			name:           "collect none",
+			jsz:            CollectJszNone,
+			jszLeadersOnly: false,
+			jszFilters:     nil,
+			assert: func(t *testing.T, test *test, output string) {
+				for _, m := range allMetrics {
+					if strings.Contains(output, m) {
+						t.Fatalf("invalid output, should not contain '%s':\n%v\n", m, output)
+					}
+				}
+			},
+		},
+		{
+			name:           "collect all",
+			jsz:            CollectJszAll,
+			jszLeadersOnly: false,
+			jszFilters:     nil,
+			assert: func(t *testing.T, test *test, output string) {
+				for _, m := range allMetrics {
+					if !strings.Contains(output, m) {
+						t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
+					}
+				}
+			},
+		},
+		{
+			name:           "collect streams",
+			jsz:            CollectJszStreams,
+			jszLeadersOnly: false,
+			jszFilters:     nil,
+			assert: func(t *testing.T, test *test, output string) {
+				for _, m := range streamMetrics {
+					if !strings.Contains(output, m) {
+						t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
+					}
+				}
+				for _, m := range consumerMetrics {
+					if strings.Contains(output, m) {
+						t.Fatalf("invalid output, should not contain '%s':\n%v\n", m, output)
+					}
+				}
+			},
+		},
+		{
+			name:           "collect consumers",
+			jsz:            CollectJszConsumers,
+			jszLeadersOnly: false,
+			jszFilters:     nil,
+			assert: func(t *testing.T, test *test, output string) {
+				for _, m := range consumerMetrics {
+					if !strings.Contains(output, m) {
+						t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
+					}
+				}
+				for _, m := range streamMetrics {
+					if strings.Contains(output, m) {
+						t.Fatalf("invalid output, should not contain '%s':\n%v\n", m, output)
+					}
+				}
+			},
+		},
+		// leaders only tests
+		{
+			name:           "collect leaders only",
+			jsz:            CollectJszAll,
+			jszLeadersOnly: true,
+			jszFilters:     nil,
+			assert: func(t *testing.T, test *test, output string) {
+				lines := strings.Split(output, "\n")
+
+				for _, m := range consumerMetrics {
+					count := 0
+					for _, line := range lines {
+						if strings.Contains(line, m) && !strings.HasPrefix(line, "#") {
+							count++
+						}
+					}
+					if count != 1 {
+						t.Fatalf("invalid output, expected %v, got %v: %v\n", 1, count, output)
+					}
+				}
+			},
+		},
+		{
+			name:           "not collect leaders only",
+			jsz:            CollectJszAll,
+			jszLeadersOnly: false,
+			jszFilters:     nil,
+			assert: func(t *testing.T, test *test, output string) {
+				lines := strings.Split(output, "\n")
+
+				for _, m := range consumerMetrics {
+					count := 0
+					for _, line := range lines {
+						if strings.Contains(line, m) && !strings.HasPrefix(line, "#") {
+							count++
+						}
+					}
+					if count != 3 {
+						t.Fatalf("invalid output, expected %v, got %v: %v\n", 3, count, output)
+					}
+				}
+			},
+		},
+		// jsz filter tests
+		{
+			name:           "collect streams with filter",
+			jsz:            CollectJszStreams,
+			jszLeadersOnly: false,
+			jszFilters:     []JszFilter{StreamTotalMessages},
+			assert: func(t *testing.T, test *test, output string) {
+				metrics := []string{}
+				for _, filter := range test.jszFilters {
+					id := JszFilterIds[filter][0]
+					m := "nats_" + id
+					metrics = append(metrics, m)
+				}
+
+				for _, m := range metrics {
+					if !strings.Contains(output, m) {
+						t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
+					}
+				}
+
+				for _, m := range allMetrics {
+					if !slices.Contains(metrics, m) && strings.Contains(output, m) {
+						t.Fatalf("invalid output, should not contain '%s':\n%v\n", m, output)
+					}
+				}
+
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sc, err := NewStatzCollectorOpts(
+				WithStats(WithStatsBatch{JsStatzs: []*server.ServerAPIJszResponse{stats}}),
+				WithCollectJsz(test.jsz, test.jszLeadersOnly, test.jszFilters),
+			)
+			if err != nil {
+				t.Fatalf("error creating statz collector: %v", err)
+			}
+
+			output := gatherStatzCollectorMetrics(t, sc)
+			test.assert(t, &test, output)
+		})
 	}
 }
 
