@@ -31,6 +31,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
+	"github.com/sirupsen/logrus"
 )
 
 // Testing constants
@@ -81,6 +82,7 @@ func httpGet(url string) (*http.Response, error) {
 func getTestOptions() *Options {
 	o := GetDefaultOptions()
 	o.Credentials = st.SystemCreds
+	o.Logger.SetLevel(logrus.ErrorLevel) // reduce logging noise
 	return o
 }
 
