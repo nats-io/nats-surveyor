@@ -29,7 +29,11 @@ import (
 	"github.com/nats-io/nuid"
 	"github.com/prometheus/client_golang/prometheus"
 	ptu "github.com/prometheus/client_golang/prometheus/testutil"
-	"github.com/stretchr/testify/require"
+)
+
+const (
+	defaultWaitFor = time.Second * 5
+	defaultTick    = time.Millisecond * 100
 )
 
 func TestServiceObservation_Load(t *testing.T) {
@@ -168,17 +172,14 @@ nats_latency_observations_count 1
 		}
 	}
 
-	// sleep a bit just in case of slower delivery to the observer
-	time.Sleep(time.Second)
-	expected = `
+	eventually(t, func() (string, error) {
+		expected := `
 # HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
 # TYPE nats_latency_observations_received_count counter
 nats_latency_observations_received_count{account="",app="testing_service",service="testing"} 10
 `
-	err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
-	if err != nil {
-		t.Fatalf("Invalid observations counter: %s", err)
-	}
+		return "invalid observations received: %s", ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
+	}, defaultWaitFor, defaultTick)
 
 	// publish some invalid observations
 	for i := 0; i < 10; i++ {
@@ -200,39 +201,42 @@ nats_latency_observations_received_count{account="",app="testing_service",servic
 		}
 	}
 
-	time.Sleep(time.Second)
+	eventually(t, func() (string, error) {
+		expected = `
+	# HELP nats_latency_observation_error_count Number of observations received by this surveyor across all services that could not be handled
+	# TYPE nats_latency_observation_error_count counter
+	nats_latency_observation_error_count{account="",service="testing"} 10
+	`
+		err = ptu.CollectAndCompare(metrics.invalidObservationsReceived, bytes.NewReader([]byte(expected)))
+		if err != nil {
+			return "invalid invalidObservationsReceived counter: %s", err
+		}
 
-	expected = `
-# HELP nats_latency_observation_error_count Number of observations received by this surveyor across all services that could not be handled
-# TYPE nats_latency_observation_error_count counter
-nats_latency_observation_error_count{account="",service="testing"} 10
-`
-	err = ptu.CollectAndCompare(metrics.invalidObservationsReceived, bytes.NewReader([]byte(expected)))
-	if err != nil {
-		t.Fatalf("Invalid invalidObservationsReceived counter: %s", err)
-	}
+		expected = `
+	# HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
+	# TYPE nats_latency_observations_received_count counter
+	nats_latency_observations_received_count{account="",app="testing_service",service="testing"} 10
+	`
+		err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
+		if err != nil {
+			return "invalid observationsReceived counter: %s", err
+		}
 
-	expected = `
-# HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
-# TYPE nats_latency_observations_received_count counter
-nats_latency_observations_received_count{account="",app="testing_service",service="testing"} 10
-`
-	err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
-	if err != nil {
-		t.Fatalf("Invalid observationsReceived counter: %s", err)
-	}
+		expected = `
+	# HELP nats_latency_observation_status_count The status result codes for requests to a service
+	# TYPE nats_latency_observation_status_count counter
+	nats_latency_observation_status_count{account="",service="testing",status="200"} 3
+	nats_latency_observation_status_count{account="",service="testing",status="400"} 2
+	nats_latency_observation_status_count{account="",service="testing",status="500"} 5
+	`
+		err = ptu.CollectAndCompare(metrics.serviceRequestStatus, bytes.NewReader([]byte(expected)))
+		if err != nil {
+			return "invalid serviceRequestStatus counter: %s", err
+		}
 
-	expected = `
-# HELP nats_latency_observation_status_count The status result codes for requests to a service
-# TYPE nats_latency_observation_status_count counter
-nats_latency_observation_status_count{account="",service="testing",status="200"} 3
-nats_latency_observation_status_count{account="",service="testing",status="400"} 2
-nats_latency_observation_status_count{account="",service="testing",status="500"} 5
-`
-	err = ptu.CollectAndCompare(metrics.serviceRequestStatus, bytes.NewReader([]byte(expected)))
-	if err != nil {
-		t.Fatalf("Status counter: %s", err)
-	}
+		return "", nil
+	}, defaultWaitFor, defaultTick)
+
 }
 
 func TestServiceObservation_Aggregate(t *testing.T) {
@@ -329,7 +333,7 @@ func TestServiceObservation_Aggregate(t *testing.T) {
 			srv := st.NewServerFromConfig(t, "../test/services.conf")
 			defer srv.Shutdown()
 
-			opt := GetDefaultOptions()
+			opt := getTestOptions()
 			opt.URLs = srv.ClientURL()
 			metrics := NewServiceObservationMetrics(prometheus.NewRegistry(), nil)
 			s, err := NewSurveyor(opt)
@@ -410,18 +414,15 @@ nats_latency_observations_count 1
 				}
 			}
 
-			waitFor := time.Second * 5
-			tick := time.Millisecond * 100
-
-			require.Eventually(t, func() bool {
-				expected = `
+			eventually(t, func() (string, error) {
+				expected := `
 	# HELP nats_latency_observations_received_count Number of observations received by this surveyor across all services
 	# TYPE nats_latency_observations_received_count counter
 	nats_latency_observations_received_count{account="a",app="testing_service",service="myservice"} 10
 				`
 				err = ptu.CollectAndCompare(metrics.observationsReceived, bytes.NewReader([]byte(expected)))
-				return err == nil
-			}, waitFor, tick, "Invalid observations counter: %s", err)
+				return "invalid observationsReceived counter: %s", err
+			}, defaultWaitFor, defaultTick)
 		})
 	}
 }
@@ -853,4 +854,27 @@ func TestSurveyor_ObservationMetrics(t *testing.T) {
 
 	infos := metrics.MetricInfos()
 	assertMetricInfos(t, infos)
+}
+
+type eventuallyF func() (msg string, err error)
+
+func eventually(t *testing.T, condition eventuallyF, waitFor time.Duration, tick time.Duration) {
+	fail := time.NewTimer(waitFor)
+	ticker := time.NewTicker(tick)
+	defer ticker.Stop()
+	defer fail.Stop()
+	var msg string
+	var err error
+	for {
+		select {
+		case <-fail.C:
+			t.Fatalf("condition not met after %s. %s: %s", waitFor, msg, err)
+		case <-ticker.C:
+			msg, err = condition()
+			if err == nil {
+				return
+			}
+		}
+	}
+
 }
