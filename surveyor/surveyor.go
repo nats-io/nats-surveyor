@@ -44,6 +44,7 @@ var (
 	DefaultListenAddress      = "0.0.0.0"
 	DefaultURL                = nats.DefaultURL
 	DefaultExpectedServers    = 1
+	DefaultJszLimit           = 1024
 	DefaultPollTimeout        = time.Second * 3
 	DefaultServerResponseWait = 500 * time.Millisecond
 	DefaultSysReqPrefix       = "$SYS.REQ"
@@ -84,6 +85,7 @@ type Options struct {
 	AccountsDetailed     bool
 	Gatewayz             bool
 	Jsz                  string
+	JszLimit             int
 	JszLeadersOnly       bool
 	JszFilters           []JszFilter
 	SysReqPrefix         string
@@ -244,6 +246,7 @@ func (s *Surveyor) createStatszCollector() error {
 		s.opts.AccountsDetailed,
 		s.opts.Gatewayz,
 		s.opts.Jsz,
+		s.opts.JszLimit,
 		s.opts.JszLeadersOnly,
 		s.opts.JszFilters,
 		s.opts.SysReqPrefix,
