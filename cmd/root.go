@@ -260,6 +260,10 @@ func init() {
 	rootCmd.Flags().String("jsz", "", "Export jsz metrics optionally, one of: all|streams|consumers")
 	_ = viper.BindPFlag("jsz", rootCmd.Flags().Lookup("jsz"))
 
+	// jsz limit
+	rootCmd.Flags().Int("jsz-limit", surveyor.DefaultJszLimit, "Limit the number of returned account jsz metrics")
+	_ = viper.BindPFlag("jsz-limit", rootCmd.Flags().Lookup("jsz-limit"))
+
 	// jsz leader only
 	rootCmd.Flags().Bool("jsz-leaders-only", false, "Fetch jsz metrics from stream and consumer leaders only")
 	_ = viper.BindPFlag("jsz-leaders-only", rootCmd.Flags().Lookup("jsz-leaders-only"))
@@ -320,6 +324,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.AccountsDetailed = viper.GetBool("accounts-detailed")
 	opts.Gatewayz = viper.GetBool("gatewayz")
 	opts.Jsz = viper.GetString("jsz")
+	opts.JszLimit = viper.GetInt("jsz-limit")
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")
 	opts.JszFilters = jszFilters
 

@@ -14,7 +14,7 @@ import (
 )
 
 func TestStatzCollector_WithoutNATSConnection(t *testing.T) {
-	sc := NewStatzCollector(nil, nil, 0, 0, 0, false, false, false, "", false, nil, "", nil)
+	sc := NewStatzCollector(nil, nil, 0, 0, 0, false, false, false, "", 0, false, nil, "", nil)
 
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(sc)

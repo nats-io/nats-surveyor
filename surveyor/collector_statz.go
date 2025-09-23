@@ -820,7 +820,7 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 // Deprecated: NewStatzCollector is deprecated. Use NewStatzCollectorOpts instead.
 func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 	serverDiscoveryWait, pollTimeout time.Duration, accounts, accountsDetailed bool, gatewayz bool,
-	jsz string, jszLeadersOnly bool, jszFilters []JszFilter, sysReqPrefix string,
+	jsz string, jszLimit int, jszLeadersOnly bool, jszFilters []JszFilter, sysReqPrefix string,
 	constLabels prometheus.Labels,
 ) *StatzCollector {
 	sc, _ := NewStatzCollectorOpts(
@@ -832,6 +832,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 		WithCollectAccounts(accounts, accountsDetailed),
 		WithCollectGatewayz(gatewayz),
 		WithCollectJsz(CollectJsz(jsz), jszLeadersOnly, jszFilters),
+		WithJszLimit(jszLimit),
 		WithConstantLabels(constLabels),
 		WithSysRequestPrefix(sysReqPrefix),
 	)
@@ -852,7 +853,7 @@ func NewStatzCollectorOpts(opts ...StatzCollectorOpt) (*StatzCollector, error) {
 		numServers:          DefaultExpectedServers,
 		serverDiscoveryWait: DefaultServerResponseWait,
 		pollTimeout:         DefaultPollTimeout,
-		jszLimit:            -1,
+		jszLimit:            DefaultJszLimit,
 
 		// TODO - normalize these if possible.  Jetstream varies from the other server labels
 		serverLabels:       []string{"server_cluster", "server_name", "server_id"},
@@ -878,7 +879,10 @@ func NewStatzCollectorOpts(opts ...StatzCollectorOpt) (*StatzCollector, error) {
 	sc.expectedCnt.WithLabelValues().Set(float64(sc.numServers))
 
 	if sc.nc != nil {
-		sc.nc.Subscribe(sc.reply+".*", sc.handleStatzResponse)
+		_, err := sc.nc.Subscribe(sc.reply+".*", sc.handleStatzResponse)
+		if err != nil {
+			return nil, fmt.Errorf("error subscribing to statz response: %w", err)
+		}
 	}
 
 	if sc.logger == nil {
