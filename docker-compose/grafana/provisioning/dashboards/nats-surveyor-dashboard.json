@@ -4161,10 +4161,6 @@
               "expr": "nats_core_mem_bytes{server_cluster=~\"$cluster\"} / nats_core_go_memlimit_bytes{server_cluster=~\"$cluster\"} * 100",
               "legendFormat": "{{server_name}}",
               "refId": "A",
-              "datasource": {
-                "type": "prometheus",
-                "uid": "$datasource"
-              },
               "editorMode": "code",
               "range": true
             }
