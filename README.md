@@ -357,19 +357,21 @@ Example file format:
   "tls_ca":     "/path/to/ca.pem, defaults to surveyor's ca if one exists",
   "tls_cert":   "/path/to/cert.pem, defaults to surveyor's cert if one exists",
   "tls_key":    "/path/to/key.pem, defaults to surveyor's key if one exists"
-}.
+}
 ```
 
 Files are watched and updated using [fsnotify](https://github.com/fsnotify/fsnotify)
 
 ## Development
 
-The easiest way to test your changes is to build local image: 
+The easiest way to test your changes is to build local image:
+
 ```
 docker build -t natsio/nats-surveyor:latest --debug .
 ```
 
 You can then use the image against local cluster from docker-compse:
+
 ```
 NATS_SURVEYOR_USER=system NATS_SURVEYOR_PASSWORD=s3cret NATS_SURVEYOR_SERVERS=nats://host.docker.internal:4222 docker compose up
 ```
