@@ -1728,6 +1728,26 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					metrics.newCounterMetric(sc.descs.accMsgsRecv, float64(as.Data.Received.Msgs), serverAndAccLabels)
 
 					if sc.collectAccountsDetailed {
+						// handle 2.12 changes
+						if as.Data.Sent.Gateways == nil {
+							as.Data.Sent.Gateways = &server.MsgBytes{}
+						}
+						if as.Data.Sent.Routes == nil {
+							as.Data.Sent.Routes = &server.MsgBytes{}
+						}
+						if as.Data.Sent.Leafs == nil {
+							as.Data.Sent.Leafs = &server.MsgBytes{}
+						}
+						if as.Data.Received.Gateways == nil {
+							as.Data.Received.Gateways = &server.MsgBytes{}
+						}
+						if as.Data.Received.Routes == nil {
+							as.Data.Received.Routes = &server.MsgBytes{}
+						}
+						if as.Data.Received.Leafs == nil {
+							as.Data.Received.Leafs = &server.MsgBytes{}
+						}
+
 						metrics.newCounterMetric(sc.descs.accClientBytesSent, float64(as.Data.Sent.Bytes-as.Data.Sent.Routes.Bytes-as.Data.Sent.Gateways.Bytes-as.Data.Sent.Leafs.Bytes), serverAndAccLabels)
 						metrics.newCounterMetric(sc.descs.accClientBytesRecv, float64(as.Data.Received.Bytes-as.Data.Received.Routes.Bytes-as.Data.Received.Gateways.Bytes-as.Data.Received.Leafs.Bytes), serverAndAccLabels)
 						metrics.newCounterMetric(sc.descs.accClientMsgsSent, float64(as.Data.Sent.Msgs-as.Data.Sent.Routes.Msgs-as.Data.Sent.Gateways.Msgs-as.Data.Sent.Leafs.Msgs), serverAndAccLabels)
