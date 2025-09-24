@@ -50,6 +50,7 @@ type statzDescs struct {
 	Start            *GaugeVec
 	Uptime           *GaugeVec
 	Mem              *GaugeVec
+	GoMemLimit       *GaugeVec
 	Cores            *GaugeVec
 	CPU              *GaugeVec
 	Connections      *GaugeVec
@@ -353,6 +354,7 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.Start = newGaugeVec(newName("start_time"), "Server start time gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.Uptime = newGaugeVec(newName("uptime"), "Server uptime gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.Mem = newGaugeVec(newName("mem_bytes"), "Server memory gauge", sc.constLabels, sc.serverLabels)
+	sc.descs.GoMemLimit = newGaugeVec(newName("go_memlimit_bytes"), "Server GOMEMLIMIT gauge (0 if not set)", sc.constLabels, sc.serverLabels)
 	sc.descs.Cores = newGaugeVec(newName("core_count"), "Machine cores gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.CPU = newGaugeVec(newName("cpu_percentage"), "Server cpu utilization gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.Connections = newGaugeVec(newName("connection_count"), "Current number of client connections gauge", sc.constLabels, sc.serverLabels)
@@ -1606,6 +1608,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			metrics.newGaugeMetric(sc.descs.Start, float64(sm.Stats.Start.UnixNano()), labels)
 			metrics.newGaugeMetric(sc.descs.Uptime, time.Since(sm.Stats.Start).Seconds(), labels)
 			metrics.newGaugeMetric(sc.descs.Mem, float64(sm.Stats.Mem), labels)
+			metrics.newGaugeMetric(sc.descs.GoMemLimit, float64(sm.Stats.MemLimit), labels)
 			metrics.newGaugeMetric(sc.descs.Cores, float64(sm.Stats.Cores), labels)
 			metrics.newGaugeMetric(sc.descs.CPU, sm.Stats.CPU, labels)
 			metrics.newGaugeMetric(sc.descs.Connections, float64(sm.Stats.Connections), labels)

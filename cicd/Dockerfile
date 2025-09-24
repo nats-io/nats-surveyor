@@ -1,5 +1,5 @@
 #syntax=docker/dockerfile:1.13
-FROM goreleaser as build
+FROM goreleaser AS build
 
 ARG GO_APP
 
