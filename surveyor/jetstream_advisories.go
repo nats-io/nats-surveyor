@@ -67,6 +67,7 @@ type JSAdvisoryMetrics struct {
 	jsStreamLeaderElected   *CounterVec
 	jsStreamQuorumLost      *CounterVec
 	jsConsumerDeliveryNAK   *CounterVec
+	jsBatchAbandoned        *CounterVec
 }
 
 func NewJetStreamAdvisoryMetrics(registry *prometheus.Registry, constLabels prometheus.Labels) *JSAdvisoryMetrics {
@@ -223,6 +224,13 @@ func NewJetStreamAdvisoryMetrics(registry *prometheus.Registry, constLabels prom
 			constLabels,
 			[]string{"account", "stream", "consumer"},
 		),
+
+		jsBatchAbandoned: newCounterVec(
+			prometheus.BuildFQName("nats", "jetstream", "atomic_batch_abandoned"),
+			"How many JetStream Atomic batches were abandoned",
+			constLabels,
+			[]string{"account", "stream", "reason"},
+		),
 	}
 
 	registry.MustRegister(metrics.jsAPIAuditCtr)
@@ -246,6 +254,7 @@ func NewJetStreamAdvisoryMetrics(registry *prometheus.Registry, constLabels prom
 	registry.MustRegister(metrics.jsStreamLeaderElected)
 	registry.MustRegister(metrics.jsStreamQuorumLost)
 	registry.MustRegister(metrics.jsConsumerDeliveryNAK)
+	registry.MustRegister(metrics.jsBatchAbandoned)
 
 	return metrics
 }
@@ -274,6 +283,7 @@ func (m *JSAdvisoryMetrics) MetricInfos() []MetricInfo {
 		m.jsStreamLeaderElected,
 		m.jsStreamQuorumLost,
 		m.jsConsumerDeliveryNAK,
+		m.jsBatchAbandoned,
 	}
 }
 
@@ -613,6 +623,9 @@ func (o *jsAdvisoryListener) advisoryHandler(m *nats.Msg) {
 
 	case *advisory.JSConsumerDeliveryNakAdvisoryV1:
 		o.metrics.jsConsumerDeliveryNAK.WithLabelValues(accountName, event.Stream, event.Consumer).Inc()
+
+	case *advisory.JSStreamBatchAbandonedAdvisoryV1:
+		o.metrics.jsBatchAbandoned.WithLabelValues(accountName, event.Stream, event.Reason.String()).Inc()
 
 	default:
 		o.metrics.jsUnknownAdvisoryCtr.WithLabelValues(schema, accountName).Inc()
