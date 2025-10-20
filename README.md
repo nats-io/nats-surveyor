@@ -176,7 +176,7 @@ Follow these links for installation instructions:
 - [Docker Installation](https://docs.docker.com/engine/install/)
 - [Docker Compose Installation](https://docs.docker.com/compose/install/)
 
-The included `docker-compose` setup supports authintication using either creds file
+The included `docker-compose` setup supports authentication using either creds file
 or username/password:
 
 **Using credential file:**
