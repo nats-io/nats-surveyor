@@ -542,9 +542,10 @@ func (o *jsAdvisoryListener) advisoryHandler(m *nats.Msg) {
 	var err error
 	if o.config.ExternalAccountConfig != nil {
 		var tokenPosition int
-		if m.Sub.Subject == o.config.ExternalAccountConfig.MetricsSubject {
+		switch m.Sub.Subject {
+		case o.config.ExternalAccountConfig.MetricsSubject:
 			tokenPosition = o.config.ExternalAccountConfig.MetricsAccountTokenPosition
-		} else if m.Sub.Subject == o.config.ExternalAccountConfig.AdvisorySubject {
+		case o.config.ExternalAccountConfig.AdvisorySubject:
 			tokenPosition = o.config.ExternalAccountConfig.AdvisoryAccountTokenPosition
 		}
 		if tokenPosition == 0 {

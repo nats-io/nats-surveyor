@@ -154,7 +154,7 @@ func newCounterVec(name string, help string, constLabels prometheus.Labels, labe
 }
 
 func (c *CounterVec) Vec() *prometheus.MetricVec {
-	return c.CounterVec.MetricVec
+	return c.MetricVec
 }
 
 func (c *CounterVec) Name() string {
@@ -203,7 +203,7 @@ func newGaugeVec(name string, help string, constLabels prometheus.Labels, labelN
 }
 
 func (g *GaugeVec) Vec() *prometheus.MetricVec {
-	return g.GaugeVec.MetricVec
+	return g.MetricVec
 }
 
 func (g *GaugeVec) Name() string {
@@ -252,7 +252,7 @@ func newSummaryVec(name string, help string, constLabels prometheus.Labels, labe
 }
 
 func (s *SummaryVec) Vec() *prometheus.MetricVec {
-	return s.SummaryVec.MetricVec
+	return s.MetricVec
 }
 
 func (s *SummaryVec) Name() string {
@@ -301,7 +301,7 @@ func newHistogramVec(name string, help string, constLabels prometheus.Labels, la
 }
 
 func (h *HistogramVec) Vec() *prometheus.MetricVec {
-	return h.HistogramVec.MetricVec
+	return h.MetricVec
 }
 
 func (h *HistogramVec) Name() string {
