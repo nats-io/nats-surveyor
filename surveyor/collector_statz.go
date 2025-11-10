@@ -2170,7 +2170,8 @@ func mapJSAccountDetailToStats(accID string, accDetail *server.AccountDetail, st
 		if stream.Config.MaxBytes > 0 {
 			reserved = float64(stream.Config.MaxBytes)
 		}
-		if stream.Config.Storage == server.MemoryStorage {
+		switch stream.Config.Storage {
+		case server.MemoryStorage:
 			if _, ok := sts.jetstreamTieredMemoryUsed[stream.Config.Replicas]; ok {
 				sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] += used
 				sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] += reserved
@@ -2178,7 +2179,7 @@ func mapJSAccountDetailToStats(accID string, accDetail *server.AccountDetail, st
 				sts.jetstreamTieredMemoryUsed[stream.Config.Replicas] = used
 				sts.jetstreamTieredMemoryReserved[stream.Config.Replicas] = reserved
 			}
-		} else if stream.Config.Storage == server.FileStorage {
+		case server.FileStorage:
 			if _, ok := sts.jetstreamTieredStorageUsed[stream.Config.Replicas]; ok {
 				sts.jetstreamTieredStorageUsed[stream.Config.Replicas] += used
 				sts.jetstreamTieredStorageReserved[stream.Config.Replicas] += reserved

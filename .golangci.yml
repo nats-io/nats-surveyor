@@ -1,17 +1,29 @@
-issues:
-  exclude-use-default: false
-  max-same-issues: 0
-
+version: "2"
 linters:
   enable:
-    - stylecheck
-    - unconvert
-    - gofmt
     - misspell
-    - unparam
     - nakedret
     - prealloc
-    - misspell
+    - staticcheck
+    - unconvert
+    - unparam
   disable:
     - errcheck
     - gocritic
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
