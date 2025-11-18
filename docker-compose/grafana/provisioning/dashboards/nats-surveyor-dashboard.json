@@ -88,7 +88,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_recv_msgs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "legendFormat": "Received",
           "refId": "A"
         }
@@ -162,7 +162,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_sent_msgs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "legendFormat": "Sent",
           "refId": "A"
         }
@@ -236,7 +236,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_recv_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "legendFormat": "Received",
           "refId": "A"
         }
@@ -310,7 +310,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_sent_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "legendFormat": "Sent",
           "refId": "A"
         }
@@ -384,7 +384,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(nats_core_connection_count{server_cluster=~\"$cluster\"})",
+          "expr": "sum(nats_core_connection_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"})",
           "refId": "A"
         }
       ],
@@ -457,7 +457,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_slow_consumer_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "legendFormat": "Slow",
           "refId": "A"
         }
@@ -531,7 +531,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "count(sum(nats_core_info{server_cluster=~\"$cluster\"}) by (server_cluster))",
+          "expr": "count(sum(nats_core_info{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}) by (server_cluster))",
           "legendFormat": "Servers",
           "refId": "A"
         }
@@ -605,7 +605,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "count(nats_core_info{server_cluster=~\"$cluster\"})",
+          "expr": "count(nats_core_info{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"})",
           "legendFormat": "Servers",
           "refId": "A"
         }
@@ -679,7 +679,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(nats_core_route_count{server_cluster=~\"$cluster\"})",
+          "expr": "sum(nats_core_route_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"})",
           "refId": "A"
         }
       ],
@@ -753,7 +753,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(nats_core_gateway_count{server_cluster=~\"$cluster\"})",
+          "expr": "sum(nats_core_gateway_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"})",
           "legendFormat": "Gateways",
           "refId": "A"
         }
@@ -844,7 +844,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "sum(nats_core_jetstream_filestore_size_bytes{})",
+          "expr": "sum(nats_core_jetstream_filestore_size_bytes{instance=\"$surveyor_instance\",})",
           "hide": false,
           "interval": "",
           "legendFormat": "Capacity",
@@ -852,7 +852,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum(nats_core_jetstream_filestore_used_bytes{})",
+          "expr": "sum(nats_core_jetstream_filestore_used_bytes{instance=\"$surveyor_instance\",})",
           "hide": false,
           "interval": "",
           "legendFormat": "Consumed",
@@ -860,7 +860,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum(nats_core_jetstream_filestore_reserved_bytes{})",
+          "expr": "sum(nats_core_jetstream_filestore_reserved_bytes{instance=\"$surveyor_instance\",})",
           "hide": false,
           "interval": "",
           "legendFormat": "Reserved",
@@ -941,7 +941,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "sum(nats_core_jetstream_memstore_size_bytes{})",
+          "expr": "sum(nats_core_jetstream_memstore_size_bytes{instance=\"$surveyor_instance\",})",
           "hide": false,
           "interval": "",
           "legendFormat": "Capacity",
@@ -949,7 +949,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum(nats_core_jetstream_memstore_used_bytes{})",
+          "expr": "sum(nats_core_jetstream_memstore_used_bytes{instance=\"$surveyor_instance\",})",
           "hide": false,
           "interval": "",
           "legendFormat": "Consumed",
@@ -957,7 +957,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum(nats_core_jetstream_memstore_reserved_bytes{})",
+          "expr": "sum(nats_core_jetstream_memstore_reserved_bytes{instance=\"$surveyor_instance\",})",
           "hide": false,
           "interval": "",
           "legendFormat": "Reserved",
@@ -1051,7 +1051,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "group by(server_domain) (nats_core_jetstream_info{server_jetstream=\"true\"})",
+          "expr": "group by(server_domain) (nats_core_jetstream_info{instance=\"$surveyor_instance\",server_jetstream=\"true\"})",
           "hide": false,
           "interval": "",
           "legendFormat": "{{server_domain}}",
@@ -1146,7 +1146,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "(nats_core_jetstream_cluster_raft_group_leader * on(server_id) group_left(server_cluster,server_name, server_domain) nats_core_jetstream_info) > 0",
+          "expr": "(nats_core_jetstream_cluster_raft_group_leader{instance=\"$surveyor_instance\"} * on(server_id) group_left(server_cluster,server_name, server_domain) nats_core_jetstream_info{instance=\"$surveyor_instance\"}) > 0",
           "hide": false,
           "interval": "",
           "legendFormat": "{{server_name}}",
@@ -1240,7 +1240,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "count(group by(server_cluster) (nats_core_jetstream_info{server_jetstream=\"true\"}))",
+          "expr": "count(group by(server_cluster) (nats_core_jetstream_info{instance=\"$surveyor_instance\",server_jetstream=\"true\"}))",
           "hide": false,
           "interval": "",
           "legendFormat": "",
@@ -1334,7 +1334,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "count(nats_core_jetstream_info{server_jetstream=\"true\"})",
+          "expr": "count(nats_core_jetstream_info{instance=\"$surveyor_instance\",server_jetstream=\"true\"})",
           "hide": false,
           "interval": "",
           "legendFormat": "Enabled",
@@ -1342,7 +1342,7 @@
         },
         {
           "exemplar": true,
-          "expr": "count(nats_core_jetstream_enabled == 1)",
+          "expr": "count(nats_core_jetstream_enabled{instance=\"$surveyor_instance\"} == 1)",
           "hide": false,
           "interval": "",
           "legendFormat": "Running",
@@ -1436,7 +1436,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "sum(nats_core_jetstream_ha_assets{})",
+          "expr": "sum(nats_core_jetstream_ha_assets{instance=\"$surveyor_instance\",})",
           "hide": false,
           "interval": "",
           "legendFormat": "Enabled",
@@ -1530,7 +1530,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "nats_core_jetstream_cluster_raft_group_replicas * on(server_id) group_left(server_domain, server_cluster,server_name) nats_core_jetstream_info > 0",
+          "expr": "nats_core_jetstream_cluster_raft_group_replicas{instance=\"$surveyor_instance\"} * on(server_id) group_left(server_domain, server_cluster,server_name) nats_core_jetstream_info{instance=\"$surveyor_instance\"} > 0",
           "hide": false,
           "interval": "",
           "legendFormat": "{{server_domain}}:{{server_name}}",
@@ -1624,7 +1624,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "sum by (server_domain, leader) (nats_core_jetstream_cluster_raft_group_info{raft_group=\"_meta_\"})",
+          "expr": "sum by (server_domain, leader) (nats_core_jetstream_cluster_raft_group_info{instance=\"$surveyor_instance\",raft_group=\"_meta_\"})",
           "hide": false,
           "interval": "",
           "legendFormat": "{{leader}}",
@@ -1745,7 +1745,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(nats_core_connection_count{server_cluster=~\"$cluster\"})",
+          "expr": "sum(nats_core_connection_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"})",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -1753,7 +1753,7 @@
           "refId": "A"
         },
         {
-          "expr": "sum(nats_core_subs_count{server_cluster=~\"$cluster\"})",
+          "expr": "sum(nats_core_subs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"})",
           "instant": false,
           "interval": "",
           "legendFormat": "Subscriptions",
@@ -1845,7 +1845,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_slow_consumer_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "legendFormat": "Slow Consumers",
           "refId": "A"
         }
@@ -1935,7 +1935,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "rate(nats_core_jetstream_api_requests{server_cluster=~\"$cluster\"}[$__rate_interval])",
+          "expr": "rate(nats_core_jetstream_api_requests{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[$__rate_interval])",
           "legendFormat": "{{server_name}}",
           "refId": "A"
         }
@@ -2027,7 +2027,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "nats_core_jetstream_api_pending{server_cluster=~\"$cluster\"}",
+          "expr": "nats_core_jetstream_api_pending{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
           "legendFormat": "{{server_name}}",
           "refId": "A"
         }
@@ -2118,12 +2118,12 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_sent_msgs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "legendFormat": "Sent",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_recv_msgs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "legendFormat": "Received",
           "refId": "B"
         }
@@ -2215,12 +2215,12 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_sent_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "legendFormat": "Sent",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_recv_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "legendFormat": "Received",
           "refId": "B"
         }
@@ -2309,7 +2309,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(nats_core_info{server_cluster=~\"$cluster\"}) by (server_version)",
+          "expr": "sum(nats_core_info{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}) by (server_version)",
           "legendFormat": "{{server_version}}",
           "refId": "A"
         }
@@ -2349,7 +2349,7 @@
       "reverseYBuckets": false,
       "targets": [
         {
-          "expr": "nats_core_rtt_nanoseconds",
+          "expr": "nats_core_rtt_nanoseconds{instance=\"$surveyor_instance\"}",
           "format": "time_series",
           "instant": false,
           "legendFormat": "RTT",
@@ -2464,7 +2464,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "nats_core_connection_count{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_connection_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -2551,7 +2551,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "nats_core_subs_count{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_subs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -2638,7 +2638,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_total_connection_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_total_connection_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -2722,7 +2722,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "delta(nats_core_subs_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "delta(nats_core_subs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -2809,7 +2809,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_slow_consumer_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -2911,7 +2911,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_gateway_sent_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_gateway_sent_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
@@ -2998,7 +2998,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_gateway_recv_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_gateway_recv_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
@@ -3085,7 +3085,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_gateway_sent_msgs_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_gateway_sent_msgs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
@@ -3172,7 +3172,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_gateway_recv_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_gateway_recv_msg_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
@@ -3273,7 +3273,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_route_sent_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_sent_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -3360,7 +3360,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_route_recv_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_recv_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -3447,7 +3447,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_route_sent_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_sent_msg_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -3534,7 +3534,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_route_recv_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_recv_msg_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -3621,7 +3621,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "sum(nats_core_info{server_cluster=~\"$cluster\"}) by (server_cluster)",
+              "expr": "sum(nats_core_info{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}) by (server_cluster)",
               "legendFormat": "{{server_cluster}}",
               "refId": "A"
             }
@@ -3708,7 +3708,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "nats_core_route_pending_bytes{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_route_pending_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -3810,7 +3810,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_sent_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -3898,7 +3898,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_recv_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -3986,7 +3986,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_sent_msgs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4074,7 +4074,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_recv_msgs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4178,7 +4178,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "nats_core_cpu_percentage{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_cpu_percentage{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
               "legendFormat": "{{server_name}}",
               "refId": "B"
             }
@@ -4295,12 +4295,12 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "nats_core_mem_bytes{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_mem_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
               "legendFormat": "{{server_name}} (usage)",
               "refId": "A"
             },
             {
-              "expr": "nats_core_go_memlimit_bytes{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_go_memlimit_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
               "legendFormat": "{{server_name}} (GOMEMLIMIT)",
               "refId": "B"
             }
@@ -4384,7 +4384,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "nats_core_mem_bytes{server_cluster=~\"$cluster\"} / nats_core_go_memlimit_bytes{server_cluster=~\"$cluster\"} * 100",
+              "expr": "nats_core_mem_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"} / nats_core_go_memlimit_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"} * 100",
               "legendFormat": "{{server_name}}",
               "refId": "A",
               "editorMode": "code",
@@ -4501,12 +4501,12 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "nats_survey_expected_count",
+              "expr": "nats_survey_expected_count{instance=\"$surveyor_instance\"}",
               "legendFormat": "Expected",
               "refId": "A"
             },
             {
-              "expr": "nats_survey_surveyed_count",
+              "expr": "nats_survey_surveyed_count{instance=\"$surveyor_instance\"}",
               "legendFormat": "Responded",
               "refId": "B"
             }
@@ -4592,7 +4592,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_rtt_nanoseconds[1m])",
+              "expr": "rate(nats_core_rtt_nanoseconds{instance=\"$surveyor_instance\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4675,7 +4675,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "increase(nats_survey_nats_reconnects[5m])",
+              "expr": "increase(nats_survey_nats_reconnects{instance=\"$surveyor_instance\"}[5m])",
               "legendFormat": "Reconnections",
               "refId": "A"
             }
@@ -4762,7 +4762,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": " rate(nats_survey_duration_seconds_sum[5m])\n/\n  rate(nats_survey_duration_seconds_count[5m])",
+              "expr": " rate(nats_survey_duration_seconds_sum{instance=\"$surveyor_instance\"}[5m])\n/\n  rate(nats_survey_duration_seconds_count{instance=\"$surveyor_instance\"}[5m])",
               "legendFormat": "Poll Time",
               "refId": "A"
             }
@@ -4789,6 +4789,48 @@
         "label": "Prometheus Datasource",
         "query": "prometheus",
         "refresh": 1
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "definition": "label_values(nats_core_info, job)",
+        "includeAll": true,
+        "label": "Surveyor Job",
+        "name": "surveyor_job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nats_core_info, job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "nats-surveyor.*",
+        "type": "query",
+        "allValue": ".*"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "definition": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+        "hide": 2,
+        "includeAll": false,
+        "label": "Surveyor Instance",
+        "name": "surveyor_instance",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
       },
       {
         "allValue": ".*",

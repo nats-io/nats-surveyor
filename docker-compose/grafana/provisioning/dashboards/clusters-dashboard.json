@@ -77,7 +77,7 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "max(nats_core_gateway_count)",
+          "expr": "max(nats_core_gateway_count{instance=\"$surveyor_instance\"})",
           "interval": "",
           "legendFormat": "Clusters",
           "refId": "A"
@@ -134,7 +134,7 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "sum(nats_core_info{server_cluster=~\"$cluster\"}) ",
+          "expr": "sum(nats_core_info{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}) ",
           "interval": "",
           "legendFormat": "Connections",
           "refId": "A"
@@ -206,13 +206,13 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(nats_core_route_sent_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_route_sent_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "interval": "",
           "legendFormat": "Sent",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(nats_core_route_recv_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_route_recv_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "interval": "",
           "legendFormat": "Received",
           "refId": "B"
@@ -320,14 +320,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(nats_core_route_sent_msg_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_route_sent_msg_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "hide": false,
           "interval": "",
           "legendFormat": "Sent",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(nats_core_route_recv_msg_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_route_recv_msg_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "interval": "",
           "legendFormat": "Received",
           "refId": "B"
@@ -444,7 +444,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_route_sent_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_sent_msg_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "interval": "",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
@@ -546,7 +546,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_route_recv_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_recv_msg_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "interval": "",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
@@ -666,7 +666,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_route_sent_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_sent_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "interval": "",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
@@ -768,7 +768,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_route_recv_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_recv_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -887,7 +887,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "nats_core_route_pending_bytes{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_route_pending_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -986,7 +986,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(nats_core_info{server_cluster=~\"$cluster\"}) by (server_cluster)",
+              "expr": "sum(nats_core_info{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}) by (server_cluster)",
               "interval": "",
               "legendFormat": "{{server_cluster}}",
               "refId": "A"
@@ -1053,6 +1053,48 @@
         "label": "Prometheus Datasource",
         "query": "prometheus",
         "refresh": 1
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "definition": "label_values(nats_core_info, job)",
+        "includeAll": true,
+        "label": "Surveyor Job",
+        "name": "surveyor_job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nats_core_info, job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "nats-surveyor.*",
+        "type": "query",
+        "allValue": ".*"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "definition": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+        "hide": 2,
+        "includeAll": false,
+        "label": "Surveyor Instance",
+        "name": "surveyor_instance",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
       },
       {
         "allValue": ".*",
