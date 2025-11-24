@@ -4101,7 +4101,7 @@
             "type": "prometheus",
             "uid": "${prom_ds}"
           },
-          "description": "CPU used by the NATS Server process",
+          "description": "CPU used by the NATS Server process. 100% = 1 core fully utilized.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -4183,7 +4183,7 @@
               "refId": "B"
             }
           ],
-          "title": "CPU Usage",
+          "title": "CPU Usage (100% = 1 core)",
           "type": "timeseries"
         },
         {
@@ -4191,7 +4191,7 @@
             "type": "prometheus",
             "uid": "${prom_ds}"
           },
-          "description": "The number of bytes in use by the NATS server",
+          "description": "RSS memory in use by the NATS server process",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -4305,7 +4305,7 @@
               "refId": "B"
             }
           ],
-          "title": "Memory",
+          "title": "Memory (RSS)",
           "type": "timeseries"
         },
         {
