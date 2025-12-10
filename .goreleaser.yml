@@ -7,29 +7,31 @@ release:
     owner: nats-io
     name: nats-surveyor
 
-  name_template: 'Release {{.Tag}}'
+  name_template: "Release {{.Tag}}"
 
 builds:
   - main: .
     id: nats-surveyor
     binary: nats-surveyor
+    flags:
+      - -trimpath
     ldflags:
-      - "-s -w -X github.com/nats-io/nats-surveyor/cmd.Version={{ .Tag }}"
+      - " -X github.com/nats-io/nats-surveyor/cmd.Version={{ .Tag }}"
     env:
       - GO111MODULE=on
       - CGO_ENABLED=0
     goos:
-    - linux
-    - darwin
-    - windows
+      - linux
+      - darwin
+      - windows
     goarch:
-    - 386
-    - amd64
-    - arm
-    - arm64
+      - 386
+      - amd64
+      - arm
+      - arm64
     goarm:
-    - 6
-    - 7
+      - 6
+      - 7
     ignore:
       - goos: darwin
         goarch: 386
@@ -37,31 +39,49 @@ builds:
         goarch: arm
 
 archives:
-  - id: zipfiles
+  - id: archives
     wrap_in_directory: true
-    name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
-      }}v{{ .Arm }}{{ end }}'
+    name_template: "{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
     formats:
-    - 'zip'
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    builds_info:
+      owner: root
+      group: root
+      mode: 0755
     files:
-    - LICENSE
-    - README.md
-    - nats-surveyor*
+      - src: LICENSE
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: README.md
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
 
 nfpms:
   - formats:
       - deb
-    file_name_template: '{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm
-      }}v{{ .Arm }}{{ end }}'
+      - rpm
+    file_name_template: "{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
     bindir: /usr/local/bin
     description: A Simplified Prometheus Monitoring Solution for NATS
     vendor: nats.io
     maintainer: Colin Sullivan <colin@nats.io>
     homepage: https://nats.io
     license: Apache 2.0
+    mtime: "{{ .CommitDate }}"
 
 snapshot:
   version_template: SNAPSHOT-{{ .Commit }}
 
 checksum:
-  name_template: '{{ .ProjectName }}-v{{ .Version }}-checksums.txt'
+  name_template: "SHA256SUMS"
+  algorithm: sha256
