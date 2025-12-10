@@ -19,11 +19,11 @@ services:
       - ./jetstream:/jetstream
     environment:
       - NATS_SURVEYOR_CREDS=/etc/surveyor/SYS.creds
-      - NATS_SURVEYOR_USER  
+      - NATS_SURVEYOR_USER
       - NATS_SURVEYOR_PASSWORD
       - NATS_SURVEYOR_SERVERS
       - NATS_SURVEYOR_SERVER_COUNT
-    command: --count ${NATS_SURVEYOR_SERVER_COUNT} -s "${NATS_SURVEYOR_SERVERS}" --accounts --observe /observations --jetstream /jetstream
+    command: --count ${NATS_SURVEYOR_SERVER_COUNT} -s "${NATS_SURVEYOR_SERVERS}" --accounts --observe /observations --jetstream /jetstream --jsz all
     networks:
       - monitor-net
     labels:
