@@ -45,7 +45,7 @@ var (
 	DefaultURL                = nats.DefaultURL
 	DefaultExpectedServers    = 1
 	DefaultJszLimit           = 1024
-	DefaultPollTimeout        = time.Second * 3
+	DefaultPollTimeout        = time.Second * 7
 	DefaultServerResponseWait = 500 * time.Millisecond
 	DefaultSysReqPrefix       = "$SYS.REQ"
 
