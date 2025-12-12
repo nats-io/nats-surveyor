@@ -64,17 +64,17 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.10, sum(rate(nats_latency_service_duration_bucket{service=~\"${service}\"}[$range])) by (le,service))",
+          "expr": "histogram_quantile(0.10, sum(rate(nats_latency_service_duration_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (le,service))",
           "legendFormat": "{{service}} 10th %",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.50, sum(rate(nats_latency_service_duration_bucket{service=~\"${service}\"}[$range])) by (le,service))",
+          "expr": "histogram_quantile(0.50, sum(rate(nats_latency_service_duration_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (le,service))",
           "legendFormat": "{{service}} 50th %",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(nats_latency_service_duration_bucket{service=~\"${service}\"}[$range])) by (le,service))",
+          "expr": "histogram_quantile(0.95, sum(rate(nats_latency_service_duration_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (le,service))",
           "legendFormat": "{{service}} 95th %",
           "refId": "C"
         }
@@ -165,17 +165,17 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.10, sum(rate(nats_latency_total_duration_bucket{service=~\"${service}\"}[$range])) by (le,service))",
+          "expr": "histogram_quantile(0.10, sum(rate(nats_latency_total_duration_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (le,service))",
           "legendFormat": "{{service}} 10th %",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.50, sum(rate(nats_latency_total_duration_bucket{service=~\"${service}\"}[$range])) by (le,service))",
+          "expr": "histogram_quantile(0.50, sum(rate(nats_latency_total_duration_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (le,service))",
           "legendFormat": "{{service}} 50th %",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(nats_latency_total_duration_bucket{service=~\"${service}\"}[$range])) by (le,service))",
+          "expr": "histogram_quantile(0.95, sum(rate(nats_latency_total_duration_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (le,service))",
           "legendFormat": "{{service}} 95th %",
           "refId": "C"
         }
@@ -268,12 +268,12 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(nats_latency_service_duration_sum{service=~\"${service}\"}[$range]) / rate(nats_latency_service_duration_count{service=~\"${service}\"}[$range])) by (service)",
+          "expr": "sum(rate(nats_latency_service_duration_sum{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range]) / rate(nats_latency_service_duration_count{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service)",
           "legendFormat": "{{service}} service time",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(nats_latency_total_duration_sum{service=~\"${service}\"}[$range]) / rate(nats_latency_total_duration_count{service=~\"${service}\"}[$range])) by (service)",
+          "expr": "sum(rate(nats_latency_total_duration_sum{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range]) / rate(nats_latency_total_duration_count{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service)",
           "legendFormat": "{{service}} total time",
           "refId": "B"
         }
@@ -379,17 +379,17 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.10, sum(rate(nats_latency_system_rtt_bucket{service=~\"${service}\"}[$range])) by (service, le))",
+          "expr": "histogram_quantile(0.10, sum(rate(nats_latency_system_rtt_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service, le))",
           "legendFormat": "{{service}} 10th %",
           "refId": "D"
         },
         {
-          "expr": "histogram_quantile(0.50, sum(rate(nats_latency_system_rtt_bucket{service=~\"${service}\"}[$range])) by (service, le))",
+          "expr": "histogram_quantile(0.50, sum(rate(nats_latency_system_rtt_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service, le))",
           "legendFormat": "{{service}} 50th %",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(nats_latency_system_rtt_bucket{service=~\"${service}\"}[$range])) by (service, le))",
+          "expr": "histogram_quantile(0.95, sum(rate(nats_latency_system_rtt_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service, le))",
           "legendFormat": "{{service}} 95th %",
           "refId": "B"
         }
@@ -493,17 +493,17 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.10, sum(rate(nats_latency_requestor_rtt_bucket{service=~\"${service}\"}[$range])) by (service, le))",
+          "expr": "histogram_quantile(0.10, sum(rate(nats_latency_requestor_rtt_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service, le))",
           "legendFormat": "{{service}} 10th %",
           "refId": "D"
         },
         {
-          "expr": "histogram_quantile(0.50, sum(rate(nats_latency_requestor_rtt_bucket{service=~\"${service}\"}[$range])) by (service, le))",
+          "expr": "histogram_quantile(0.50, sum(rate(nats_latency_requestor_rtt_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service, le))",
           "legendFormat": "{{service}} 50th %",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(nats_latency_requestor_rtt_bucket{service=~\"${service}\"}[$range])) by (service, le))",
+          "expr": "histogram_quantile(0.95, sum(rate(nats_latency_requestor_rtt_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service, le))",
           "legendFormat": "{{service}} 95th %",
           "refId": "B"
         }
@@ -607,17 +607,17 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.10, sum(rate(nats_latency_responder_rtt_bucket{service=~\"${service}\"}[$range])) by (service, le))",
+          "expr": "histogram_quantile(0.10, sum(rate(nats_latency_responder_rtt_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service, le))",
           "legendFormat": "{{service}} 10th %",
           "refId": "D"
         },
         {
-          "expr": "histogram_quantile(0.50, sum(rate(nats_latency_responder_rtt_bucket{service=~\"${service}\"}[$range])) by (service, le))",
+          "expr": "histogram_quantile(0.50, sum(rate(nats_latency_responder_rtt_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service, le))",
           "legendFormat": "{{service}} 50th %",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(nats_latency_responder_rtt_bucket{service=~\"${service}\"}[$range])) by (service, le))",
+          "expr": "histogram_quantile(0.95, sum(rate(nats_latency_responder_rtt_bucket{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service, le))",
           "legendFormat": "{{service}} 95th %",
           "refId": "B"
         }
@@ -709,7 +709,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(nats_latency_observation_status_count{service=~\"${service}\"}[$range])) by (service,status)",
+          "expr": "sum(rate(nats_latency_observation_status_count{instance=\"$surveyor_instance\",service=~\"${service}\"}[$range])) by (service,status)",
           "legendFormat": "{{service}} {{status}}",
           "refId": "A"
         }
@@ -770,6 +770,48 @@
         "label": "Prometheus Datasource",
         "query": "prometheus",
         "refresh": 1
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "definition": "label_values(nats_core_info, job)",
+        "includeAll": true,
+        "label": "Surveyor Job",
+        "name": "surveyor_job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nats_core_info, job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "nats-surveyor.*",
+        "type": "query",
+        "allValue": ".*"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "definition": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+        "hide": 2,
+        "includeAll": false,
+        "label": "Surveyor Instance",
+        "name": "surveyor_instance",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
       },
       {
         "allValue": ".+",
