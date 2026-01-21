@@ -87,6 +87,7 @@ type Options struct {
 	Jsz                  string
 	JszLimit             int
 	JszLeadersOnly       bool
+	JszReplicas          bool
 	JszFilters           []JszFilter
 	SysReqPrefix         string
 	Logger               *logrus.Logger    // not exposed by CLI
@@ -236,21 +237,19 @@ func (s *Surveyor) createStatszCollector() error {
 		s.logger.Debugln("Skipping per-account exports")
 	}
 
-	s.statzC = NewStatzCollector(
-		s.conn.Conn(),
-		s.logger,
-		s.opts.ExpectedServers,
-		s.opts.ServerResponseWait,
-		s.opts.PollTimeout,
-		s.opts.Accounts,
-		s.opts.AccountsDetailed,
-		s.opts.Gatewayz,
-		s.opts.Jsz,
-		s.opts.JszLimit,
-		s.opts.JszLeadersOnly,
-		s.opts.JszFilters,
-		s.opts.SysReqPrefix,
-		s.opts.ConstLabels,
+	s.statzC, _ = NewStatzCollectorOpts(
+		WithNATSConnection(s.conn.Conn()),
+		WithLogger(s.logger),
+		WithNumServers(s.opts.ExpectedServers),
+		WithServerDiscoveryWait(s.opts.ServerResponseWait),
+		WithPollTimeout(s.opts.PollTimeout),
+		WithCollectAccounts(s.opts.Accounts, s.opts.AccountsDetailed),
+		WithCollectGatewayz(s.opts.Gatewayz),
+		WithCollectJsz(CollectJsz(s.opts.Jsz), s.opts.JszLeadersOnly, s.opts.JszFilters),
+		WithJszLimit(s.opts.JszLimit),
+		WithJszReplicas(s.opts.JszReplicas),
+		WithConstantLabels(s.opts.ConstLabels),
+		WithSysRequestPrefix(s.opts.SysReqPrefix),
 	)
 
 	return s.promRegistry.Register(s.statzC)

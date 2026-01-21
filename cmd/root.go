@@ -268,6 +268,10 @@ func init() {
 	rootCmd.Flags().Bool("jsz-leaders-only", false, "Fetch jsz metrics from stream and consumer leaders only")
 	_ = viper.BindPFlag("jsz-leaders-only", rootCmd.Flags().Lookup("jsz-leaders-only"))
 
+	// jsz replicas
+	rootCmd.Flags().Bool("jsz-replicas", false, "Export stream and consumer replica metrics (lag, active, current, offline) (NATS_SURVEYOR_JSZ_REPLICAS)")
+	_ = viper.BindPFlag("jsz-replicas", rootCmd.Flags().Lookup("jsz-replicas"))
+
 	// jsz filter list using enumflag
 	rootCmd.Flags().Var(
 		enumflag.NewSlice(&jszFilters, "jsz-filter", surveyor.JszFilterIds, enumflag.EnumCaseInsensitive),
@@ -326,6 +330,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.Jsz = viper.GetString("jsz")
 	opts.JszLimit = viper.GetInt("jsz-limit")
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")
+	opts.JszReplicas = viper.GetBool("jsz-replicas")
 	opts.JszFilters = jszFilters
 
 	opts.SysReqPrefix = viper.GetString("sys-req-prefix")
