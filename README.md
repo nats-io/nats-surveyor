@@ -50,6 +50,7 @@ Flags:
       --jsz string                          Export jsz metrics optionally, one of: all|streams|consumers (NATS_SURVEYOR_JSZ)
       --jsz-limit int                       Limit the number of returned account jsz metrics (NATS_SURVEYOR_JSZ_LIMIT) (default 1024)
       --jsz-leaders-only                    Fetch jsz metrics from stream and consumer leaders only (NATS_SURVEYOR_JSZ_LEADERS_ONLY)
+      --jsz-replicas                        Export stream and consumer replica metrics (lag, active, current, offline) (NATS_SURVEYOR_JSZ_REPLICAS)
       --jsz-filter jsz-filter               Fetch selected jsz metrics only(comma separated list). Metrics: stream_total_messages,stream_total_bytes,stream_first_seq,stream_last_seq,stream_consumer_count,stream_subject_count,consumer_delivered_consumer_seq,consumer_delivered_stream_seq,consumer_ack_floor_consumer_seq,consumer_ack_floor_stream_seq,consumer_num_ack_pending,consumer_num_pending,consumer_num_redelivered,consumer_num_waiting (NATS_SURVEYOR_JSZ_FILTER) (default [])
       --sys-req-prefix string               Subject prefix for system requests ($SYS.REQ) (NATS_SURVEYOR_SYS_REQ_PREFIX) (default "$SYS.REQ")
       --log-level string                    Log level, one of: trace|debug|info|warn|error|fatal|panic (NATS_SURVEYOR_LOG_LEVEL) (default "info")

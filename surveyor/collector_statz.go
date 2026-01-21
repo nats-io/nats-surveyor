@@ -108,6 +108,7 @@ type statzDescs struct {
 	JetstreamClusterRaftGroupReplicaActive  *GaugeVec
 	JetstreamClusterRaftGroupReplicaCurrent *GaugeVec
 	JetstreamClusterRaftGroupReplicaOffline *GaugeVec
+	JetstreamClusterRaftGroupReplicaLag     *GaugeVec
 	// JetStream server stats
 	JetstreamServerDisabled   *GaugeVec
 	JetstreamServerStreams    *GaugeVec
@@ -177,6 +178,18 @@ type statzDescs struct {
 	accJszConsumerNumPending           *GaugeVec
 	accJszConsumerAckFloorStreamSeq    *GaugeVec
 	accJszConsumerAckFloorConsumerSeq  *GaugeVec
+
+	// JSZ Stream replica metrics.
+	accJszStreamReplicaLag     *GaugeVec
+	accJszStreamReplicaActive  *GaugeVec
+	accJszStreamReplicaCurrent *GaugeVec
+	accJszStreamReplicaOffline *GaugeVec
+
+	// JSZ Consumer replica metrics.
+	accJszConsumerReplicaLag     *GaugeVec
+	accJszConsumerReplicaActive  *GaugeVec
+	accJszConsumerReplicaCurrent *GaugeVec
+	accJszConsumerReplicaOffline *GaugeVec
 }
 
 // gatewayzDescs holds the gateway metric descriptions
@@ -224,6 +237,7 @@ type StatzCollector struct {
 	collectJsz              CollectJsz
 	jszLimit                int
 	jszLeadersOnly          bool
+	jszReplicas             bool
 	jszFilterSet            map[JszFilter]bool
 	sysReqPrefix            string
 	accStatZeroConn         map[string]int
@@ -266,6 +280,14 @@ type accountStats struct {
 	jszData                        []streamAccountStats
 }
 
+type replicaStats struct {
+	name    string
+	lag     float64
+	active  float64
+	current bool
+	offline bool
+}
+
 type consumerStats struct {
 	consumerName                 string
 	consumerLeader               string
@@ -278,6 +300,7 @@ type consumerStats struct {
 	consumerAckFloorStreamSeq    float64
 	consumerAckFloorConsumerSeq  float64
 	consumerRaftGroup            string
+	replicas                     []*replicaStats
 }
 
 type streamAccountStats struct {
@@ -298,6 +321,7 @@ type streamAccountStats struct {
 	streamSubjectCount  float64
 	streamLeader        string
 	consumerStats       []*consumerStats
+	replicas            []*replicaStats
 }
 
 func serverName(sm *server.ServerInfo) string {
@@ -423,6 +447,7 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.JetstreamClusterRaftGroupReplicaActive = newGaugeVec(newName("jetstream_cluster_raft_group_replica_peer_active"), "Jetstream RAFT Group Peer last Active time. Very large values may imply raft is stalled", sc.constLabels, jsClusterReplicaLabelKeys)
 	sc.descs.JetstreamClusterRaftGroupReplicaCurrent = newGaugeVec(newName("jetstream_cluster_raft_group_replica_peer_current"), "Jetstream RAFT Group Peer is current: 1 or not: 0", sc.constLabels, jsClusterReplicaLabelKeys)
 	sc.descs.JetstreamClusterRaftGroupReplicaOffline = newGaugeVec(newName("jetstream_cluster_raft_group_replica_peer_offline"), "Jetstream RAFT Group Peer is offline: 1 or online: 0", sc.constLabels, jsClusterReplicaLabelKeys)
+	sc.descs.JetstreamClusterRaftGroupReplicaLag = newGaugeVec(newName("jetstream_cluster_raft_group_replica_peer_lag"), "Jetstream RAFT Group Peer lag in number of operations", sc.constLabels, jsClusterReplicaLabelKeys)
 
 	jsServerLabelKeys := []string{"server_id", "server_name", "cluster_name"}
 	sc.descs.JetstreamServerDisabled = newGaugeVec(newName("jetstream_server_jetstream_disabled"), "JetStream disabled or not", sc.constLabels, jsServerLabelKeys)
@@ -576,6 +601,59 @@ func (sc *StatzCollector) buildDescs() {
 			sc.constLabels,
 			consumerLabels,
 		)
+
+		// Stream replica metrics (same labels as jszLabels + peer)
+		streamReplicaLabels := append(jszLabels, "peer")
+		sc.descs.accJszStreamReplicaLag = newGaugeVec(
+			prometheus.BuildFQName("nats", "stream", "replica_peer_lag"),
+			"Number of operations this stream replica is behind the leader",
+			sc.constLabels,
+			streamReplicaLabels,
+		)
+		sc.descs.accJszStreamReplicaActive = newGaugeVec(
+			prometheus.BuildFQName("nats", "stream", "replica_peer_active"),
+			"Last active time for this stream replica in nanoseconds",
+			sc.constLabels,
+			streamReplicaLabels,
+		)
+		sc.descs.accJszStreamReplicaCurrent = newGaugeVec(
+			prometheus.BuildFQName("nats", "stream", "replica_peer_current"),
+			"Stream replica is current: 1 or not: 0",
+			sc.constLabels,
+			streamReplicaLabels,
+		)
+		sc.descs.accJszStreamReplicaOffline = newGaugeVec(
+			prometheus.BuildFQName("nats", "stream", "replica_peer_offline"),
+			"Stream replica is offline: 1 or online: 0",
+			sc.constLabels,
+			streamReplicaLabels,
+		)
+
+		consumerReplicaLabels := append(consumerLabels, "peer")
+		sc.descs.accJszConsumerReplicaLag = newGaugeVec(
+			prometheus.BuildFQName("nats", "consumer", "replica_peer_lag"),
+			"Number of operations this consumer replica is behind the leader",
+			sc.constLabels,
+			consumerReplicaLabels,
+		)
+		sc.descs.accJszConsumerReplicaActive = newGaugeVec(
+			prometheus.BuildFQName("nats", "consumer", "replica_peer_active"),
+			"Last active time for this consumer replica in nanoseconds",
+			sc.constLabels,
+			consumerReplicaLabels,
+		)
+		sc.descs.accJszConsumerReplicaCurrent = newGaugeVec(
+			prometheus.BuildFQName("nats", "consumer", "replica_peer_current"),
+			"Consumer replica is current: 1 or not: 0",
+			sc.constLabels,
+			consumerReplicaLabels,
+		)
+		sc.descs.accJszConsumerReplicaOffline = newGaugeVec(
+			prometheus.BuildFQName("nats", "consumer", "replica_peer_offline"),
+			"Consumer replica is offline: 1 or online: 0",
+			sc.constLabels,
+			consumerReplicaLabels,
+		)
 	}
 
 	// Surveyor
@@ -697,6 +775,13 @@ func WithCollectJsz(jsz CollectJsz, jszLeadersOnly bool, jszFilters []JszFilter)
 func WithJszLimit(jszLimit int) StatzCollectorOpt {
 	return func(sc *StatzCollector) error {
 		sc.jszLimit = jszLimit
+		return nil
+	}
+}
+
+func WithJszReplicas(jszReplicas bool) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.jszReplicas = jszReplicas
 		return nil
 	}
 }
@@ -1430,6 +1515,7 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 		sc.descs.JetstreamClusterRaftGroupReplicaActive,
 		sc.descs.JetstreamClusterRaftGroupReplicaCurrent,
 		sc.descs.JetstreamClusterRaftGroupReplicaOffline,
+		sc.descs.JetstreamClusterRaftGroupReplicaLag,
 	}
 
 	// Account scope metrics
@@ -1505,6 +1591,10 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 					sc.descs.accJszStreamLastSeq,
 					sc.descs.accJszStreamConsumerCount,
 					sc.descs.accJszStreamSubjectCount,
+					sc.descs.accJszStreamReplicaLag,
+					sc.descs.accJszStreamReplicaActive,
+					sc.descs.accJszStreamReplicaCurrent,
+					sc.descs.accJszStreamReplicaOffline,
 				)
 			}
 
@@ -1519,6 +1609,10 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 					sc.descs.accJszConsumerNumPending,
 					sc.descs.accJszConsumerAckFloorStreamSeq,
 					sc.descs.accJszConsumerAckFloorConsumerSeq,
+					sc.descs.accJszConsumerReplicaLag,
+					sc.descs.accJszConsumerReplicaActive,
+					sc.descs.accJszConsumerReplicaCurrent,
+					sc.descs.accJszConsumerReplicaOffline,
 				)
 			}
 		}
@@ -1686,6 +1780,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 						} else {
 							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(0), jsClusterReplicaLabelValues)
 						}
+						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaLag, float64(jsr.Lag), jsClusterReplicaLabelValues)
 					}
 				}
 			}
@@ -1840,6 +1935,26 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 								),
 							)
 						}
+
+						if sc.jszReplicas {
+							for _, replica := range streamStat.replicas {
+								streamReplicaLabels := append(accLabels,
+									streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+									streamStat.streamName, streamStat.streamLeader, replica.name)
+								metrics.newGaugeMetric(sc.descs.accJszStreamReplicaLag, replica.lag, streamReplicaLabels)
+								metrics.newGaugeMetric(sc.descs.accJszStreamReplicaActive, replica.active, streamReplicaLabels)
+								if replica.current {
+									metrics.newGaugeMetric(sc.descs.accJszStreamReplicaCurrent, float64(1), streamReplicaLabels)
+								} else {
+									metrics.newGaugeMetric(sc.descs.accJszStreamReplicaCurrent, float64(0), streamReplicaLabels)
+								}
+								if replica.offline {
+									metrics.newGaugeMetric(sc.descs.accJszStreamReplicaOffline, float64(1), streamReplicaLabels)
+								} else {
+									metrics.newGaugeMetric(sc.descs.accJszStreamReplicaOffline, float64(0), streamReplicaLabels)
+								}
+							}
+						}
 					}
 
 					for _, consumerStat := range streamStat.consumerStats {
@@ -1920,6 +2035,27 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
 									),
 								)
+							}
+
+							if sc.jszReplicas {
+								for _, replica := range consumerStat.replicas {
+									consumerReplicaLabels := append(accLabels,
+										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+										replica.name)
+									metrics.newGaugeMetric(sc.descs.accJszConsumerReplicaLag, replica.lag, consumerReplicaLabels)
+									metrics.newGaugeMetric(sc.descs.accJszConsumerReplicaActive, replica.active, consumerReplicaLabels)
+									if replica.current {
+										metrics.newGaugeMetric(sc.descs.accJszConsumerReplicaCurrent, float64(1), consumerReplicaLabels)
+									} else {
+										metrics.newGaugeMetric(sc.descs.accJszConsumerReplicaCurrent, float64(0), consumerReplicaLabels)
+									}
+									if replica.offline {
+										metrics.newGaugeMetric(sc.descs.accJszConsumerReplicaOffline, float64(1), consumerReplicaLabels)
+									} else {
+										metrics.newGaugeMetric(sc.descs.accJszConsumerReplicaOffline, float64(0), consumerReplicaLabels)
+									}
+								}
 							}
 						}
 					}
@@ -2199,8 +2335,21 @@ func mapJSStreamDetailToStats(server *server.ServerInfo, accDetail *server.Accou
 	}
 	for _, stream := range accDetail.Streams {
 		var streamLeader string
+		var streamReplicas []*replicaStats
 		if stream.Cluster != nil {
 			streamLeader = stream.Cluster.Leader
+			for _, r := range stream.Cluster.Replicas {
+				if r == nil {
+					continue
+				}
+				streamReplicas = append(streamReplicas, &replicaStats{
+					name:    r.Name,
+					lag:     float64(r.Lag),
+					active:  float64(r.Active),
+					current: r.Current,
+					offline: r.Offline,
+				})
+			}
 		}
 		sas := streamAccountStats{
 			accountID:          accDetail.Id,
@@ -2219,13 +2368,27 @@ func mapJSStreamDetailToStats(server *server.ServerInfo, accDetail *server.Accou
 			streamSubjectCount: float64(stream.State.NumSubjects),
 			streamLeader:       streamLeader,
 			consumerStats:      make([]*consumerStats, 0),
+			replicas:           streamReplicas,
 		}
 
 		for _, consumer := range stream.Consumer {
 			var consumerLeader, raftGroup string
+			var consumerReplicas []*replicaStats
 			if consumer.Cluster != nil {
 				consumerLeader = consumer.Cluster.Leader
 				raftGroup = consumer.Cluster.RaftGroup
+				for _, r := range consumer.Cluster.Replicas {
+					if r == nil {
+						continue
+					}
+					consumerReplicas = append(consumerReplicas, &replicaStats{
+						name:    r.Name,
+						lag:     float64(r.Lag),
+						active:  float64(r.Active),
+						current: r.Current,
+						offline: r.Offline,
+					})
+				}
 			}
 			if raftGroup == "" {
 				// For R1 may need to find manually within the complete list
@@ -2249,6 +2412,7 @@ func mapJSStreamDetailToStats(server *server.ServerInfo, accDetail *server.Accou
 				consumerNumPending:           float64(consumer.NumPending),
 				consumerAckFloorStreamSeq:    float64(consumer.AckFloor.Stream),
 				consumerAckFloorConsumerSeq:  float64(consumer.AckFloor.Consumer),
+				replicas:                     consumerReplicas,
 			}
 			sas.consumerStats = append(sas.consumerStats, &cs)
 		}
