@@ -1,5 +1,5 @@
 #syntax=docker/dockerfile:1.13
-FROM --platform=$BUILDPLATFORM golang:1.24.6-bullseye
+FROM --platform=$BUILDPLATFORM golang:1.25.6-trixie
 
 ARG CI
 ARG GITHUB_TOKEN
@@ -13,8 +13,7 @@ WORKDIR /go/src
 RUN <<EOT
   set -e
 
-  echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' > /etc/apt/sources.list.d/goreleaser.list
-  apt-key adv --keyserver keyserver.ubuntu.com --recv-key C99B11DEB97541F0
+  echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | tee /etc/apt/sources.list.d/goreleaser.list
 
   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg > /usr/share/keyrings/githubcli-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list
