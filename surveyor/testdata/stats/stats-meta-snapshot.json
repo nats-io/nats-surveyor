@@ -1,0 +1,82 @@
+{
+  "server": {
+    "name": "meta-server1",
+    "host": "0.0.0.0",
+    "id": "meta-server1",
+    "cluster": "meta-cluster",
+    "version": "2.12.3",
+    "jetstream": true,
+    "flags": 1
+  },
+  "statsz": {
+    "start": "2026-01-01T00:00:00Z",
+    "mem": 2048,
+    "cores": 4,
+    "cpu": 0.3,
+    "connections": 20,
+    "total_connections": 200,
+    "active_accounts": 15,
+    "num_subs": 150,
+    "sent": {
+      "bytes": 2048,
+      "msgs": 200
+    },
+    "received": {
+      "bytes": 2048,
+      "msgs": 200
+    },
+    "active_servers": 3,
+    "jetstream": {
+      "config": {
+        "max_memory": 2048,
+        "max_storage": 2048,
+        "sync_interval": 2000,
+        "sync_always": true
+      },
+      "stats": {
+        "memory": 2048,
+        "storage": 2048,
+        "reserved_memory": 1024,
+        "reserved_storage": 1024,
+        "accounts": 15,
+        "ha_assets": 15,
+        "api": {
+          "level": 1,
+          "total": 100,
+          "errors": 2
+        }
+      },
+      "meta": {
+        "name": "meta-cluster",
+        "leader": "meta-server1",
+        "peer": "meta-server2",
+        "replicas": [
+          {
+            "name": "meta-server2",
+            "current": true,
+            "offline": false,
+            "active": 2000,
+            "lag": 50,
+            "peer": "meta-server2"
+          },
+          {
+            "name": "meta-server3",
+            "current": true,
+            "offline": false,
+            "active": 2100,
+            "lag": 25,
+            "peer": "meta-server3"
+          }
+        ],
+        "size": 3,
+        "pending": 0,
+        "snapshot": {
+          "pending_entries": 1500,
+          "pending_size": 524288,
+          "last_time": "2026-01-20T15:30:45.123456789Z",
+          "last_duration": 1234567890
+        }
+      }
+    }
+  }
+}
