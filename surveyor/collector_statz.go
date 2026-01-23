@@ -108,6 +108,10 @@ type statzDescs struct {
 	JetstreamClusterRaftGroupReplicaActive  *GaugeVec
 	JetstreamClusterRaftGroupReplicaCurrent *GaugeVec
 	JetstreamClusterRaftGroupReplicaOffline *GaugeVec
+	// JetStream meta snapshot stats
+	JetstreamMetaSnapshotPendingEntries *GaugeVec
+	JetstreamMetaSnapshotPendingBytes   *GaugeVec
+	JetstreamMetaSnapshotLastDuration   *GaugeVec
 	// JetStream server stats
 	JetstreamServerDisabled   *GaugeVec
 	JetstreamServerStreams    *GaugeVec
@@ -341,6 +345,22 @@ func (sc *StatzCollector) gatewayLabelValues(sm *server.ServerInfo, gStat *serve
 	return []string{sm.Cluster, serverName(sm), sm.ID, gStat.Name, strconv.FormatUint(gStat.ID, 10)}
 }
 
+// safeMsgBytesBytes returns the Bytes value from a MsgBytes pointer, or 0 if nil
+func safeMsgBytesBytes(mb *server.MsgBytes) int64 {
+	if mb == nil {
+		return 0
+	}
+	return mb.Bytes
+}
+
+// safeMsgBytesMsgs returns the Msgs value from a MsgBytes pointer, or 0 if nil
+func safeMsgBytesMsgs(mb *server.MsgBytes) int64 {
+	if mb == nil {
+		return 0
+	}
+	return mb.Msgs
+}
+
 // Up/Down on servers - look at discovery mechanisms in Prometheus - aging out, how does it work?
 func (sc *StatzCollector) buildDescs() {
 	newName := func(name string) string {
@@ -423,6 +443,12 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.JetstreamClusterRaftGroupReplicaActive = newGaugeVec(newName("jetstream_cluster_raft_group_replica_peer_active"), "Jetstream RAFT Group Peer last Active time. Very large values may imply raft is stalled", sc.constLabels, jsClusterReplicaLabelKeys)
 	sc.descs.JetstreamClusterRaftGroupReplicaCurrent = newGaugeVec(newName("jetstream_cluster_raft_group_replica_peer_current"), "Jetstream RAFT Group Peer is current: 1 or not: 0", sc.constLabels, jsClusterReplicaLabelKeys)
 	sc.descs.JetstreamClusterRaftGroupReplicaOffline = newGaugeVec(newName("jetstream_cluster_raft_group_replica_peer_offline"), "Jetstream RAFT Group Peer is offline: 1 or online: 0", sc.constLabels, jsClusterReplicaLabelKeys)
+
+	// Meta snapshot stats
+	jsMetaSnapshotLabelKeys := []string{"server_id", "server_name", "cluster_name"}
+	sc.descs.JetstreamMetaSnapshotPendingEntries = newGaugeVec(newName("jetstream_meta_snapshot_pending_entries"), "Number of pending entries awaiting meta snapshot", sc.constLabels, jsMetaSnapshotLabelKeys)
+	sc.descs.JetstreamMetaSnapshotPendingBytes = newGaugeVec(newName("jetstream_meta_snapshot_pending_bytes"), "Size in bytes of pending entries awaiting meta snapshot", sc.constLabels, jsMetaSnapshotLabelKeys)
+	sc.descs.JetstreamMetaSnapshotLastDuration = newGaugeVec(newName("jetstream_meta_snapshot_last_duration"), "Duration of the last meta snapshot in nanoseconds", sc.constLabels, jsMetaSnapshotLabelKeys)
 
 	jsServerLabelKeys := []string{"server_id", "server_name", "cluster_name"}
 	sc.descs.JetstreamServerDisabled = newGaugeVec(newName("jetstream_server_jetstream_disabled"), "JetStream disabled or not", sc.constLabels, jsServerLabelKeys)
@@ -1430,6 +1456,10 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 		sc.descs.JetstreamClusterRaftGroupReplicaActive,
 		sc.descs.JetstreamClusterRaftGroupReplicaCurrent,
 		sc.descs.JetstreamClusterRaftGroupReplicaOffline,
+		// JetStream meta snapshot stats
+		sc.descs.JetstreamMetaSnapshotPendingEntries,
+		sc.descs.JetstreamMetaSnapshotPendingBytes,
+		sc.descs.JetstreamMetaSnapshotLastDuration,
 	}
 
 	// Account scope metrics
@@ -1687,6 +1717,15 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(0), jsClusterReplicaLabelValues)
 						}
 					}
+
+					// Meta snapshot stats
+					if sm.Stats.JetStream.Meta.Snapshot != nil {
+						jsMetaSnapshotLabelValues := []string{sm.Server.ID, serverName(&sm.Server), sm.Server.Cluster}
+						snapshot := sm.Stats.JetStream.Meta.Snapshot
+						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingEntries, float64(snapshot.PendingEntries), jsMetaSnapshotLabelValues)
+						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingBytes, float64(snapshot.PendingSize), jsMetaSnapshotLabelValues)
+						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastDuration, float64(snapshot.LastDuration), jsMetaSnapshotLabelValues)
+					}
 				}
 			}
 
@@ -1728,22 +1767,22 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					metrics.newCounterMetric(sc.descs.accMsgsRecv, float64(as.Data.Received.Msgs), serverAndAccLabels)
 
 					if sc.collectAccountsDetailed {
-						metrics.newCounterMetric(sc.descs.accClientBytesSent, float64(as.Data.Sent.Bytes-as.Data.Sent.Routes.Bytes-as.Data.Sent.Gateways.Bytes-as.Data.Sent.Leafs.Bytes), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accClientBytesRecv, float64(as.Data.Received.Bytes-as.Data.Received.Routes.Bytes-as.Data.Received.Gateways.Bytes-as.Data.Received.Leafs.Bytes), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accClientMsgsSent, float64(as.Data.Sent.Msgs-as.Data.Sent.Routes.Msgs-as.Data.Sent.Gateways.Msgs-as.Data.Sent.Leafs.Msgs), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accClientMsgsRecv, float64(as.Data.Received.Msgs-as.Data.Received.Routes.Msgs-as.Data.Received.Gateways.Msgs-as.Data.Received.Leafs.Msgs), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accLeafBytesSent, float64(as.Data.Sent.Leafs.Bytes), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accLeafBytesRecv, float64(as.Data.Received.Leafs.Bytes), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accLeafMsgsSent, float64(as.Data.Sent.Leafs.Msgs), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accLeafMsgsRecv, float64(as.Data.Received.Leafs.Msgs), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accRouteBytesSent, float64(as.Data.Sent.Routes.Bytes), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accRouteBytesRecv, float64(as.Data.Received.Routes.Bytes), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accRouteMsgsSent, float64(as.Data.Sent.Routes.Msgs), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accRouteMsgsRecv, float64(as.Data.Received.Routes.Msgs), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accGatewayBytesSent, float64(as.Data.Sent.Gateways.Bytes), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accGatewayBytesRecv, float64(as.Data.Received.Gateways.Bytes), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accGatewayMsgsSent, float64(as.Data.Sent.Gateways.Msgs), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accGatewayMsgsRecv, float64(as.Data.Received.Gateways.Msgs), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accClientBytesSent, float64(as.Data.Sent.Bytes-safeMsgBytesBytes(as.Data.Sent.Routes)-safeMsgBytesBytes(as.Data.Sent.Gateways)-safeMsgBytesBytes(as.Data.Sent.Leafs)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accClientBytesRecv, float64(as.Data.Received.Bytes-safeMsgBytesBytes(as.Data.Received.Routes)-safeMsgBytesBytes(as.Data.Received.Gateways)-safeMsgBytesBytes(as.Data.Received.Leafs)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accClientMsgsSent, float64(as.Data.Sent.Msgs-safeMsgBytesMsgs(as.Data.Sent.Routes)-safeMsgBytesMsgs(as.Data.Sent.Gateways)-safeMsgBytesMsgs(as.Data.Sent.Leafs)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accClientMsgsRecv, float64(as.Data.Received.Msgs-safeMsgBytesMsgs(as.Data.Received.Routes)-safeMsgBytesMsgs(as.Data.Received.Gateways)-safeMsgBytesMsgs(as.Data.Received.Leafs)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accLeafBytesSent, float64(safeMsgBytesBytes(as.Data.Sent.Leafs)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accLeafBytesRecv, float64(safeMsgBytesBytes(as.Data.Received.Leafs)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accLeafMsgsSent, float64(safeMsgBytesMsgs(as.Data.Sent.Leafs)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accLeafMsgsRecv, float64(safeMsgBytesMsgs(as.Data.Received.Leafs)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accRouteBytesSent, float64(safeMsgBytesBytes(as.Data.Sent.Routes)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accRouteBytesRecv, float64(safeMsgBytesBytes(as.Data.Received.Routes)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accRouteMsgsSent, float64(safeMsgBytesMsgs(as.Data.Sent.Routes)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accRouteMsgsRecv, float64(safeMsgBytesMsgs(as.Data.Received.Routes)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accGatewayBytesSent, float64(safeMsgBytesBytes(as.Data.Sent.Gateways)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accGatewayBytesRecv, float64(safeMsgBytesBytes(as.Data.Received.Gateways)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accGatewayMsgsSent, float64(safeMsgBytesMsgs(as.Data.Sent.Gateways)), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accGatewayMsgsRecv, float64(safeMsgBytesMsgs(as.Data.Received.Gateways)), serverAndAccLabels)
 					}
 				}
 
