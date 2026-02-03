@@ -32,6 +32,19 @@
     "consumers": 10,
     "messages": 10,
     "bytes": 1024,
+    "meta_cluster": {
+      "name": "proc_compose",
+      "leader": "s2",
+      "peer": "noC8kOtg",
+      "cluster_size": 3,
+      "pending": 0,
+      "snapshot": {
+        "pending_entries": 42,
+        "pending_size": 336,
+        "last_time": "2026-02-03T09:20:55.329870139Z",
+        "last_duration": 77120006
+      }
+    },
     "account_details": [
       {
         "name": "account1",

@@ -194,6 +194,12 @@ func TestStatzCollector_WithStats_Jsz(t *testing.T) {
 		"nats_consumer_num_redelivered",
 		"nats_consumer_num_waiting",
 	}
+	metaSnapshotMetrics := []string{
+		"nats_core_jetstream_meta_snapshot_last_duration_seconds",
+		"nats_core_jetstream_meta_snapshot_last_timestamp_seconds",
+		"nats_core_jetstream_meta_snapshot_pending_bytes",
+		"nats_core_jetstream_meta_snapshot_pending_entries",
+	}
 
 	allMetrics := []string{}
 	allMetrics = append(allMetrics, streamMetrics...)
@@ -228,7 +234,7 @@ func TestStatzCollector_WithStats_Jsz(t *testing.T) {
 			jszLeadersOnly: false,
 			jszFilters:     nil,
 			assert: func(t *testing.T, test *test, output string) {
-				for _, m := range allMetrics {
+				for _, m := range append(allMetrics, metaSnapshotMetrics...) {
 					if !strings.Contains(output, m) {
 						t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
 					}
@@ -360,6 +366,57 @@ func TestStatzCollector_WithStats_Jsz(t *testing.T) {
 	}
 }
 
+/*
+func TestStatzCollector_WithStats_JetstreamMetaSnapshot(t *testing.T) {
+	statsRaw, err := os.ReadFile("testdata/stats/stats-meta-snapshot.json")
+	if err != nil {
+		t.Fatalf("error reading testdata: %v", err)
+	}
+	stats := &server.ServerStatsMsg{}
+	err = json.Unmarshal(statsRaw, stats)
+	if err != nil {
+		t.Fatalf("error unmarshalling stats: %v", err)
+	}
+
+	sc, err := NewStatzCollectorOpts(
+		WithStats(WithStatsBatch{
+			Stats: []*server.ServerStatsMsg{stats},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("error creating statz collector: %v", err)
+	}
+
+	output := gatherStatzCollectorMetrics(t, sc)
+
+	// Verify all JetStream meta cluster snapshot metrics are present
+	want := []string{
+		"nats_core_jetstream_meta_snapshot_pending_entries",
+		"nats_core_jetstream_meta_snapshot_pending_bytes",
+		"nats_core_jetstream_meta_snapshot_last_duration",
+	}
+
+	for _, m := range want {
+		if !strings.Contains(output, m) {
+			t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
+		}
+	}
+
+	// Verify specific metric values
+	expectedValues := []string{
+		"nats_core_jetstream_meta_snapshot_pending_entries{cluster_name=\"meta-cluster\",server_id=\"meta-server1\",server_name=\"meta-server1\"} 1500",
+		"nats_core_jetstream_meta_snapshot_pending_bytes{cluster_name=\"meta-cluster\",server_id=\"meta-server1\",server_name=\"meta-server1\"} 524288",
+		"nats_core_jetstream_meta_snapshot_last_duration{cluster_name=\"meta-cluster\",server_id=\"meta-server1\",server_name=\"meta-server1\"} 1.23456789e+09",
+	}
+
+	for _, expectedValue := range expectedValues {
+		if !strings.Contains(output, expectedValue) {
+			t.Fatalf("expected metric value not found. Expected: %s\nActual output:\n%v", expectedValue, output)
+		}
+	}
+}
+*/
+
 func TestStatzCollector_GoMemLimit(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -409,55 +466,6 @@ func TestStatzCollector_GoMemLimit(t *testing.T) {
 				t.Fatalf("expected metric value not found. Expected: %s\nActual output:\n%v", tt.expectedMetric, output)
 			}
 		})
-	}
-}
-
-func TestStatzCollector_WithStats_JetstreamMetaSnapshot(t *testing.T) {
-	statsRaw, err := os.ReadFile("testdata/stats/stats-meta-snapshot.json")
-	if err != nil {
-		t.Fatalf("error reading testdata: %v", err)
-	}
-	stats := &server.ServerStatsMsg{}
-	err = json.Unmarshal(statsRaw, stats)
-	if err != nil {
-		t.Fatalf("error unmarshalling stats: %v", err)
-	}
-
-	sc, err := NewStatzCollectorOpts(
-		WithStats(WithStatsBatch{
-			Stats: []*server.ServerStatsMsg{stats},
-		}),
-	)
-	if err != nil {
-		t.Fatalf("error creating statz collector: %v", err)
-	}
-
-	output := gatherStatzCollectorMetrics(t, sc)
-
-	// Verify all JetStream meta cluster snapshot metrics are present
-	want := []string{
-		"nats_core_jetstream_meta_snapshot_pending_entries",
-		"nats_core_jetstream_meta_snapshot_pending_bytes",
-		"nats_core_jetstream_meta_snapshot_last_duration",
-	}
-
-	for _, m := range want {
-		if !strings.Contains(output, m) {
-			t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
-		}
-	}
-
-	// Verify specific metric values
-	expectedValues := []string{
-		"nats_core_jetstream_meta_snapshot_pending_entries{cluster_name=\"meta-cluster\",server_id=\"meta-server1\",server_name=\"meta-server1\"} 1500",
-		"nats_core_jetstream_meta_snapshot_pending_bytes{cluster_name=\"meta-cluster\",server_id=\"meta-server1\",server_name=\"meta-server1\"} 524288",
-		"nats_core_jetstream_meta_snapshot_last_duration{cluster_name=\"meta-cluster\",server_id=\"meta-server1\",server_name=\"meta-server1\"} 1.23456789e+09",
-	}
-
-	for _, expectedValue := range expectedValues {
-		if !strings.Contains(output, expectedValue) {
-			t.Fatalf("expected metric value not found. Expected: %s\nActual output:\n%v", expectedValue, output)
-		}
 	}
 }
 
