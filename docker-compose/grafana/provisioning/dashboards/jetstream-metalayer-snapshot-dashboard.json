@@ -21,7 +21,7 @@
           "type": "prometheus",
           "uid": "${prom_ds}"
         },
-        "enable": false,
+        "enable": true,
         "hide": false,
         "iconColor": "light-orange",
         "mappings": {},
