@@ -81,7 +81,7 @@
               "replicas": 3,
               "storage": "file"
             },
-            "state": {},
+            "state": { },
             "stream_raft_group": "raft",
             "consumer_raft_groups": [
               {
