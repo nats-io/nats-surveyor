@@ -1976,15 +1976,17 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				metrics.newGaugeMetric(sc.descs.JetstreamServerMaxStorage, float64(jss.Data.Config.MaxStore), jsServerLabelValues)
 
 				// Meta snaphost stats
-				stats := jss.Data.Meta.Snapshot
-				metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingEntries,
-					float64(stats.PendingEntries), jsServerLabelValues)
-				metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingBytes,
-					float64(stats.PendingSize), jsServerLabelValues)
-				metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastDuration,
-					stats.LastDuration.Seconds(), jsServerLabelValues)
-				metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastTimestamp,
-					float64(stats.LastTime.Unix()), jsServerLabelValues)
+				if jss.Data.Meta != nil {
+					stats := jss.Data.Meta.Snapshot
+					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingEntries,
+						float64(stats.PendingEntries), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingBytes,
+						float64(stats.PendingSize), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastDuration,
+						stats.LastDuration.Seconds(), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastTimestamp,
+						float64(stats.LastTime.Unix()), jsServerLabelValues)
+				}
 			}
 		}
 
