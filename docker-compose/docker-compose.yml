@@ -23,7 +23,7 @@ services:
       - NATS_SURVEYOR_PASSWORD
       - NATS_SURVEYOR_SERVERS
       - NATS_SURVEYOR_SERVER_COUNT
-    command: --count ${NATS_SURVEYOR_SERVER_COUNT} -s "${NATS_SURVEYOR_SERVERS}" --accounts --observe /observations --jetstream /jetstream --jsz all
+    command: --count ${NATS_SURVEYOR_SERVER_COUNT} -s "${NATS_SURVEYOR_SERVERS}" --accounts --accounts-detailed --observe /observations --jetstream /jetstream --jsz all
     networks:
       - monitor-net
     labels:
@@ -33,6 +33,8 @@ services:
     image: prom/prometheus:${PROMETHEUS_DOCKER_TAG}
     container_name: prometheus
     restart: "no"
+    ports:
+      - "9090:9090"
     volumes:
       - ./prometheus/:/etc/prometheus/
       - $PROMETHEUS_STORAGE:/usr/local/share/prometheus

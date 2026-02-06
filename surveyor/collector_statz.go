@@ -112,6 +112,7 @@ type statzDescs struct {
 	JetstreamMetaSnapshotPendingEntries *GaugeVec
 	JetstreamMetaSnapshotPendingBytes   *GaugeVec
 	JetstreamMetaSnapshotLastDuration   *GaugeVec
+	JetstreamMetaSnapshotLastTimestamp  *GaugeVec
 	// JetStream server stats
 	JetstreamServerDisabled   *GaugeVec
 	JetstreamServerStreams    *GaugeVec
@@ -448,7 +449,8 @@ func (sc *StatzCollector) buildDescs() {
 	jsMetaSnapshotLabelKeys := []string{"server_id", "server_name", "cluster_name"}
 	sc.descs.JetstreamMetaSnapshotPendingEntries = newGaugeVec(newName("jetstream_meta_snapshot_pending_entries"), "Number of pending entries awaiting meta snapshot", sc.constLabels, jsMetaSnapshotLabelKeys)
 	sc.descs.JetstreamMetaSnapshotPendingBytes = newGaugeVec(newName("jetstream_meta_snapshot_pending_bytes"), "Size in bytes of pending entries awaiting meta snapshot", sc.constLabels, jsMetaSnapshotLabelKeys)
-	sc.descs.JetstreamMetaSnapshotLastDuration = newGaugeVec(newName("jetstream_meta_snapshot_last_duration"), "Duration of the last meta snapshot in nanoseconds", sc.constLabels, jsMetaSnapshotLabelKeys)
+	sc.descs.JetstreamMetaSnapshotLastDuration = newGaugeVec(newName("jetstream_meta_snapshot_last_duration_seconds"), "Duration of the last meta snapshot in seconds", sc.constLabels, jsMetaSnapshotLabelKeys)
+	sc.descs.JetstreamMetaSnapshotLastTimestamp = newGaugeVec(newName("jetstream_meta_snapshot_last_timestamp_seconds"), "Timestamp of the last meta snapshot as Unix epoch in seconds", sc.constLabels, jsMetaSnapshotLabelKeys)
 
 	jsServerLabelKeys := []string{"server_id", "server_name", "cluster_name"}
 	sc.descs.JetstreamServerDisabled = newGaugeVec(newName("jetstream_server_jetstream_disabled"), "JetStream disabled or not", sc.constLabels, jsServerLabelKeys)
@@ -845,6 +847,7 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 }
 
 // NewStatzCollector creates a NATS Statz Collector.
+//
 // Deprecated: NewStatzCollector is deprecated. Use NewStatzCollectorOpts instead.
 func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 	serverDiscoveryWait, pollTimeout time.Duration, accounts, accountsDetailed bool, gatewayz bool,
@@ -1460,6 +1463,7 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 		sc.descs.JetstreamMetaSnapshotPendingEntries,
 		sc.descs.JetstreamMetaSnapshotPendingBytes,
 		sc.descs.JetstreamMetaSnapshotLastDuration,
+		sc.descs.JetstreamMetaSnapshotLastTimestamp,
 	}
 
 	// Account scope metrics
@@ -1718,14 +1722,6 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 						}
 					}
 
-					// Meta snapshot stats
-					if sm.Stats.JetStream.Meta.Snapshot != nil {
-						jsMetaSnapshotLabelValues := []string{sm.Server.ID, serverName(&sm.Server), sm.Server.Cluster}
-						snapshot := sm.Stats.JetStream.Meta.Snapshot
-						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingEntries, float64(snapshot.PendingEntries), jsMetaSnapshotLabelValues)
-						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingBytes, float64(snapshot.PendingSize), jsMetaSnapshotLabelValues)
-						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastDuration, float64(snapshot.LastDuration), jsMetaSnapshotLabelValues)
-					}
 				}
 			}
 
@@ -1978,6 +1974,19 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				metrics.newGaugeMetric(sc.descs.JetstreamServerBytes, float64(jss.Data.Bytes), jsServerLabelValues)
 				metrics.newGaugeMetric(sc.descs.JetstreamServerMaxMemory, float64(jss.Data.Config.MaxMemory), jsServerLabelValues)
 				metrics.newGaugeMetric(sc.descs.JetstreamServerMaxStorage, float64(jss.Data.Config.MaxStore), jsServerLabelValues)
+
+				// Meta snaphost stats
+				if jss.Data.Meta != nil {
+					stats := jss.Data.Meta.Snapshot
+					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingEntries,
+						float64(stats.PendingEntries), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingBytes,
+						float64(stats.PendingSize), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastDuration,
+						stats.LastDuration.Seconds(), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastTimestamp,
+						float64(stats.LastTime.Unix()), jsServerLabelValues)
+				}
 			}
 		}
 
