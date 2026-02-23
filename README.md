@@ -15,12 +15,16 @@ must be enabled to use surveyor.
 ## Usage
 
 ```text
+Prometheus exporter for NATS
+
+Usage:
   nats-surveyor [flags]
 
 Flags:
   -s, --servers string                      NATS Cluster url(s) (NATS_SURVEYOR_SERVERS) (default "nats://127.0.0.1:4222")
   -c, --count int                           Expected number of servers (-1 for undefined). (NATS_SURVEYOR_COUNT) (default 1)
-      --timeout duration                    Polling timeout (NATS_SURVEYOR_TIMEOUT) (default 3s)
+      --timeout duration                    Polling timeout.
+                                            Should be less than scrape_timeout/scrape_interval in Prometheus. (NATS_SURVEYOR_TIMEOUT) (default 7s)
       --server-discovery-timeout duration   Maximum wait time between responses from servers during server discovery.
                                             Use in conjunction with -count=-1. (NATS_SURVEYOR_SERVER_DISCOVERY_TIMEOUT) (default 500ms)
       --creds string                        Credentials File (NATS_SURVEYOR_CREDS)
@@ -29,7 +33,7 @@ Flags:
       --seed string                         Private key (nkey seed). Use in conjunction with --jwt (NATS_SURVEYOR_SEED)
       --user string                         NATS user name or token (NATS_SURVEYOR_USER)
       --password string                     NATS user password (NATS_SURVEYOR_PASSWORD)
-      --token-file string                   Path to file containing a NATS token. The file is re-read on reconnects (NATS_SURVEYOR_TOKEN_FILE)
+      --token-file string                   Path to a file with a bearer token (NATS_SURVEYOR_TOKEN_FILE)
       --tlscert string                      Client certificate file for NATS connections. (NATS_SURVEYOR_TLSCERT)
       --tlskey string                       Client private key for NATS connections. (NATS_SURVEYOR_TLSKEY)
       --tlscacert string                    Client certificate CA on NATS connections. (NATS_SURVEYOR_TLSCACERT)

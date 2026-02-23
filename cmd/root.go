@@ -153,7 +153,7 @@ func init() {
 	_ = viper.BindPFlag("count", rootCmd.Flags().Lookup("count"))
 
 	// timeout
-	rootCmd.Flags().Duration("timeout", surveyor.DefaultPollTimeout, "Polling timeout")
+	rootCmd.Flags().Duration("timeout", surveyor.DefaultPollTimeout, "Polling timeout.\nShould be less than scrape_timeout/scrape_interval in Prometheus.")
 	_ = viper.BindPFlag("timeout", rootCmd.Flags().Lookup("timeout"))
 
 	// server-discovery-timeout
