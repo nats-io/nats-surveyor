@@ -101,7 +101,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "nats_core_cpu_percentage{server_cluster=~\"$cluster\"}",
+          "expr": "nats_core_cpu_percentage{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
           "legendFormat": "{{server_name}}",
           "refId": "B"
         }
@@ -221,7 +221,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "nats_core_mem_bytes{server_cluster=~\"$cluster\"}",
+          "expr": "nats_core_mem_bytes{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
           "legendFormat": "{{server_name}}",
           "refId": "A"
         }
@@ -282,6 +282,48 @@
         "label": "Prometheus Datasource",
         "query": "prometheus",
         "refresh": 1
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "definition": "label_values(nats_core_info, job)",
+        "includeAll": true,
+        "label": "Surveyor Job",
+        "name": "surveyor_job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nats_core_info, job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "nats-surveyor.*",
+        "type": "query",
+        "allValue": ".*"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "definition": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+        "hide": 2,
+        "includeAll": false,
+        "label": "Surveyor Instance",
+        "name": "surveyor_instance",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
       },
       {
         "allValue": ".*",
