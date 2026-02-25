@@ -27,7 +27,7 @@
   "liveNow": false,
   "panels": [
     {
-      "description": "Combined messages received by all servers",
+      "description": "Aggregate messages received by all servers from clients, routes, gateways and leafnodes",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -101,7 +101,7 @@
       }
     },
     {
-      "description": "Combined messages sent by all servers",
+      "description": "Aggregate messages sent by all servers to clients, routes, gateways and leafnodes",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -175,7 +175,7 @@
       }
     },
     {
-      "description": "Combined bytes received by all servers",
+      "description": "Aggregate bytes received by all servers from clients, routes, gateways and leafnodes",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -249,7 +249,7 @@
       }
     },
     {
-      "description": "Combined bytes sent by all servers",
+      "description": "Aggregate bytes sent by all servers to clients, routes, gateways and leafnodes",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2040,7 +2040,7 @@
       }
     },
     {
-      "description": "Combined total messages for all servers",
+      "description": "Aggregate messages across all servers and all connection types: clients, routes, gateways and leafnodes",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2136,7 +2136,7 @@
       }
     },
     {
-      "description": "Combined cluster network usage",
+      "description": "Aggregate network usage across all servers and all connection types: clients, routes, gateways and leafnodes",
       "fieldConfig": {
         "defaults": {
           "color": {
