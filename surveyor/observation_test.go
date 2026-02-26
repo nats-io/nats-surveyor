@@ -859,6 +859,7 @@ func TestSurveyor_ObservationMetrics(t *testing.T) {
 type eventuallyF func() (msg string, err error)
 
 func eventually(t *testing.T, condition eventuallyF, waitFor time.Duration, tick time.Duration) {
+	t.Helper()
 	fail := time.NewTimer(waitFor)
 	ticker := time.NewTicker(tick)
 	defer ticker.Stop()
