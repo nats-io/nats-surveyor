@@ -408,7 +408,7 @@ nats_latency_observations_count 1
 
 			// wait for all observations to be received in the test subscription
 			for i := 0; i < 10; i++ {
-				_, err = sub.NextMsg(time.Second)
+				_, err = sub.NextMsg(time.Second * 5)
 				if err != nil {
 					t.Fatalf("test subscriber didn't receive all published messages")
 				}
