@@ -10,6 +10,7 @@ linters:
   disable:
     - errcheck
     - gocritic
+    - prealloc
   exclusions:
     generated: lax
     paths:
