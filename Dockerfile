@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine3.23 AS build
+FROM golang:1.26-alpine3.23 AS build
 COPY . /go/src/nats-surveyor
 WORKDIR /go/src/nats-surveyor
 ENV GO111MODULE=on
