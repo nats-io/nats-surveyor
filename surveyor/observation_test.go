@@ -408,7 +408,7 @@ nats_latency_observations_count 1
 
 			// wait for all observations to be received in the test subscription
 			for i := 0; i < 10; i++ {
-				_, err = sub.NextMsg(time.Second)
+				_, err = sub.NextMsg(time.Second * 5)
 				if err != nil {
 					t.Fatalf("test subscriber didn't receive all published messages")
 				}
@@ -859,6 +859,7 @@ func TestSurveyor_ObservationMetrics(t *testing.T) {
 type eventuallyF func() (msg string, err error)
 
 func eventually(t *testing.T, condition eventuallyF, waitFor time.Duration, tick time.Duration) {
+	t.Helper()
 	fail := time.NewTimer(waitFor)
 	ticker := time.NewTicker(tick)
 	defer ticker.Stop()

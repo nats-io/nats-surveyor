@@ -643,6 +643,7 @@ func TestSurveyor_NoSystemAccount(t *testing.T) {
 	opts := getTestOptions()
 	opts.HTTPUser = "colin"
 	opts.HTTPPassword = "secret"
+	opts.URLs = ns.ClientURL()
 	s, err := NewSurveyor(opts)
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
@@ -785,7 +786,7 @@ func TestSurveyor_Concurrent(t *testing.T) {
 
 	for _, v := range results {
 		if v != baseVal {
-			t.Fatalf("Expected all values to be the same")
+			t.Fatalf("Expected all values to be the same. Got baseVal: %v. current value: %v", baseVal, v)
 		}
 	}
 }
