@@ -1,6 +1,6 @@
 module github.com/nats-io/nats-surveyor
 
-go 1.25.5
+go 1.26.0
 
 require (
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
