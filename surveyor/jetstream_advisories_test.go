@@ -634,9 +634,6 @@ func TestSurveyor_AdvisoriesError(t *testing.T) {
 	}
 	defer s.Stop()
 	om := s.JetStreamAdvisoryManager()
-	if err != nil {
-		t.Fatalf("Error creating advisories manager: %s", err)
-	}
 
 	// add invalid advisory (missing account name)
 	err = om.Set(

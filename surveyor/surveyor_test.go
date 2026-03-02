@@ -464,9 +464,6 @@ func TestSurveyor_Reconnect(t *testing.T) {
 
 	// poll and check for basic core NATS output
 	pollAndCheckDefault(t, "nats")
-	if err != nil {
-		t.Fatalf("poll error:  %v\n", err)
-	}
 
 	// shutdown the server
 	ns.Shutdown()
@@ -481,7 +478,8 @@ func TestSurveyor_Reconnect(t *testing.T) {
 
 	// poll and check for basic core NATS output, the next server should
 	for i := 0; i < 5; i++ {
-		results, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
+		var results string
+		results, err = PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
 		if err == nil || strings.Contains(results, "nats_up 1") {
 			break
 		}
@@ -918,9 +916,6 @@ func TestSurveyor_AccountJetStreamJszLeaderOnly(t *testing.T) {
 	reader := strings.NewReader(output)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		if scanner.Err(); err != nil {
-			break
-		}
 		line := scanner.Text()
 		metric, labels := parseLabels(line)
 		if strings.HasPrefix(metric, "nats_stream") {
@@ -1108,9 +1103,6 @@ func TestSurveyor_AccountJetStreamJszFilters(t *testing.T) {
 	reader := strings.NewReader(output)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		if scanner.Err(); err != nil {
-			break
-		}
 		line := scanner.Text()
 		metric, labels := parseLabels(line)
 		if strings.HasPrefix(metric, "nats_stream") {

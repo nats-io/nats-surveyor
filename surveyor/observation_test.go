@@ -554,9 +554,6 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 	}
 	defer s.Stop()
 	om := s.ServiceObservationManager()
-	if err != nil {
-		t.Fatalf("Error creating observations manager: %s", err)
-	}
 
 	// add invalid observation (missing service name)
 	err = om.Set(
