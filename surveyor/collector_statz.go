@@ -2023,8 +2023,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		// We want to collect these before we exit the flight group
 		// but they should still be sent to every caller
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			var i int
 			for m := range collectCh {
 				sm := surveyorMetrics[i]
@@ -2033,8 +2032,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				i++
 			}
 
-			wg.Done()
-		}()
+		})
 
 		timer.ObserveDuration()
 		for _, m := range surveyorMetrics {
