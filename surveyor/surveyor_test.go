@@ -29,6 +29,7 @@ import (
 
 	st "github.com/nats-io/nats-surveyor/test"
 	"github.com/nats-io/nats.go"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
 	"github.com/sirupsen/logrus"
@@ -464,9 +465,6 @@ func TestSurveyor_Reconnect(t *testing.T) {
 
 	// poll and check for basic core NATS output
 	pollAndCheckDefault(t, "nats")
-	if err != nil {
-		t.Fatalf("poll error:  %v\n", err)
-	}
 
 	// shutdown the server
 	ns.Shutdown()
@@ -481,7 +479,8 @@ func TestSurveyor_Reconnect(t *testing.T) {
 
 	// poll and check for basic core NATS output, the next server should
 	for i := 0; i < 5; i++ {
-		results, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
+		var results string
+		results, err = PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
 		if err == nil || strings.Contains(results, "nats_up 1") {
 			break
 		}
@@ -745,16 +744,15 @@ func TestSurveyor_Concurrent(t *testing.T) {
 		t.Fatalf("start error: %v", err)
 	}
 	defer s.Stop()
-	metricFamily := "nats_core_mem_bytes"
-	results := make([]float64, 0)
+	metricFamily := "nats_core_uptime"
+	metrics := make([]*io_prometheus_client.Metric, 0)
 	mutex := sync.Mutex{}
 	var wg sync.WaitGroup
 
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 3 {
+		wg.Go(func() {
 			output, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
+			time.Sleep(1 * time.Second)
 			if err != nil {
 				t.Errorf("%v", err)
 				return
@@ -772,21 +770,24 @@ func TestSurveyor_Concurrent(t *testing.T) {
 				return
 			}
 
-			value := metricFamily.Metric[0].GetGauge().GetValue()
+			metric := metricFamily.Metric[0]
+			// fmt.Println(metric.String())
 
 			mutex.Lock()
 			defer mutex.Unlock()
-			results = append(results, value)
-		}()
+			metrics = append(metrics, metric)
+		})
 	}
 
 	wg.Wait()
 
-	baseVal := results[0]
+	baseVal := metrics[0]
 
-	for _, v := range results {
-		if v != baseVal {
-			t.Fatalf("Expected all values to be the same. Got baseVal: %v. current value: %v", baseVal, v)
+	for _, v := range metrics {
+		if *(v.Gauge.Value) != *(baseVal.Gauge.Value) {
+			t.Fatalf("Expected that singleflight should have prevented concurrent polling,"+
+				" and all uptime values to be the same. "+
+				"Got baseVal: %v. current value: %v", baseVal, v)
 		}
 	}
 }
@@ -918,9 +919,6 @@ func TestSurveyor_AccountJetStreamJszLeaderOnly(t *testing.T) {
 	reader := strings.NewReader(output)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		if scanner.Err(); err != nil {
-			break
-		}
 		line := scanner.Text()
 		metric, labels := parseLabels(line)
 		if strings.HasPrefix(metric, "nats_stream") {
@@ -1108,9 +1106,6 @@ func TestSurveyor_AccountJetStreamJszFilters(t *testing.T) {
 	reader := strings.NewReader(output)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		if scanner.Err(); err != nil {
-			break
-		}
 		line := scanner.Text()
 		metric, labels := parseLabels(line)
 		if strings.HasPrefix(metric, "nats_stream") {
