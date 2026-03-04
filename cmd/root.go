@@ -256,6 +256,10 @@ func init() {
 	rootCmd.Flags().Bool("gatewayz", false, "Export gateway metrics")
 	_ = viper.BindPFlag("gatewayz", rootCmd.Flags().Lookup("gatewayz"))
 
+	// raftz
+	rootCmd.Flags().Bool("raftz", false, "Export metalayer Raft group metrics from raftz endpoint")
+	_ = viper.BindPFlag("raftz", rootCmd.Flags().Lookup("raftz"))
+
 	// jsz streams
 	rootCmd.Flags().String("jsz", "", "Export jsz metrics optionally, one of: all|streams|consumers")
 	_ = viper.BindPFlag("jsz", rootCmd.Flags().Lookup("jsz"))
@@ -323,6 +327,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.Accounts = viper.GetBool("accounts")
 	opts.AccountsDetailed = viper.GetBool("accounts-detailed")
 	opts.Gatewayz = viper.GetBool("gatewayz")
+	opts.Gatewayz = viper.GetBool("raftz")
 	opts.Jsz = viper.GetString("jsz")
 	opts.JszLimit = viper.GetInt("jsz-limit")
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")

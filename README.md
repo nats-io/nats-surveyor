@@ -15,6 +15,7 @@ must be enabled to use surveyor.
 ## Usage
 
 ```text
+Usage:
   nats-surveyor [flags]
 
 Flags:
@@ -29,7 +30,7 @@ Flags:
       --seed string                         Private key (nkey seed). Use in conjunction with --jwt (NATS_SURVEYOR_SEED)
       --user string                         NATS user name or token (NATS_SURVEYOR_USER)
       --password string                     NATS user password (NATS_SURVEYOR_PASSWORD)
-      --token-file string                   Path to file containing a NATS token. The file is re-read on reconnects (NATS_SURVEYOR_TOKEN_FILE)
+      --token-file string                   Path to a file with a bearer token (NATS_SURVEYOR_TOKEN_FILE)
       --tlscert string                      Client certificate file for NATS connections. (NATS_SURVEYOR_TLSCERT)
       --tlskey string                       Client private key for NATS connections. (NATS_SURVEYOR_TLSKEY)
       --tlscacert string                    Client certificate CA on NATS connections. (NATS_SURVEYOR_TLSCACERT)
@@ -47,6 +48,7 @@ Flags:
       --accounts                            Export per-account metrics (NATS_SURVEYOR_ACCOUNTS)
       --accounts-detailed                   Export granular per-account bytes and message metrics (NATS_SURVEYOR_ACCOUNTS_DETAILED)
       --gatewayz                            Export gateway metrics (NATS_SURVEYOR_GATEWAYZ)
+      --raftz                               Export metalayer Raft group metrics from raftz endpoint (NATS_SURVEYOR_RAFTZ)
       --jsz string                          Export jsz metrics optionally, one of: all|streams|consumers (NATS_SURVEYOR_JSZ)
       --jsz-limit int                       Limit the number of returned account jsz metrics (NATS_SURVEYOR_JSZ_LIMIT) (default 1024)
       --jsz-leaders-only                    Fetch jsz metrics from stream and consumer leaders only (NATS_SURVEYOR_JSZ_LEADERS_ONLY)
