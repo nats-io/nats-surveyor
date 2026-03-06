@@ -84,6 +84,7 @@ type Options struct {
 	Accounts             bool
 	AccountsDetailed     bool
 	Gatewayz             bool
+	Raftz                bool
 	Jsz                  string
 	JszLimit             int
 	JszLeadersOnly       bool
@@ -245,6 +246,7 @@ func (s *Surveyor) createStatszCollector() error {
 		s.opts.Accounts,
 		s.opts.AccountsDetailed,
 		s.opts.Gatewayz,
+		s.opts.Raftz,
 		s.opts.Jsz,
 		s.opts.JszLimit,
 		s.opts.JszLeadersOnly,
