@@ -352,7 +352,9 @@ func TestSurveyor_Raftz(t *testing.T) {
 	}
 
 	want := []string{
-		"nats_core_rafz_meta_wal_messages",
+		"nats_core_raftz_meta_committed",
+		"nats_core_raftz_meta_applied",
+		"nats_core_raftz_meta_pindex",
 	}
 	for _, m := range want {
 		if !strings.Contains(output, m) {

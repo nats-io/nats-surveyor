@@ -327,7 +327,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.Accounts = viper.GetBool("accounts")
 	opts.AccountsDetailed = viper.GetBool("accounts-detailed")
 	opts.Gatewayz = viper.GetBool("gatewayz")
-	opts.Gatewayz = viper.GetBool("raftz")
+	opts.Raftz = viper.GetBool("raftz")
 	opts.Jsz = viper.GetString("jsz")
 	opts.JszLimit = viper.GetInt("jsz-limit")
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")

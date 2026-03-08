@@ -83,7 +83,9 @@ type statzDescs struct {
 	InboundGateways   *gatewayzDescs
 
 	// Metalayer raftz info
-	RaftzWalMessages *GaugeVec
+	RaftzMetaCommitted *GaugeVec
+	RaftzMetaApplied   *GaugeVec
+	RaftzMetaPindex    *GaugeVec
 
 	// Jetstream Info
 	JetstreamInfo *GaugeVec
@@ -418,8 +420,18 @@ func (sc *StatzCollector) buildDescs() {
 
 	// Raftz
 	if sc.collectRaftz {
-		sc.descs.RaftzWalMessages = newGaugeVec(newName("rafz_meta_wal_messages"),
-			"Number of log entries currently stored in the WAL (entries after last snapshot)",
+		sc.descs.RaftzMetaCommitted = newGaugeVec(newName("raftz_meta_committed"),
+			"Highest committed log entry index of the meta Raft group",
+			sc.constLabels,
+			sc.jsServerLabels,
+		)
+		sc.descs.RaftzMetaApplied = newGaugeVec(newName("raftz_meta_applied"),
+			"Highest applied log entry index of the meta Raft group",
+			sc.constLabels,
+			sc.jsServerLabels,
+		)
+		sc.descs.RaftzMetaPindex = newGaugeVec(newName("raftz_meta_pindex"),
+			"Log entry index at last snapshot of the meta Raft group",
 			sc.constLabels,
 			sc.jsServerLabels,
 		)
@@ -1428,7 +1440,6 @@ func (sc *StatzCollector) getRaftz(nc *nats.Conn) ([]*raftStat, error) {
 	}
 
 	for _, msg := range msgs {
-		fmt.Println(string(msg.Data))
 		var r raftStat
 
 		if err = unmarshalMsg(msg, &r); err != nil {
@@ -1522,7 +1533,9 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 		sc.descs.GatewayNumInbound,
 
 		// Raftz
-		sc.descs.RaftzWalMessages,
+		sc.descs.RaftzMetaCommitted,
+		sc.descs.RaftzMetaApplied,
+		sc.descs.RaftzMetaPindex,
 
 		// Jetstream Descriptions
 		// Jetstream Info
@@ -2088,20 +2101,16 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				if raftStat == nil || raftStat.Data == nil {
 					continue
 				}
-				raftzStatus := *(raftStat.Data)
-				for _, group := range raftzStatus {
-
-					labels := sc.serverLabelValues(raftStat.Server)
-					// labelValues := []string{jss.Server.ID, jss.Server.Name, jss.Server.Cluster}
-					if metaGroupRaftz, ok := group["_meta_"]; ok {
-
-						metrics.newGaugeMetric(sc.descs.RaftzWalMessages,
-							float64(metaGroupRaftz.WAL.Msgs), labels)
+				for _, group := range *(raftStat.Data) {
+					meta, ok := group["_meta_"]
+					if !ok {
 						continue
-
 					}
+					labels := sc.serverLabelValues(raftStat.Server)
+					metrics.newGaugeMetric(sc.descs.RaftzMetaCommitted, float64(meta.Committed), labels)
+					metrics.newGaugeMetric(sc.descs.RaftzMetaApplied, float64(meta.Applied), labels)
+					metrics.newGaugeMetric(sc.descs.RaftzMetaPindex, float64(meta.PIndex), labels)
 				}
-
 			}
 		}
 
@@ -2231,8 +2240,6 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte,
 	})
 	defer sub.Unsubscribe()
 
-	//TODO
-	fmt.Println("subject, data", subject, string(data))
 	msg := &nats.Msg{
 		Subject: subject,
 		Reply:   inbox,
