@@ -25,14 +25,14 @@
         "hide": false,
         "iconColor": "light-orange",
         "mappings": {},
-        "name": "Metalayer snapshot events annotations",
+        "name": "Meta layer snapshot events annotations",
         "tagKeys": "{{server_name}}",
         "target": {
           "expr": "nats_core_jetstream_meta_snapshot_last_timestamp_seconds *1000",
           "interval": "",
           "refId": "Anno"
         },
-        "textFormat": "Metalayer snapshot event",
+        "textFormat": "Meta layer snapshot event",
         "titleFormat": "{{server_name}}",
         "useValueForTime": true
       }
@@ -117,7 +117,9 @@
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "sortBy": "Name",
+          "sortDesc": false
         },
         "tooltip": {
           "hideZeros": false,
@@ -134,7 +136,8 @@
           "refId": "A"
         }
       ],
-      "title": "Metalayer snapshot duration, seconds",
+      "description": "How long the last meta layer snapshot took",
+      "title": "Meta layer snapshot duration, seconds",
       "type": "timeseries"
     },
     {
@@ -210,7 +213,9 @@
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "sortBy": "Name",
+          "sortDesc": false
         },
         "tooltip": {
           "hideZeros": false,
@@ -227,7 +232,8 @@
           "refId": "A"
         }
       ],
-      "title": "Size of the pending entries in the metalayer, bytes",
+      "description": "Size in bytes of WAL entries accumulated since the last snapshot. The WAL is compacted on each snapshot, typically every couple of minutes, so this should show a see-saw pattern rather than continuous growth.",
+      "title": "Size of the pending entries in the meta layer, bytes",
       "type": "timeseries"
     },
     {
@@ -302,7 +308,9 @@
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "sortBy": "Name",
+          "sortDesc": false
         },
         "tooltip": {
           "hideZeros": false,
@@ -319,7 +327,8 @@
           "refId": "A"
         }
       ],
-      "title": "Pending entries in the metalayer",
+      "description": "Number of WAL entries accumulated since the last snapshot. The WAL is compacted on each snapshot, typically every couple of minutes, so this should show a see-saw pattern rather than continuous growth.",
+      "title": "Pending entries in the meta layer",
       "type": "timeseries"
     }
   ],
@@ -345,7 +354,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "JetStream Metalayer snapshot metrics",
+  "title": "JetStream meta layer snapshot metrics",
   "uid": "adrr5gg",
   "version": 1,
   "weekStart": ""
