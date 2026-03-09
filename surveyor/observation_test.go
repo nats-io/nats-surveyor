@@ -390,6 +390,7 @@ nats_latency_observations_count 1
 			if err != nil {
 				t.Fatalf("subscribe failed: %s", err)
 			}
+			ncAgg.Flush()
 
 			replySub, err := ncA.Subscribe("test.service", func(m *nats.Msg) {
 				m.Respond([]byte("hello"))
@@ -398,6 +399,7 @@ nats_latency_observations_count 1
 				t.Fatalf("subscribe failed: %s", err)
 			}
 			defer replySub.Unsubscribe()
+			ncA.Flush()
 			// send a bunch of observations
 			for i := 0; i < 10; i++ {
 				_, err := ncB.Request("test.service", []byte("hello"), time.Second*3)

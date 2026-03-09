@@ -82,6 +82,11 @@ type statzDescs struct {
 	OutboundGateways  *gatewayzDescs
 	InboundGateways   *gatewayzDescs
 
+	// Metalayer raftz info
+	RaftzMetaCommitted *GaugeVec
+	RaftzMetaApplied   *GaugeVec
+	RaftzMetaPindex    *GaugeVec
+
 	// Jetstream Info
 	JetstreamInfo *GaugeVec
 	// Jetstream Server
@@ -213,6 +218,7 @@ type StatzCollector struct {
 	jsStats                 []*jsStat
 	accStats                []*accountStats
 	gatewayStatz            []*gatewayStatz
+	raftStats               []*raftStat
 	rtts                    map[string]time.Duration
 	pollTimeout             time.Duration
 	reply                   string
@@ -226,6 +232,7 @@ type StatzCollector struct {
 	collectAccounts         bool
 	collectAccountsDetailed bool
 	collectGatewayz         bool
+	collectRaftz            bool
 	collectJsz              CollectJsz
 	jszLimit                int
 	jszLeadersOnly          bool
@@ -409,6 +416,25 @@ func (sc *StatzCollector) buildDescs() {
 	if sc.collectGatewayz {
 		sc.descs.OutboundGateways = sc.newGatewayzDescs("gatewayz_outbound_gateway", newName)
 		sc.descs.InboundGateways = sc.newGatewayzDescs("gatewayz_inbound_gateway", newName)
+	}
+
+	// Raftz
+	if sc.collectRaftz {
+		sc.descs.RaftzMetaCommitted = newGaugeVec(newName("raftz_meta_committed"),
+			"Highest committed log entry index of the meta Raft group",
+			sc.constLabels,
+			sc.jsServerLabels,
+		)
+		sc.descs.RaftzMetaApplied = newGaugeVec(newName("raftz_meta_applied"),
+			"Highest applied log entry index of the meta Raft group",
+			sc.constLabels,
+			sc.jsServerLabels,
+		)
+		sc.descs.RaftzMetaPindex = newGaugeVec(newName("raftz_meta_pindex"),
+			"Log entry index at last snapshot of the meta Raft group",
+			sc.constLabels,
+			sc.jsServerLabels,
+		)
 	}
 
 	// Jetstream Info
@@ -711,6 +737,13 @@ func WithCollectGatewayz(collectGatewayz bool) StatzCollectorOpt {
 	}
 }
 
+func WithCollectRaftz(collectRaftz bool) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.collectRaftz = collectRaftz
+		return nil
+	}
+}
+
 func WithCollectJsz(jsz CollectJsz, jszLeadersOnly bool, jszFilters []JszFilter) StatzCollectorOpt {
 	return func(sc *StatzCollector) error {
 		sc.collectJsz = jsz
@@ -851,7 +884,7 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 // Deprecated: NewStatzCollector is deprecated. Use NewStatzCollectorOpts instead.
 func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 	serverDiscoveryWait, pollTimeout time.Duration, accounts, accountsDetailed bool, gatewayz bool,
-	jsz string, jszLimit int, jszLeadersOnly bool, jszFilters []JszFilter, sysReqPrefix string,
+	raftz bool, jsz string, jszLimit int, jszLeadersOnly bool, jszFilters []JszFilter, sysReqPrefix string,
 	constLabels prometheus.Labels,
 ) *StatzCollector {
 	sc, _ := NewStatzCollectorOpts(
@@ -862,6 +895,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 		WithPollTimeout(pollTimeout),
 		WithCollectAccounts(accounts, accountsDetailed),
 		WithCollectGatewayz(gatewayz),
+		WithCollectRaftz(raftz),
 		WithCollectJsz(CollectJsz(jsz), jszLeadersOnly, jszFilters),
 		WithJszLimit(jszLimit),
 		WithConstantLabels(constLabels),
@@ -1095,6 +1129,14 @@ func (sc *StatzCollector) poll() error {
 			return err
 		}
 	}
+
+	if sc.collectRaftz {
+		err := sc.pollRaftz()
+		if err != nil {
+			return err
+		}
+	}
+
 	_, collectJsz := shouldCollectJsz(sc.collectJsz)
 	if sc.collectAccounts || collectJsz {
 		return sc.pollAccountInfo()
@@ -1160,6 +1202,20 @@ func (sc *StatzCollector) pollGatewayInfo() error {
 	sc.Unlock()
 
 	return nil
+}
+
+func (sc *StatzCollector) pollRaftz() error {
+	raftStats, err := sc.getRaftz(sc.nc)
+	if err != nil {
+		return err
+	}
+
+	sc.Lock()
+	sc.raftStats = raftStats
+	sc.Unlock()
+
+	return nil
+
 }
 
 func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountDetail, []*jsStat) {
@@ -1246,6 +1302,11 @@ type accStatz struct {
 type gatewayStatz struct {
 	server.ServerAPIResponse
 	Data *server.Gatewayz `json:"data,omitempty"`
+}
+
+type raftStat struct {
+	server.ServerAPIResponse
+	Data *server.RaftzStatus `json:"data,omitempty"`
 }
 
 type jsStat struct {
@@ -1361,6 +1422,45 @@ func (sc *StatzCollector) getGatewayz(nc *nats.Conn) ([]*gatewayStatz, error) {
 	return res, nil
 }
 
+func (sc *StatzCollector) getRaftz(nc *nats.Conn) ([]*raftStat, error) {
+	req := &server.RaftzOptions{
+		AccountFilter: "",
+		GroupFilter:   "_meta_",
+	}
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]*raftStat, 0)
+	subj := sc.sysReqPrefix + ".SERVER.PING.RAFTZ"
+
+	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
+	if err != nil {
+		sc.logger.Warnf("Error requesting raftz stats: %s", err.Error())
+	}
+
+	for _, msg := range msgs {
+		var r raftStat
+
+		if err = unmarshalMsg(msg, &r); err != nil {
+			sc.logger.Warnf("Error deserializing raftz stats: %s", err.Error())
+			continue
+		}
+
+		if r.Error != nil {
+			sc.logger.Warnf("Error in Raftz stats response: %s", r.Error.Error())
+			continue
+		}
+
+		res = append(res, &r)
+		if sc.numServers != -1 && len(res) == sc.numServers {
+			break
+		}
+	}
+
+	return res, nil
+}
+
 func mergeStreamDetails(from, to *server.AccountDetail) {
 Outer:
 	for _, stream := range from.Streams {
@@ -1464,6 +1564,15 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 		sc.descs.JetstreamMetaSnapshotPendingBytes,
 		sc.descs.JetstreamMetaSnapshotLastDuration,
 		sc.descs.JetstreamMetaSnapshotLastTimestamp,
+	}
+
+	// Raftz
+	if sc.collectRaftz {
+		metrics = append(metrics,
+			sc.descs.RaftzMetaCommitted,
+			sc.descs.RaftzMetaApplied,
+			sc.descs.RaftzMetaPindex,
+		)
 	}
 
 	// Account scope metrics
@@ -1986,6 +2095,25 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 						stats.LastDuration.Seconds(), jsServerLabelValues)
 					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastTimestamp,
 						float64(stats.LastTime.Unix()), jsServerLabelValues)
+				}
+			}
+		}
+
+		// Raftz metrics
+		if sc.collectRaftz {
+			for _, raftStat := range sc.raftStats {
+				if raftStat == nil || raftStat.Data == nil {
+					continue
+				}
+				for _, group := range *(raftStat.Data) {
+					meta, ok := group["_meta_"]
+					if !ok {
+						continue
+					}
+					labels := sc.serverLabelValues(raftStat.Server)
+					metrics.newGaugeMetric(sc.descs.RaftzMetaCommitted, float64(meta.Committed), labels)
+					metrics.newGaugeMetric(sc.descs.RaftzMetaApplied, float64(meta.Applied), labels)
+					metrics.newGaugeMetric(sc.descs.RaftzMetaPindex, float64(meta.PIndex), labels)
 				}
 			}
 		}

@@ -325,6 +325,45 @@ func TestSurveyor_Gatewayz(t *testing.T) {
 	}
 }
 
+func TestSurveyor_Raftz(t *testing.T) {
+
+	sc := st.NewJetStreamCluster(t)
+	defer sc.Shutdown()
+
+	opt := getTestOptions()
+	opt.Credentials = ""
+	opt.NATSUser = "admin"
+	opt.NATSPassword = "s3cr3t!"
+	opt.ExpectedServers = 3
+	opt.Raftz = true
+	s, err := NewSurveyor(opt)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+
+	defer s.Stop()
+
+	output, err := PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{
+		"nats_core_raftz_meta_committed",
+		"nats_core_raftz_meta_applied",
+		"nats_core_raftz_meta_pindex",
+	}
+	for _, m := range want {
+		if !strings.Contains(output, m) {
+			t.Logf("output: %s", output)
+			t.Fatalf("missing: %s", m)
+		}
+	}
+}
+
 func TestSurveyor_AccountJetStreamAssets(t *testing.T) {
 	sc := st.NewJetStreamCluster(t)
 	defer sc.Shutdown()
@@ -771,7 +810,6 @@ func TestSurveyor_Concurrent(t *testing.T) {
 			}
 
 			metric := metricFamily.Metric[0]
-			// fmt.Println(metric.String())
 
 			mutex.Lock()
 			defer mutex.Unlock()
