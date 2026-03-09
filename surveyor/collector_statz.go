@@ -1532,11 +1532,6 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 		sc.descs.GatewayRecvBytes,
 		sc.descs.GatewayNumInbound,
 
-		// Raftz
-		sc.descs.RaftzMetaCommitted,
-		sc.descs.RaftzMetaApplied,
-		sc.descs.RaftzMetaPindex,
-
 		// Jetstream Descriptions
 		// Jetstream Info
 		sc.descs.JetstreamInfo,
@@ -1569,6 +1564,15 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 		sc.descs.JetstreamMetaSnapshotPendingBytes,
 		sc.descs.JetstreamMetaSnapshotLastDuration,
 		sc.descs.JetstreamMetaSnapshotLastTimestamp,
+	}
+
+	// Raftz
+	if sc.collectRaftz {
+		metrics = append(metrics,
+			sc.descs.RaftzMetaCommitted,
+			sc.descs.RaftzMetaApplied,
+			sc.descs.RaftzMetaPindex,
+		)
 	}
 
 	// Account scope metrics
