@@ -351,7 +351,7 @@ Files are watched and updated using [fsnotify](https://github.com/fsnotify/fsnot
 JetStream can be monitored on a per-account basis by creating JSON files in the `jetstream` directory.
 The file extension must be `.json`.
 Only one authentication method needs to be provided.
-e sure that you give access to the `$JS.EVENT.>` subject to your user.
+Be sure that you give access to the `$JS.EVENT.>` subject to your user.
 Example file format:
 
 ### Credentials
