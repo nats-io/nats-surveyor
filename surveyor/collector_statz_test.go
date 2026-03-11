@@ -14,7 +14,7 @@ import (
 )
 
 func TestStatzCollector_WithoutNATSConnection(t *testing.T) {
-	sc := NewStatzCollector(nil, nil, 0, 0, 0, false, false, false, "", 0, false, nil, "", nil)
+	sc := NewStatzCollector(nil, nil, 0, 0, 0, false, false, false, false, "", 0, false, nil, "", nil)
 
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(sc)
@@ -194,6 +194,12 @@ func TestStatzCollector_WithStats_Jsz(t *testing.T) {
 		"nats_consumer_num_redelivered",
 		"nats_consumer_num_waiting",
 	}
+	metaSnapshotMetrics := []string{
+		"nats_core_jetstream_meta_snapshot_last_duration_seconds",
+		"nats_core_jetstream_meta_snapshot_last_timestamp_seconds",
+		"nats_core_jetstream_meta_snapshot_pending_bytes",
+		"nats_core_jetstream_meta_snapshot_pending_entries",
+	}
 
 	allMetrics := []string{}
 	allMetrics = append(allMetrics, streamMetrics...)
@@ -228,7 +234,7 @@ func TestStatzCollector_WithStats_Jsz(t *testing.T) {
 			jszLeadersOnly: false,
 			jszFilters:     nil,
 			assert: func(t *testing.T, test *test, output string) {
-				for _, m := range allMetrics {
+				for _, m := range append(allMetrics, metaSnapshotMetrics...) {
 					if !strings.Contains(output, m) {
 						t.Fatalf("invalid output, missing '%s':\n%v\n", m, output)
 					}

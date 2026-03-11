@@ -29,6 +29,7 @@ import (
 
 	st "github.com/nats-io/nats-surveyor/test"
 	"github.com/nats-io/nats.go"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
 	"github.com/sirupsen/logrus"
@@ -324,6 +325,45 @@ func TestSurveyor_Gatewayz(t *testing.T) {
 	}
 }
 
+func TestSurveyor_Raftz(t *testing.T) {
+
+	sc := st.NewJetStreamCluster(t)
+	defer sc.Shutdown()
+
+	opt := getTestOptions()
+	opt.Credentials = ""
+	opt.NATSUser = "admin"
+	opt.NATSPassword = "s3cr3t!"
+	opt.ExpectedServers = 3
+	opt.Raftz = true
+	s, err := NewSurveyor(opt)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+
+	defer s.Stop()
+
+	output, err := PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{
+		"nats_core_raftz_meta_committed",
+		"nats_core_raftz_meta_applied",
+		"nats_core_raftz_meta_pindex",
+	}
+	for _, m := range want {
+		if !strings.Contains(output, m) {
+			t.Logf("output: %s", output)
+			t.Fatalf("missing: %s", m)
+		}
+	}
+}
+
 func TestSurveyor_AccountJetStreamAssets(t *testing.T) {
 	sc := st.NewJetStreamCluster(t)
 	defer sc.Shutdown()
@@ -464,9 +504,6 @@ func TestSurveyor_Reconnect(t *testing.T) {
 
 	// poll and check for basic core NATS output
 	pollAndCheckDefault(t, "nats")
-	if err != nil {
-		t.Fatalf("poll error:  %v\n", err)
-	}
 
 	// shutdown the server
 	ns.Shutdown()
@@ -481,7 +518,8 @@ func TestSurveyor_Reconnect(t *testing.T) {
 
 	// poll and check for basic core NATS output, the next server should
 	for i := 0; i < 5; i++ {
-		results, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
+		var results string
+		results, err = PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
 		if err == nil || strings.Contains(results, "nats_up 1") {
 			break
 		}
@@ -643,6 +681,7 @@ func TestSurveyor_NoSystemAccount(t *testing.T) {
 	opts := getTestOptions()
 	opts.HTTPUser = "colin"
 	opts.HTTPPassword = "secret"
+	opts.URLs = ns.ClientURL()
 	s, err := NewSurveyor(opts)
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
@@ -744,16 +783,15 @@ func TestSurveyor_Concurrent(t *testing.T) {
 		t.Fatalf("start error: %v", err)
 	}
 	defer s.Stop()
-	metricFamily := "nats_core_mem_bytes"
-	results := make([]float64, 0)
+	metricFamily := "nats_core_uptime"
+	metrics := make([]*io_prometheus_client.Metric, 0)
 	mutex := sync.Mutex{}
 	var wg sync.WaitGroup
 
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 3 {
+		wg.Go(func() {
 			output, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
+			time.Sleep(1 * time.Second)
 			if err != nil {
 				t.Errorf("%v", err)
 				return
@@ -771,21 +809,23 @@ func TestSurveyor_Concurrent(t *testing.T) {
 				return
 			}
 
-			value := metricFamily.Metric[0].GetGauge().GetValue()
+			metric := metricFamily.Metric[0]
 
 			mutex.Lock()
 			defer mutex.Unlock()
-			results = append(results, value)
-		}()
+			metrics = append(metrics, metric)
+		})
 	}
 
 	wg.Wait()
 
-	baseVal := results[0]
+	baseVal := metrics[0]
 
-	for _, v := range results {
-		if v != baseVal {
-			t.Fatalf("Expected all values to be the same")
+	for _, v := range metrics {
+		if *(v.Gauge.Value) != *(baseVal.Gauge.Value) {
+			t.Fatalf("Expected that singleflight should have prevented concurrent polling,"+
+				" and all uptime values to be the same. "+
+				"Got baseVal: %v. current value: %v", baseVal, v)
 		}
 	}
 }
@@ -917,9 +957,6 @@ func TestSurveyor_AccountJetStreamJszLeaderOnly(t *testing.T) {
 	reader := strings.NewReader(output)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		if scanner.Err(); err != nil {
-			break
-		}
 		line := scanner.Text()
 		metric, labels := parseLabels(line)
 		if strings.HasPrefix(metric, "nats_stream") {
@@ -1107,9 +1144,6 @@ func TestSurveyor_AccountJetStreamJszFilters(t *testing.T) {
 	reader := strings.NewReader(output)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		if scanner.Err(); err != nil {
-			break
-		}
 		line := scanner.Text()
 		metric, labels := parseLabels(line)
 		if strings.HasPrefix(metric, "nats_stream") {

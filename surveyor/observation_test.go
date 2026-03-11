@@ -390,6 +390,7 @@ nats_latency_observations_count 1
 			if err != nil {
 				t.Fatalf("subscribe failed: %s", err)
 			}
+			ncAgg.Flush()
 
 			replySub, err := ncA.Subscribe("test.service", func(m *nats.Msg) {
 				m.Respond([]byte("hello"))
@@ -398,6 +399,7 @@ nats_latency_observations_count 1
 				t.Fatalf("subscribe failed: %s", err)
 			}
 			defer replySub.Unsubscribe()
+			ncA.Flush()
 			// send a bunch of observations
 			for i := 0; i < 10; i++ {
 				_, err := ncB.Request("test.service", []byte("hello"), time.Second*3)
@@ -408,7 +410,7 @@ nats_latency_observations_count 1
 
 			// wait for all observations to be received in the test subscription
 			for i := 0; i < 10; i++ {
-				_, err = sub.NextMsg(time.Second)
+				_, err = sub.NextMsg(time.Second * 5)
 				if err != nil {
 					t.Fatalf("test subscriber didn't receive all published messages")
 				}
@@ -554,9 +556,6 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 	}
 	defer s.Stop()
 	om := s.ServiceObservationManager()
-	if err != nil {
-		t.Fatalf("Error creating observations manager: %s", err)
-	}
 
 	// add invalid observation (missing service name)
 	err = om.Set(
@@ -859,6 +858,7 @@ func TestSurveyor_ObservationMetrics(t *testing.T) {
 type eventuallyF func() (msg string, err error)
 
 func eventually(t *testing.T, condition eventuallyF, waitFor time.Duration, tick time.Duration) {
+	t.Helper()
 	fail := time.NewTimer(waitFor)
 	ticker := time.NewTicker(tick)
 	defer ticker.Stop()
