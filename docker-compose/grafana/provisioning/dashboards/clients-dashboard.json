@@ -78,7 +78,7 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "sum(nats_core_connection_count{server_cluster=~\"$cluster\"})",
+          "expr": "sum(nats_core_connection_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"})",
           "interval": "",
           "legendFormat": "Connections",
           "refId": "A"
@@ -135,7 +135,7 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "sum(nats_core_subs_count{server_cluster=~\"$cluster\"})",
+          "expr": "sum(nats_core_subs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"})",
           "interval": "",
           "legendFormat": "Subscriptions",
           "refId": "A"
@@ -192,7 +192,7 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_total_connection_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_total_connection_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
           "interval": "",
           "legendFormat": "Connections / Second",
           "refId": "A"
@@ -272,7 +272,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "nats_core_connection_count{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_connection_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
               "interval": "",
               "legendFormat": "{{server_name}}",
               "refId": "A"
@@ -374,7 +374,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "nats_core_connection_count{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_connection_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
               "interval": "",
               "legendFormat": "{{server_name}}",
               "refId": "A"
@@ -477,7 +477,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_total_connection_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_total_connection_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "interval": "",
               "legendFormat": "{{server_name}}",
               "refId": "A"
@@ -581,7 +581,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_slow_consumer_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -698,7 +698,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "nats_core_subs_count{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_subs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -798,7 +798,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(delta(nats_core_subs_count{server_cluster=~\"$cluster\"}[1m]))",
+              "expr": "sum(delta(nats_core_subs_count{instance=\"$surveyor_instance\",server_cluster=~\"$cluster\"}[1m]))",
               "interval": "",
               "legendFormat": "{{server_name}}",
               "refId": "A"
@@ -864,6 +864,48 @@
         "label": "Prometheus Datasource",
         "query": "prometheus",
         "refresh": 1
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "definition": "label_values(nats_core_info, job)",
+        "includeAll": true,
+        "label": "Surveyor Job",
+        "name": "surveyor_job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nats_core_info, job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "nats-surveyor.*",
+        "type": "query",
+        "allValue": ".*"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "definition": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+        "hide": 2,
+        "includeAll": false,
+        "label": "Surveyor Instance",
+        "name": "surveyor_instance",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nats_core_info{job=~\"$surveyor_job\"}, instance)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
       },
       {
         "allValue": ".*",
