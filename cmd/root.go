@@ -285,6 +285,10 @@ func init() {
 	rootCmd.Flags().String("sys-req-prefix", surveyor.DefaultSysReqPrefix, "Subject prefix for system requests ($SYS.REQ)")
 	_ = viper.BindPFlag("sys-req-prefix", rootCmd.Flags().Lookup("sys-req-prefix"))
 
+	// pprof
+	rootCmd.Flags().Bool("pprof", false, "Enable pprof endpoint at /debug/pprof/")
+	_ = viper.BindPFlag("pprof", rootCmd.Flags().Lookup("pprof"))
+
 	// log-level
 	rootCmd.Flags().String("log-level", "info", "Log level, one of: trace|debug|info|warn|error|fatal|panic")
 	_ = viper.BindPFlag("log-level", rootCmd.Flags().Lookup("log-level"))
@@ -333,6 +337,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")
 	opts.JszFilters = jszFilters
 
+	opts.EnablePprof = viper.GetBool("pprof")
 	opts.SysReqPrefix = viper.GetString("sys-req-prefix")
 	opts.ServerResponseWait = viper.GetDuration("server-discovery-timeout")
 	opts.TokenFile = viper.GetString("token-file")
