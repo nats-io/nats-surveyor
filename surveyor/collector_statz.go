@@ -15,9 +15,11 @@ package surveyor
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"runtime/trace"
 	"sort"
 	"strconv"
 	"strings"
@@ -836,7 +838,7 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 					jsAccInfos[acc.Id] = acc
 					continue
 				}
-				mergeStreamDetails(accInfo, acc)
+				mergeStreamDetails(context.Background(), accInfo, acc)
 				jsAccInfos[acc.Id] = acc
 			}
 		}
@@ -1003,7 +1005,9 @@ func (sc *StatzCollector) handleStatzResponse(msg *nats.Msg) {
 }
 
 // poll will only fail if there is a NATS publishing error
-func (sc *StatzCollector) poll() error {
+func (sc *StatzCollector) poll(ctx context.Context) error {
+	defer trace.StartRegion(ctx, "poll").End()
+
 	sc.Lock()
 	sc.start = time.Now()
 	sc.uptime = time.Duration(time.Since(sc.start).Seconds())
@@ -1124,14 +1128,14 @@ func (sc *StatzCollector) poll() error {
 	}
 
 	if sc.collectGatewayz {
-		err := sc.pollGatewayInfo()
+		err := sc.pollGatewayInfo(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
 	if sc.collectRaftz {
-		err := sc.pollRaftz()
+		err := sc.pollRaftz(ctx)
 		if err != nil {
 			return err
 		}
@@ -1139,7 +1143,7 @@ func (sc *StatzCollector) poll() error {
 
 	_, collectJsz := shouldCollectJsz(sc.collectJsz)
 	if sc.collectAccounts || collectJsz {
-		return sc.pollAccountInfo()
+		return sc.pollAccountInfo(ctx)
 	}
 	return nil
 }
@@ -1150,9 +1154,11 @@ func shouldCollectJsz(setting CollectJsz) (CollectJsz, bool) {
 	return CollectJsz(jsz), enabled
 }
 
-func (sc *StatzCollector) pollAccountInfo() error {
+func (sc *StatzCollector) pollAccountInfo(ctx context.Context) error {
+	defer trace.StartRegion(ctx, "pollAccountInfo").End()
+
 	nc := sc.nc
-	accs, err := sc.getAccStatz(nc)
+	accs, err := sc.getAccStatz(ctx, nc)
 	if err != nil {
 		return err
 	}
@@ -1163,7 +1169,7 @@ func (sc *StatzCollector) pollAccountInfo() error {
 		accStats[accID] = sts
 	}
 
-	accDetails, jsStats := sc.getJSInfos(nc)
+	accDetails, jsStats := sc.getJSInfos(ctx, nc)
 	for accID, accDetail := range accDetails {
 		sts := accStats[accID]
 		sts = mapJSAccountDetailToStats(accID, accDetail, sts)
@@ -1191,8 +1197,10 @@ func (sc *StatzCollector) pollAccountInfo() error {
 	return nil
 }
 
-func (sc *StatzCollector) pollGatewayInfo() error {
-	gatewayz, err := sc.getGatewayz(sc.nc)
+func (sc *StatzCollector) pollGatewayInfo(ctx context.Context) error {
+	defer trace.StartRegion(ctx, "collectGatewayz").End()
+
+	gatewayz, err := sc.getGatewayz(ctx, sc.nc)
 	if err != nil {
 		return err
 	}
@@ -1204,8 +1212,10 @@ func (sc *StatzCollector) pollGatewayInfo() error {
 	return nil
 }
 
-func (sc *StatzCollector) pollRaftz() error {
-	raftStats, err := sc.getRaftz(sc.nc)
+func (sc *StatzCollector) pollRaftz(ctx context.Context) error {
+	defer trace.StartRegion(ctx, "collectRaftz").End()
+
+	raftStats, err := sc.getRaftz(ctx, sc.nc)
 	if err != nil {
 		return err
 	}
@@ -1218,7 +1228,8 @@ func (sc *StatzCollector) pollRaftz() error {
 
 }
 
-func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountDetail, []*jsStat) {
+func (sc *StatzCollector) getJSInfos(ctx context.Context, nc *nats.Conn) (map[string]*server.AccountDetail, []*jsStat) {
+	defer trace.StartRegion(ctx, "getJSInfos").End()
 	var opts server.JSzOptions
 	jsz, collectJsz := shouldCollectJsz(sc.collectJsz)
 	getConsumers := jsz == CollectJszConsumers || jsz == CollectJszAll
@@ -1249,7 +1260,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 	}
 
 	subj := sc.sysReqPrefix + ".SERVER.PING.JSZ"
-	msgs, err := requestMany(nc, sc, subj, req, true)
+	msgs, err := requestMany(ctx, nc, sc, subj, req, true)
 	if err != nil {
 		sc.logger.Warnf("Unable to request JetStream info: %s", err)
 	}
@@ -1265,6 +1276,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 		if r.Error != nil {
 			if strings.Contains(r.Error.Description, "jetstream not enabled") {
 				// jetstream is not enabled on server
+
 				return nil, nil
 			}
 			continue
@@ -1286,7 +1298,7 @@ func (sc *StatzCollector) getJSInfos(nc *nats.Conn) (map[string]*server.AccountD
 				jsAccInfos[acc.Id] = acc
 				continue
 			}
-			mergeStreamDetails(accInfo, acc)
+			mergeStreamDetails(ctx, accInfo, acc)
 			jsAccInfos[acc.Id] = acc
 		}
 	}
@@ -1319,7 +1331,8 @@ type accStat struct {
 	Data   *server.AccountStat
 }
 
-func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, error) {
+func (sc *StatzCollector) getAccStatz(ctx context.Context, nc *nats.Conn) (map[string][]*accStat, error) {
+	defer trace.StartRegion(ctx, "getAccStatz").End()
 	req := &server.AccountStatzOptions{
 		IncludeUnused: true,
 	}
@@ -1330,7 +1343,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 	res := make([]*accStatz, 0)
 	subj := sc.sysReqPrefix + ".ACCOUNT.PING.STATZ"
 
-	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
+	msgs, err := requestMany(ctx, nc, sc, subj, reqJSON, true)
 	if err != nil {
 		sc.logger.Warnf("Error requesting account stats: %s", err.Error())
 	}
@@ -1382,7 +1395,7 @@ func (sc *StatzCollector) getAccStatz(nc *nats.Conn) (map[string][]*accStat, err
 	return accStats, nil
 }
 
-func (sc *StatzCollector) getGatewayz(nc *nats.Conn) ([]*gatewayStatz, error) {
+func (sc *StatzCollector) getGatewayz(ctx context.Context, nc *nats.Conn) ([]*gatewayStatz, error) {
 	req := &server.GatewayzEventOptions{
 		GatewayzOptions: server.GatewayzOptions{
 			Accounts: false,
@@ -1395,7 +1408,7 @@ func (sc *StatzCollector) getGatewayz(nc *nats.Conn) ([]*gatewayStatz, error) {
 	res := make([]*gatewayStatz, 0)
 	subj := sc.sysReqPrefix + ".SERVER.PING.GATEWAYZ"
 
-	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
+	msgs, err := requestMany(ctx, nc, sc, subj, reqJSON, true)
 	if err != nil {
 		sc.logger.Warnf("Error requesting gatewayz stats: %s", err.Error())
 	}
@@ -1422,7 +1435,7 @@ func (sc *StatzCollector) getGatewayz(nc *nats.Conn) ([]*gatewayStatz, error) {
 	return res, nil
 }
 
-func (sc *StatzCollector) getRaftz(nc *nats.Conn) ([]*raftStat, error) {
+func (sc *StatzCollector) getRaftz(ctx context.Context, nc *nats.Conn) ([]*raftStat, error) {
 	req := &server.RaftzOptions{
 		AccountFilter: "",
 		GroupFilter:   "_meta_",
@@ -1434,7 +1447,7 @@ func (sc *StatzCollector) getRaftz(nc *nats.Conn) ([]*raftStat, error) {
 	res := make([]*raftStat, 0)
 	subj := sc.sysReqPrefix + ".SERVER.PING.RAFTZ"
 
-	msgs, err := requestMany(nc, sc, subj, reqJSON, true)
+	msgs, err := requestMany(ctx, nc, sc, subj, reqJSON, true)
 	if err != nil {
 		sc.logger.Warnf("Error requesting raftz stats: %s", err.Error())
 	}
@@ -1461,12 +1474,13 @@ func (sc *StatzCollector) getRaftz(nc *nats.Conn) ([]*raftStat, error) {
 	return res, nil
 }
 
-func mergeStreamDetails(from, to *server.AccountDetail) {
+func mergeStreamDetails(ctx context.Context, from, to *server.AccountDetail) {
+	defer trace.StartRegion(ctx, "mergeStreamDetails").End()
 Outer:
 	for _, stream := range from.Streams {
 		for i, toStream := range to.Streams {
 			if stream.Name == toStream.Name {
-				mergeStreamConsumers(&stream, &toStream)
+				mergeStreamConsumers(ctx, &stream, &toStream)
 				to.Streams[i] = toStream
 				continue Outer
 			}
@@ -1475,7 +1489,8 @@ Outer:
 	}
 }
 
-func mergeStreamConsumers(from, to *server.StreamDetail) {
+func mergeStreamConsumers(ctx context.Context, from, to *server.StreamDetail) {
+	defer trace.StartRegion(ctx, "mergeStreamConsumers").End()
 Outer:
 	for _, cons := range from.Consumer {
 		for _, toCons := range to.Consumer {
@@ -1716,8 +1731,11 @@ func (ms *metricSlice) newCounterMetric(counter *CounterVec, value float64, labe
 
 // Collect gathers the streaming server serverz metrics.
 func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
+	ctx, task := trace.NewTask(context.Background(), "StatzCollector.Collect")
+	defer task.End()
+	start := time.Now()
 	// Run in flightgroup to allow simultaneous query
-	result, err, _ := sc.flightGroup.Do("collect", func() (interface{}, error) {
+	result, err, _ := sc.flightGroup.Do("collect", func() (any, error) {
 		metrics := &metricSlice{
 			metrics: make([]Metric, 0),
 			Mutex:   sync.Mutex{},
@@ -1727,7 +1745,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 
 		// poll the servers
 		if sc.nc != nil {
-			if err := sc.poll(); err != nil {
+			if err := sc.poll(ctx); err != nil {
 				sc.logger.Warnf("Error polling NATS server: %v", err)
 				sc.pollErrCnt.WithLabelValues().Inc()
 				metrics.newMetric(sc.natsUp, 0, prometheus.GaugeValue, nil)
@@ -1739,403 +1757,405 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		sc.Lock()
 		defer sc.Unlock()
 
-		metrics.newMetric(sc.natsUp, 1, prometheus.GaugeValue, nil)
-		sc.surveyedCnt.WithLabelValues().Set(0)
+		trace.WithRegion(ctx, "buildMetrics", func() {
+			metrics.newMetric(sc.natsUp, 1, prometheus.GaugeValue, nil)
+			sc.surveyedCnt.WithLabelValues().Set(0)
 
-		for _, sm := range sc.stats {
-			sc.surveyedCnt.WithLabelValues().Inc()
+			for _, sm := range sc.stats {
+				sc.surveyedCnt.WithLabelValues().Inc()
 
-			metrics.newGaugeMetric(sc.descs.Info, 1, sc.serverInfoLabelValues(&sm.Server))
+				metrics.newGaugeMetric(sc.descs.Info, 1, sc.serverInfoLabelValues(&sm.Server))
 
-			labels := sc.serverLabelValues(&sm.Server)
-			metrics.newGaugeMetric(sc.descs.Start, float64(sm.Stats.Start.UnixNano()), labels)
-			metrics.newGaugeMetric(sc.descs.Uptime, time.Since(sm.Stats.Start).Seconds(), labels)
-			metrics.newGaugeMetric(sc.descs.Mem, float64(sm.Stats.Mem), labels)
-			metrics.newGaugeMetric(sc.descs.GoMemLimit, float64(sm.Stats.MemLimit), labels)
-			metrics.newGaugeMetric(sc.descs.Cores, float64(sm.Stats.Cores), labels)
-			metrics.newGaugeMetric(sc.descs.CPU, sm.Stats.CPU, labels)
-			metrics.newGaugeMetric(sc.descs.Connections, float64(sm.Stats.Connections), labels)
-			metrics.newCounterMetric(sc.descs.TotalConnections, float64(sm.Stats.TotalConnections), labels)
-			metrics.newGaugeMetric(sc.descs.ActiveAccounts, float64(sm.Stats.ActiveAccounts), labels)
-			metrics.newGaugeMetric(sc.descs.NumSubs, float64(sm.Stats.NumSubs), labels)
-			metrics.newCounterMetric(sc.descs.SentMsgs, float64(sm.Stats.Sent.Msgs), labels)
-			metrics.newCounterMetric(sc.descs.SentBytes, float64(sm.Stats.Sent.Bytes), labels)
-			metrics.newCounterMetric(sc.descs.RecvMsgs, float64(sm.Stats.Received.Msgs), labels)
-			metrics.newCounterMetric(sc.descs.RecvBytes, float64(sm.Stats.Received.Bytes), labels)
-			metrics.newGaugeMetric(sc.descs.SlowConsumers, float64(sm.Stats.SlowConsumers), labels)
-			metrics.newGaugeMetric(sc.descs.RTT, float64(sc.rtts[sm.Server.ID]), labels)
-			metrics.newGaugeMetric(sc.descs.Routes, float64(len(sm.Stats.Routes)), labels)
-			metrics.newGaugeMetric(sc.descs.Gateways, float64(len(sm.Stats.Gateways)), labels)
+				labels := sc.serverLabelValues(&sm.Server)
+				metrics.newGaugeMetric(sc.descs.Start, float64(sm.Stats.Start.UnixNano()), labels)
+				metrics.newGaugeMetric(sc.descs.Uptime, time.Since(sm.Stats.Start).Seconds(), labels)
+				metrics.newGaugeMetric(sc.descs.Mem, float64(sm.Stats.Mem), labels)
+				metrics.newGaugeMetric(sc.descs.GoMemLimit, float64(sm.Stats.MemLimit), labels)
+				metrics.newGaugeMetric(sc.descs.Cores, float64(sm.Stats.Cores), labels)
+				metrics.newGaugeMetric(sc.descs.CPU, sm.Stats.CPU, labels)
+				metrics.newGaugeMetric(sc.descs.Connections, float64(sm.Stats.Connections), labels)
+				metrics.newCounterMetric(sc.descs.TotalConnections, float64(sm.Stats.TotalConnections), labels)
+				metrics.newGaugeMetric(sc.descs.ActiveAccounts, float64(sm.Stats.ActiveAccounts), labels)
+				metrics.newGaugeMetric(sc.descs.NumSubs, float64(sm.Stats.NumSubs), labels)
+				metrics.newCounterMetric(sc.descs.SentMsgs, float64(sm.Stats.Sent.Msgs), labels)
+				metrics.newCounterMetric(sc.descs.SentBytes, float64(sm.Stats.Sent.Bytes), labels)
+				metrics.newCounterMetric(sc.descs.RecvMsgs, float64(sm.Stats.Received.Msgs), labels)
+				metrics.newCounterMetric(sc.descs.RecvBytes, float64(sm.Stats.Received.Bytes), labels)
+				metrics.newGaugeMetric(sc.descs.SlowConsumers, float64(sm.Stats.SlowConsumers), labels)
+				metrics.newGaugeMetric(sc.descs.RTT, float64(sc.rtts[sm.Server.ID]), labels)
+				metrics.newGaugeMetric(sc.descs.Routes, float64(len(sm.Stats.Routes)), labels)
+				metrics.newGaugeMetric(sc.descs.Gateways, float64(len(sm.Stats.Gateways)), labels)
 
-			metrics.newGaugeMetric(sc.descs.JetstreamInfo, float64(1), jetstreamInfoLabelValues(sm))
-			// Any / All Meta-data in sc.descs.JetstreamInfo can be xrefed by the server_id.
-			// labels define the "uniqueness" of a time series, any associations beyond that should be left to prometheus
-			lblServerID := []string{sm.Server.ID, sm.Server.Name, sm.Server.Cluster}
-			if sm.Stats.JetStream == nil {
-				metrics.newGaugeMetric(sc.descs.JetstreamEnabled, float64(0), lblServerID)
-			} else {
-				metrics.newGaugeMetric(sc.descs.JetstreamEnabled, float64(1), lblServerID)
-				if sm.Stats.JetStream.Config != nil {
-					metrics.newGaugeMetric(sc.descs.JetstreamFilestoreSizeBytes, float64(sm.Stats.JetStream.Config.MaxStore), lblServerID)
-					metrics.newGaugeMetric(sc.descs.JetstreamMemstoreSizeBytes, float64(sm.Stats.JetStream.Config.MaxMemory), lblServerID)
-					// StoreDir  At present, '$SYS.REQ.SERVER.PING', server.sendStatsz() squashes StoreDir to "".
-					// Domain is also at 'sm.Server.Domain'. Unknown if there's a semantic difference at present. See jsDomainLabelValue().
-				}
-				if sm.Stats.JetStream.Stats != nil {
-					metrics.newGaugeMetric(sc.descs.JetstreamFilestoreUsedBytes, float64(sm.Stats.JetStream.Stats.Store), lblServerID)
-					metrics.newGaugeMetric(sc.descs.JetstreamFilestoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedStore), lblServerID)
-					metrics.newGaugeMetric(sc.descs.JetstreamMemstoreUsedBytes, float64(sm.Stats.JetStream.Stats.Memory), lblServerID)
-					metrics.newGaugeMetric(sc.descs.JetstreamMemstoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedMemory), lblServerID)
-					metrics.newGaugeMetric(sc.descs.JetstreamAccounts, float64(sm.Stats.JetStream.Stats.Accounts), lblServerID)
-					metrics.newGaugeMetric(sc.descs.JetstreamHAAssets, float64(sm.Stats.JetStream.Stats.HAAssets), lblServerID)
-					// At present, Total does not include Errors. Keeping them separate
-					metrics.newCounterMetric(sc.descs.JetstreamAPIRequests, float64(sm.Stats.JetStream.Stats.API.Total), lblServerID)
-					metrics.newCounterMetric(sc.descs.JetstreamAPIErrors, float64(sm.Stats.JetStream.Stats.API.Errors), lblServerID)
-				}
-
-				if sm.Stats.JetStream.Meta == nil {
-					metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(0), []string{"", "", sm.Server.ID, serverName(&sm.Server), "", ""})
+				metrics.newGaugeMetric(sc.descs.JetstreamInfo, float64(1), jetstreamInfoLabelValues(sm))
+				// Any / All Meta-data in sc.descs.JetstreamInfo can be xrefed by the server_id.
+				// labels define the "uniqueness" of a time series, any associations beyond that should be left to prometheus
+				lblServerID := []string{sm.Server.ID, sm.Server.Name, sm.Server.Cluster}
+				if sm.Stats.JetStream == nil {
+					metrics.newGaugeMetric(sc.descs.JetstreamEnabled, float64(0), lblServerID)
 				} else {
-					jsRaftGroupInfoLabelValues := []string{jsDomainLabelValue(sm), "_meta_", sm.Server.ID, serverName(&sm.Server), sm.Stats.JetStream.Meta.Name, sm.Stats.JetStream.Meta.Leader}
-					metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(1), jsRaftGroupInfoLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamEnabled, float64(1), lblServerID)
+					if sm.Stats.JetStream.Config != nil {
+						metrics.newGaugeMetric(sc.descs.JetstreamFilestoreSizeBytes, float64(sm.Stats.JetStream.Config.MaxStore), lblServerID)
+						metrics.newGaugeMetric(sc.descs.JetstreamMemstoreSizeBytes, float64(sm.Stats.JetStream.Config.MaxMemory), lblServerID)
+						// StoreDir  At present, '$SYS.REQ.SERVER.PING', server.sendStatsz() squashes StoreDir to "".
+						// Domain is also at 'sm.Server.Domain'. Unknown if there's a semantic difference at present. See jsDomainLabelValue().
+					}
+					if sm.Stats.JetStream.Stats != nil {
+						metrics.newGaugeMetric(sc.descs.JetstreamFilestoreUsedBytes, float64(sm.Stats.JetStream.Stats.Store), lblServerID)
+						metrics.newGaugeMetric(sc.descs.JetstreamFilestoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedStore), lblServerID)
+						metrics.newGaugeMetric(sc.descs.JetstreamMemstoreUsedBytes, float64(sm.Stats.JetStream.Stats.Memory), lblServerID)
+						metrics.newGaugeMetric(sc.descs.JetstreamMemstoreReservedBytes, float64(sm.Stats.JetStream.Stats.ReservedMemory), lblServerID)
+						metrics.newGaugeMetric(sc.descs.JetstreamAccounts, float64(sm.Stats.JetStream.Stats.Accounts), lblServerID)
+						metrics.newGaugeMetric(sc.descs.JetstreamHAAssets, float64(sm.Stats.JetStream.Stats.HAAssets), lblServerID)
+						// At present, Total does not include Errors. Keeping them separate
+						metrics.newCounterMetric(sc.descs.JetstreamAPIRequests, float64(sm.Stats.JetStream.Stats.API.Total), lblServerID)
+						metrics.newCounterMetric(sc.descs.JetstreamAPIErrors, float64(sm.Stats.JetStream.Stats.API.Errors), lblServerID)
+					}
 
-					jsRaftGroupLabelValues := []string{sm.Server.ID, serverName(&sm.Server), sm.Server.Cluster}
-					// FIXME: add labels needed or remove...
-
-					metrics.newGaugeMetric(sc.descs.JetstreamAPIPending, float64(sm.Stats.JetStream.Meta.Pending), jsRaftGroupLabelValues)
-					metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupSize, float64(sm.Stats.JetStream.Meta.Size), jsRaftGroupLabelValues)
-
-					// Could provide false positive if two server have the same server_name in the same or different clusters in the super-cluster...
-					// At present, in this statsz only a peer that thinks it's a Leader will have `sm.Stats.JetStream.Meta.Replicas != nil`.
-					if sm.Stats.JetStream.Meta.Leader != "" && sm.Server.Name != "" && sm.Server.Name == sm.Stats.JetStream.Meta.Leader {
-						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupLeader, float64(1), jsRaftGroupLabelValues)
+					if sm.Stats.JetStream.Meta == nil {
+						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(0), []string{"", "", sm.Server.ID, serverName(&sm.Server), "", ""})
 					} else {
-						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupLeader, float64(0), jsRaftGroupLabelValues)
-					}
-					metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicas, float64(len(sm.Stats.JetStream.Meta.Replicas)), jsRaftGroupLabelValues)
-					for _, jsr := range sm.Stats.JetStream.Meta.Replicas {
-						if jsr == nil {
-							continue
-						}
-						jsClusterReplicaLabelValues := []string{sm.Server.ID, serverName(&sm.Server), jsr.Name, sm.Server.Cluster}
-						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaActive, float64(jsr.Active), jsClusterReplicaLabelValues)
-						if jsr.Current {
-							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(1), jsClusterReplicaLabelValues)
+						jsRaftGroupInfoLabelValues := []string{jsDomainLabelValue(sm), "_meta_", sm.Server.ID, serverName(&sm.Server), sm.Stats.JetStream.Meta.Name, sm.Stats.JetStream.Meta.Leader}
+						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupInfo, float64(1), jsRaftGroupInfoLabelValues)
+
+						jsRaftGroupLabelValues := []string{sm.Server.ID, serverName(&sm.Server), sm.Server.Cluster}
+						// FIXME: add labels needed or remove...
+
+						metrics.newGaugeMetric(sc.descs.JetstreamAPIPending, float64(sm.Stats.JetStream.Meta.Pending), jsRaftGroupLabelValues)
+						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupSize, float64(sm.Stats.JetStream.Meta.Size), jsRaftGroupLabelValues)
+
+						// Could provide false positive if two server have the same server_name in the same or different clusters in the super-cluster...
+						// At present, in this statsz only a peer that thinks it's a Leader will have `sm.Stats.JetStream.Meta.Replicas != nil`.
+						if sm.Stats.JetStream.Meta.Leader != "" && sm.Server.Name != "" && sm.Server.Name == sm.Stats.JetStream.Meta.Leader {
+							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupLeader, float64(1), jsRaftGroupLabelValues)
 						} else {
-							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(0), jsClusterReplicaLabelValues)
+							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupLeader, float64(0), jsRaftGroupLabelValues)
 						}
-						if jsr.Offline {
-							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(1), jsClusterReplicaLabelValues)
-						} else {
-							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(0), jsClusterReplicaLabelValues)
+						metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicas, float64(len(sm.Stats.JetStream.Meta.Replicas)), jsRaftGroupLabelValues)
+						for _, jsr := range sm.Stats.JetStream.Meta.Replicas {
+							if jsr == nil {
+								continue
+							}
+							jsClusterReplicaLabelValues := []string{sm.Server.ID, serverName(&sm.Server), jsr.Name, sm.Server.Cluster}
+							metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaActive, float64(jsr.Active), jsClusterReplicaLabelValues)
+							if jsr.Current {
+								metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(1), jsClusterReplicaLabelValues)
+							} else {
+								metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaCurrent, float64(0), jsClusterReplicaLabelValues)
+							}
+							if jsr.Offline {
+								metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(1), jsClusterReplicaLabelValues)
+							} else {
+								metrics.newGaugeMetric(sc.descs.JetstreamClusterRaftGroupReplicaOffline, float64(0), jsClusterReplicaLabelValues)
+							}
 						}
-					}
 
-				}
-			}
-
-			for _, rs := range sm.Stats.Routes {
-				labels = sc.routeLabelValues(&sm.Server, rs)
-				metrics.newCounterMetric(sc.descs.RouteSentMsgs, float64(rs.Sent.Msgs), labels)
-				metrics.newCounterMetric(sc.descs.RouteSentBytes, float64(rs.Sent.Bytes), labels)
-				metrics.newCounterMetric(sc.descs.RouteRecvMsgs, float64(rs.Received.Msgs), labels)
-				metrics.newCounterMetric(sc.descs.RouteRecvBytes, float64(rs.Received.Bytes), labels)
-				metrics.newGaugeMetric(sc.descs.RoutePending, float64(rs.Pending), labels)
-			}
-
-			for _, gw := range sm.Stats.Gateways {
-				labels = sc.gatewayLabelValues(&sm.Server, gw)
-				metrics.newCounterMetric(sc.descs.GatewaySentMsgs, float64(gw.Sent.Msgs), labels)
-				metrics.newCounterMetric(sc.descs.GatewaySentBytes, float64(gw.Sent.Bytes), labels)
-				metrics.newCounterMetric(sc.descs.GatewayRecvMsgs, float64(gw.Received.Msgs), labels)
-				metrics.newCounterMetric(sc.descs.GatewayRecvBytes, float64(gw.Received.Bytes), labels)
-				metrics.newGaugeMetric(sc.descs.GatewayNumInbound, float64(gw.NumInbound), labels)
-			}
-		}
-
-		// Account scope metrics
-		_, collectJsz := shouldCollectJsz(sc.collectJsz)
-		if sc.collectAccounts || collectJsz {
-			metrics.newGaugeMetric(sc.descs.accCount, float64(len(sc.accStats)), nil)
-			for _, stat := range sc.accStats {
-				accLabels := []string{stat.accountID, stat.accountName}
-				for _, as := range stat.stats {
-					serverAndAccLabels := append(sc.serverLabelValues(as.Server), accLabels...)
-					metrics.newGaugeMetric(sc.descs.accConnCount, float64(as.Data.Conns), serverAndAccLabels)
-					metrics.newGaugeMetric(sc.descs.accTotalConnCount, float64(as.Data.TotalConns), serverAndAccLabels)
-					metrics.newGaugeMetric(sc.descs.accLeafCount, float64(as.Data.LeafNodes), serverAndAccLabels)
-					metrics.newGaugeMetric(sc.descs.accSubCount, float64(as.Data.NumSubs), serverAndAccLabels)
-					metrics.newGaugeMetric(sc.descs.accSlowConsumerCount, float64(as.Data.SlowConsumers), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accBytesSent, float64(as.Data.Sent.Bytes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accBytesRecv, float64(as.Data.Received.Bytes), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accMsgsSent, float64(as.Data.Sent.Msgs), serverAndAccLabels)
-					metrics.newCounterMetric(sc.descs.accMsgsRecv, float64(as.Data.Received.Msgs), serverAndAccLabels)
-
-					if sc.collectAccountsDetailed {
-						metrics.newCounterMetric(sc.descs.accClientBytesSent, float64(as.Data.Sent.Bytes-safeMsgBytesBytes(as.Data.Sent.Routes)-safeMsgBytesBytes(as.Data.Sent.Gateways)-safeMsgBytesBytes(as.Data.Sent.Leafs)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accClientBytesRecv, float64(as.Data.Received.Bytes-safeMsgBytesBytes(as.Data.Received.Routes)-safeMsgBytesBytes(as.Data.Received.Gateways)-safeMsgBytesBytes(as.Data.Received.Leafs)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accClientMsgsSent, float64(as.Data.Sent.Msgs-safeMsgBytesMsgs(as.Data.Sent.Routes)-safeMsgBytesMsgs(as.Data.Sent.Gateways)-safeMsgBytesMsgs(as.Data.Sent.Leafs)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accClientMsgsRecv, float64(as.Data.Received.Msgs-safeMsgBytesMsgs(as.Data.Received.Routes)-safeMsgBytesMsgs(as.Data.Received.Gateways)-safeMsgBytesMsgs(as.Data.Received.Leafs)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accLeafBytesSent, float64(safeMsgBytesBytes(as.Data.Sent.Leafs)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accLeafBytesRecv, float64(safeMsgBytesBytes(as.Data.Received.Leafs)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accLeafMsgsSent, float64(safeMsgBytesMsgs(as.Data.Sent.Leafs)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accLeafMsgsRecv, float64(safeMsgBytesMsgs(as.Data.Received.Leafs)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accRouteBytesSent, float64(safeMsgBytesBytes(as.Data.Sent.Routes)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accRouteBytesRecv, float64(safeMsgBytesBytes(as.Data.Received.Routes)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accRouteMsgsSent, float64(safeMsgBytesMsgs(as.Data.Sent.Routes)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accRouteMsgsRecv, float64(safeMsgBytesMsgs(as.Data.Received.Routes)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accGatewayBytesSent, float64(safeMsgBytesBytes(as.Data.Sent.Gateways)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accGatewayBytesRecv, float64(safeMsgBytesBytes(as.Data.Received.Gateways)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accGatewayMsgsSent, float64(safeMsgBytesMsgs(as.Data.Sent.Gateways)), serverAndAccLabels)
-						metrics.newCounterMetric(sc.descs.accGatewayMsgsRecv, float64(safeMsgBytesMsgs(as.Data.Received.Gateways)), serverAndAccLabels)
 					}
 				}
 
-				metrics.newGaugeMetric(sc.descs.accJetstreamEnabled, stat.jetstreamEnabled, accLabels)
-				metrics.newGaugeMetric(sc.descs.accJetstreamMemoryUsed, stat.jetstreamMemoryUsed, accLabels)
-				metrics.newGaugeMetric(sc.descs.accJetstreamStorageUsed, stat.jetstreamStorageUsed, accLabels)
-				metrics.newGaugeMetric(sc.descs.accJetstreamMemoryReserved, stat.jetstreamMemoryReserved, accLabels)
-				metrics.newGaugeMetric(sc.descs.accJetstreamStorageReserved, stat.jetstreamStorageReserved, accLabels)
-				for tier, size := range stat.jetstreamTieredMemoryUsed {
-					metrics.newGaugeMetric(sc.descs.accJetstreamTieredMemoryUsed, size, append(accLabels, fmt.Sprintf("R%d", tier)))
-				}
-				for tier, size := range stat.jetstreamTieredStorageUsed {
-					metrics.newGaugeMetric(sc.descs.accJetstreamTieredStorageUsed, size, append(accLabels, fmt.Sprintf("R%d", tier)))
-				}
-				for tier, size := range stat.jetstreamTieredMemoryReserved {
-					metrics.newGaugeMetric(sc.descs.accJetstreamTieredMemoryReserved, size, append(accLabels, fmt.Sprintf("R%d", tier)))
-				}
-				for tier, size := range stat.jetstreamTieredStorageReserved {
-					metrics.newGaugeMetric(sc.descs.accJetstreamTieredStorageReserved, size, append(accLabels, fmt.Sprintf("R%d", tier)))
+				for _, rs := range sm.Stats.Routes {
+					labels = sc.routeLabelValues(&sm.Server, rs)
+					metrics.newCounterMetric(sc.descs.RouteSentMsgs, float64(rs.Sent.Msgs), labels)
+					metrics.newCounterMetric(sc.descs.RouteSentBytes, float64(rs.Sent.Bytes), labels)
+					metrics.newCounterMetric(sc.descs.RouteRecvMsgs, float64(rs.Received.Msgs), labels)
+					metrics.newCounterMetric(sc.descs.RouteRecvBytes, float64(rs.Received.Bytes), labels)
+					metrics.newGaugeMetric(sc.descs.RoutePending, float64(rs.Pending), labels)
 				}
 
-				metrics.newGaugeMetric(sc.descs.accJetstreamStreamCount, stat.jetstreamStreamCount, accLabels)
-				for _, streamStat := range stat.jetstreamStreams {
-					metrics.newGaugeMetric(sc.descs.accJetstreamConsumerCount, streamStat.consumerCount, append(accLabels, streamStat.streamName, streamStat.raftGroup))
-					metrics.newGaugeMetric(sc.descs.accJetstreamReplicaCount, streamStat.replicaCount, append(accLabels, streamStat.streamName, streamStat.raftGroup))
-				}
-
-				collectJsz, shouldCollectJsz := shouldCollectJsz(sc.collectJsz)
-				if !shouldCollectJsz {
-					continue
-				}
-				for _, streamStat := range stat.jszData {
-					hasFilters := len(sc.jszFilterSet) > 0
-
-					isLeaderOrAll := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == streamStat.streamLeader
-					showJszStreams := collectJsz == CollectJszAll || collectJsz == CollectJszStreams
-					if isLeaderOrAll && showJszStreams {
-						if sc.jszFilterSet[StreamTotalMessages] || !hasFilters {
-							metrics.newGaugeMetric(sc.descs.accJszStreamMsgs,
-								streamStat.streamMessages,
-								append(accLabels,
-									streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-									streamStat.streamName, streamStat.streamLeader,
-								),
-							)
-						}
-
-						if sc.jszFilterSet[StreamTotalBytes] || !hasFilters {
-							metrics.newGaugeMetric(sc.descs.accJszStreamBytes,
-								streamStat.streamBytes,
-								append(accLabels,
-									streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-									streamStat.streamName, streamStat.streamLeader,
-								),
-							)
-						}
-
-						if sc.jszFilterSet[StreamFirstSeq] || !hasFilters {
-							metrics.newGaugeMetric(sc.descs.accJszStreamFirstSeq,
-								streamStat.streamFirstSeq,
-								append(accLabels,
-									streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-									streamStat.streamName, streamStat.streamLeader,
-								),
-							)
-						}
-
-						if sc.jszFilterSet[StreamLastSeq] || !hasFilters {
-							metrics.newGaugeMetric(sc.descs.accJszStreamLastSeq,
-								streamStat.streamLastSeq,
-								append(accLabels,
-									streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-									streamStat.streamName, streamStat.streamLeader,
-								),
-							)
-						}
-
-						if sc.jszFilterSet[StreamConsumerCount] || !hasFilters {
-							metrics.newGaugeMetric(sc.descs.accJszStreamConsumerCount,
-								streamStat.streamConsumerCount,
-								append(accLabels,
-									streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-									streamStat.streamName, streamStat.streamLeader,
-								),
-							)
-						}
-
-						if sc.jszFilterSet[StreamSubjectCount] || !hasFilters {
-							metrics.newGaugeMetric(sc.descs.accJszStreamSubjectCount,
-								streamStat.streamSubjectCount,
-								append(accLabels,
-									streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
-									streamStat.streamName, streamStat.streamLeader,
-								),
-							)
-						}
-					}
-
-					for _, consumerStat := range streamStat.consumerStats {
-						isLeaderOrAll := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == consumerStat.consumerLeader
-						showJszConsumers := collectJsz == CollectJszAll || collectJsz == CollectJszConsumers
-						if isLeaderOrAll && showJszConsumers {
-							raftGroup := consumerStat.consumerRaftGroup
-
-							if sc.jszFilterSet[ConsumerDeliveredConsumerSeq] || !hasFilters {
-								metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredConsumerSeq,
-									consumerStat.consumerDeliveredConsumerSeq,
-									append(accLabels,
-										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
-										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-									),
-								)
-							}
-
-							if sc.jszFilterSet[ConsumerDeliveredStreamSeq] || !hasFilters {
-								metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredStreamSeq,
-									consumerStat.consumerDeliveredStreamSeq,
-									append(accLabels,
-										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
-										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-									),
-								)
-							}
-							if sc.jszFilterSet[ConsumerNumAckPending] || !hasFilters {
-								metrics.newGaugeMetric(sc.descs.accJszConsumerNumAckPending,
-									consumerStat.consumerNumAckPending,
-									append(accLabels,
-										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
-										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-									),
-								)
-							}
-							if sc.jszFilterSet[ConsumerNumRedelivered] || !hasFilters {
-								metrics.newGaugeMetric(sc.descs.accJszConsumerNumRedelivered,
-									consumerStat.consumerNumRedelivered,
-									append(accLabels,
-										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
-										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-									),
-								)
-							}
-							if sc.jszFilterSet[ConsumerNumWaiting] || !hasFilters {
-								metrics.newGaugeMetric(sc.descs.accJszConsumerNumWaiting,
-									consumerStat.consumerNumWaiting,
-									append(accLabels,
-										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
-										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-									),
-								)
-							}
-							if sc.jszFilterSet[ConsumerNumPending] || !hasFilters {
-								metrics.newGaugeMetric(sc.descs.accJszConsumerNumPending,
-									consumerStat.consumerNumPending,
-									append(accLabels,
-										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
-										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-									),
-								)
-							}
-							if sc.jszFilterSet[ConsumerAckFloorStreamSeq] || !hasFilters {
-								metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorStreamSeq,
-									consumerStat.consumerAckFloorStreamSeq,
-									append(accLabels,
-										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
-										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-									),
-								)
-							}
-							if sc.jszFilterSet[ConsumerAckFloorConsumerSeq] || !hasFilters {
-								metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorConsumerSeq,
-									consumerStat.consumerAckFloorConsumerSeq,
-									append(accLabels,
-										streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
-										streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
-									),
-								)
-							}
-						}
-					}
+				for _, gw := range sm.Stats.Gateways {
+					labels = sc.gatewayLabelValues(&sm.Server, gw)
+					metrics.newCounterMetric(sc.descs.GatewaySentMsgs, float64(gw.Sent.Msgs), labels)
+					metrics.newCounterMetric(sc.descs.GatewaySentBytes, float64(gw.Sent.Bytes), labels)
+					metrics.newCounterMetric(sc.descs.GatewayRecvMsgs, float64(gw.Received.Msgs), labels)
+					metrics.newCounterMetric(sc.descs.GatewayRecvBytes, float64(gw.Received.Bytes), labels)
+					metrics.newGaugeMetric(sc.descs.GatewayNumInbound, float64(gw.NumInbound), labels)
 				}
 			}
 
-			for _, jss := range sc.jsStats {
-				jsServerLabelValues := []string{jss.Server.ID, jss.Server.Name, jss.Server.Cluster}
-				var isJetStreamDisabled float64
-				if jss.Data.Disabled {
-					isJetStreamDisabled = 1
-				}
-				metrics.newGaugeMetric(sc.descs.JetstreamServerDisabled, isJetStreamDisabled, jsServerLabelValues)
-				metrics.newGaugeMetric(sc.descs.JetstreamServerStreams, float64(jss.Data.Streams), jsServerLabelValues)
-				metrics.newGaugeMetric(sc.descs.JetstreamServerConsumers, float64(jss.Data.Consumers), jsServerLabelValues)
-				metrics.newGaugeMetric(sc.descs.JetstreamServerMessages, float64(jss.Data.Messages), jsServerLabelValues)
-				metrics.newGaugeMetric(sc.descs.JetstreamServerBytes, float64(jss.Data.Bytes), jsServerLabelValues)
-				metrics.newGaugeMetric(sc.descs.JetstreamServerMaxMemory, float64(jss.Data.Config.MaxMemory), jsServerLabelValues)
-				metrics.newGaugeMetric(sc.descs.JetstreamServerMaxStorage, float64(jss.Data.Config.MaxStore), jsServerLabelValues)
+			// Account scope metrics
+			_, collectJsz := shouldCollectJsz(sc.collectJsz)
+			if sc.collectAccounts || collectJsz {
+				metrics.newGaugeMetric(sc.descs.accCount, float64(len(sc.accStats)), nil)
+				for _, stat := range sc.accStats {
+					accLabels := []string{stat.accountID, stat.accountName}
+					for _, as := range stat.stats {
+						serverAndAccLabels := append(sc.serverLabelValues(as.Server), accLabels...)
+						metrics.newGaugeMetric(sc.descs.accConnCount, float64(as.Data.Conns), serverAndAccLabels)
+						metrics.newGaugeMetric(sc.descs.accTotalConnCount, float64(as.Data.TotalConns), serverAndAccLabels)
+						metrics.newGaugeMetric(sc.descs.accLeafCount, float64(as.Data.LeafNodes), serverAndAccLabels)
+						metrics.newGaugeMetric(sc.descs.accSubCount, float64(as.Data.NumSubs), serverAndAccLabels)
+						metrics.newGaugeMetric(sc.descs.accSlowConsumerCount, float64(as.Data.SlowConsumers), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accBytesSent, float64(as.Data.Sent.Bytes), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accBytesRecv, float64(as.Data.Received.Bytes), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accMsgsSent, float64(as.Data.Sent.Msgs), serverAndAccLabels)
+						metrics.newCounterMetric(sc.descs.accMsgsRecv, float64(as.Data.Received.Msgs), serverAndAccLabels)
 
-				// Meta snaphost stats
-				if jss.Data.Meta != nil {
-					stats := jss.Data.Meta.Snapshot
-					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingEntries,
-						float64(stats.PendingEntries), jsServerLabelValues)
-					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingBytes,
-						float64(stats.PendingSize), jsServerLabelValues)
-					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastDuration,
-						stats.LastDuration.Seconds(), jsServerLabelValues)
-					metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastTimestamp,
-						float64(stats.LastTime.Unix()), jsServerLabelValues)
-				}
-			}
-		}
+						if sc.collectAccountsDetailed {
+							metrics.newCounterMetric(sc.descs.accClientBytesSent, float64(as.Data.Sent.Bytes-safeMsgBytesBytes(as.Data.Sent.Routes)-safeMsgBytesBytes(as.Data.Sent.Gateways)-safeMsgBytesBytes(as.Data.Sent.Leafs)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accClientBytesRecv, float64(as.Data.Received.Bytes-safeMsgBytesBytes(as.Data.Received.Routes)-safeMsgBytesBytes(as.Data.Received.Gateways)-safeMsgBytesBytes(as.Data.Received.Leafs)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accClientMsgsSent, float64(as.Data.Sent.Msgs-safeMsgBytesMsgs(as.Data.Sent.Routes)-safeMsgBytesMsgs(as.Data.Sent.Gateways)-safeMsgBytesMsgs(as.Data.Sent.Leafs)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accClientMsgsRecv, float64(as.Data.Received.Msgs-safeMsgBytesMsgs(as.Data.Received.Routes)-safeMsgBytesMsgs(as.Data.Received.Gateways)-safeMsgBytesMsgs(as.Data.Received.Leafs)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accLeafBytesSent, float64(safeMsgBytesBytes(as.Data.Sent.Leafs)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accLeafBytesRecv, float64(safeMsgBytesBytes(as.Data.Received.Leafs)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accLeafMsgsSent, float64(safeMsgBytesMsgs(as.Data.Sent.Leafs)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accLeafMsgsRecv, float64(safeMsgBytesMsgs(as.Data.Received.Leafs)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accRouteBytesSent, float64(safeMsgBytesBytes(as.Data.Sent.Routes)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accRouteBytesRecv, float64(safeMsgBytesBytes(as.Data.Received.Routes)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accRouteMsgsSent, float64(safeMsgBytesMsgs(as.Data.Sent.Routes)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accRouteMsgsRecv, float64(safeMsgBytesMsgs(as.Data.Received.Routes)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accGatewayBytesSent, float64(safeMsgBytesBytes(as.Data.Sent.Gateways)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accGatewayBytesRecv, float64(safeMsgBytesBytes(as.Data.Received.Gateways)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accGatewayMsgsSent, float64(safeMsgBytesMsgs(as.Data.Sent.Gateways)), serverAndAccLabels)
+							metrics.newCounterMetric(sc.descs.accGatewayMsgsRecv, float64(safeMsgBytesMsgs(as.Data.Received.Gateways)), serverAndAccLabels)
+						}
+					}
 
-		// Raftz metrics
-		if sc.collectRaftz {
-			for _, raftStat := range sc.raftStats {
-				if raftStat == nil || raftStat.Data == nil {
-					continue
-				}
-				for _, group := range *(raftStat.Data) {
-					meta, ok := group["_meta_"]
-					if !ok {
+					metrics.newGaugeMetric(sc.descs.accJetstreamEnabled, stat.jetstreamEnabled, accLabels)
+					metrics.newGaugeMetric(sc.descs.accJetstreamMemoryUsed, stat.jetstreamMemoryUsed, accLabels)
+					metrics.newGaugeMetric(sc.descs.accJetstreamStorageUsed, stat.jetstreamStorageUsed, accLabels)
+					metrics.newGaugeMetric(sc.descs.accJetstreamMemoryReserved, stat.jetstreamMemoryReserved, accLabels)
+					metrics.newGaugeMetric(sc.descs.accJetstreamStorageReserved, stat.jetstreamStorageReserved, accLabels)
+					for tier, size := range stat.jetstreamTieredMemoryUsed {
+						metrics.newGaugeMetric(sc.descs.accJetstreamTieredMemoryUsed, size, append(accLabels, fmt.Sprintf("R%d", tier)))
+					}
+					for tier, size := range stat.jetstreamTieredStorageUsed {
+						metrics.newGaugeMetric(sc.descs.accJetstreamTieredStorageUsed, size, append(accLabels, fmt.Sprintf("R%d", tier)))
+					}
+					for tier, size := range stat.jetstreamTieredMemoryReserved {
+						metrics.newGaugeMetric(sc.descs.accJetstreamTieredMemoryReserved, size, append(accLabels, fmt.Sprintf("R%d", tier)))
+					}
+					for tier, size := range stat.jetstreamTieredStorageReserved {
+						metrics.newGaugeMetric(sc.descs.accJetstreamTieredStorageReserved, size, append(accLabels, fmt.Sprintf("R%d", tier)))
+					}
+
+					metrics.newGaugeMetric(sc.descs.accJetstreamStreamCount, stat.jetstreamStreamCount, accLabels)
+					for _, streamStat := range stat.jetstreamStreams {
+						metrics.newGaugeMetric(sc.descs.accJetstreamConsumerCount, streamStat.consumerCount, append(accLabels, streamStat.streamName, streamStat.raftGroup))
+						metrics.newGaugeMetric(sc.descs.accJetstreamReplicaCount, streamStat.replicaCount, append(accLabels, streamStat.streamName, streamStat.raftGroup))
+					}
+
+					collectJsz, shouldCollectJsz := shouldCollectJsz(sc.collectJsz)
+					if !shouldCollectJsz {
 						continue
 					}
-					labels := sc.serverLabelValues(raftStat.Server)
-					metrics.newGaugeMetric(sc.descs.RaftzMetaCommitted, float64(meta.Committed), labels)
-					metrics.newGaugeMetric(sc.descs.RaftzMetaApplied, float64(meta.Applied), labels)
-					metrics.newGaugeMetric(sc.descs.RaftzMetaPindex, float64(meta.PIndex), labels)
-				}
-			}
-		}
+					for _, streamStat := range stat.jszData {
+						hasFilters := len(sc.jszFilterSet) > 0
 
-		// Gatewayz metrics
-		if sc.collectGatewayz {
-			for _, gwStat := range sc.gatewayStatz {
-				if gwStat == nil || gwStat.Data == nil {
-					continue
+						isLeaderOrAll := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == streamStat.streamLeader
+						showJszStreams := collectJsz == CollectJszAll || collectJsz == CollectJszStreams
+						if isLeaderOrAll && showJszStreams {
+							if sc.jszFilterSet[StreamTotalMessages] || !hasFilters {
+								metrics.newGaugeMetric(sc.descs.accJszStreamMsgs,
+									streamStat.streamMessages,
+									append(accLabels,
+										streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+										streamStat.streamName, streamStat.streamLeader,
+									),
+								)
+							}
+
+							if sc.jszFilterSet[StreamTotalBytes] || !hasFilters {
+								metrics.newGaugeMetric(sc.descs.accJszStreamBytes,
+									streamStat.streamBytes,
+									append(accLabels,
+										streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+										streamStat.streamName, streamStat.streamLeader,
+									),
+								)
+							}
+
+							if sc.jszFilterSet[StreamFirstSeq] || !hasFilters {
+								metrics.newGaugeMetric(sc.descs.accJszStreamFirstSeq,
+									streamStat.streamFirstSeq,
+									append(accLabels,
+										streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+										streamStat.streamName, streamStat.streamLeader,
+									),
+								)
+							}
+
+							if sc.jszFilterSet[StreamLastSeq] || !hasFilters {
+								metrics.newGaugeMetric(sc.descs.accJszStreamLastSeq,
+									streamStat.streamLastSeq,
+									append(accLabels,
+										streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+										streamStat.streamName, streamStat.streamLeader,
+									),
+								)
+							}
+
+							if sc.jszFilterSet[StreamConsumerCount] || !hasFilters {
+								metrics.newGaugeMetric(sc.descs.accJszStreamConsumerCount,
+									streamStat.streamConsumerCount,
+									append(accLabels,
+										streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+										streamStat.streamName, streamStat.streamLeader,
+									),
+								)
+							}
+
+							if sc.jszFilterSet[StreamSubjectCount] || !hasFilters {
+								metrics.newGaugeMetric(sc.descs.accJszStreamSubjectCount,
+									streamStat.streamSubjectCount,
+									append(accLabels,
+										streamStat.clusterName, streamStat.raftGroup, streamStat.serverID, streamStat.serverName,
+										streamStat.streamName, streamStat.streamLeader,
+									),
+								)
+							}
+						}
+
+						for _, consumerStat := range streamStat.consumerStats {
+							isLeaderOrAll := !sc.jszLeadersOnly || sc.jszLeadersOnly && streamStat.serverName == consumerStat.consumerLeader
+							showJszConsumers := collectJsz == CollectJszAll || collectJsz == CollectJszConsumers
+							if isLeaderOrAll && showJszConsumers {
+								raftGroup := consumerStat.consumerRaftGroup
+
+								if sc.jszFilterSet[ConsumerDeliveredConsumerSeq] || !hasFilters {
+									metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredConsumerSeq,
+										consumerStat.consumerDeliveredConsumerSeq,
+										append(accLabels,
+											streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+											streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+										),
+									)
+								}
+
+								if sc.jszFilterSet[ConsumerDeliveredStreamSeq] || !hasFilters {
+									metrics.newGaugeMetric(sc.descs.accJszConsumerDeliveredStreamSeq,
+										consumerStat.consumerDeliveredStreamSeq,
+										append(accLabels,
+											streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+											streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+										),
+									)
+								}
+								if sc.jszFilterSet[ConsumerNumAckPending] || !hasFilters {
+									metrics.newGaugeMetric(sc.descs.accJszConsumerNumAckPending,
+										consumerStat.consumerNumAckPending,
+										append(accLabels,
+											streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+											streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+										),
+									)
+								}
+								if sc.jszFilterSet[ConsumerNumRedelivered] || !hasFilters {
+									metrics.newGaugeMetric(sc.descs.accJszConsumerNumRedelivered,
+										consumerStat.consumerNumRedelivered,
+										append(accLabels,
+											streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+											streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+										),
+									)
+								}
+								if sc.jszFilterSet[ConsumerNumWaiting] || !hasFilters {
+									metrics.newGaugeMetric(sc.descs.accJszConsumerNumWaiting,
+										consumerStat.consumerNumWaiting,
+										append(accLabels,
+											streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+											streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+										),
+									)
+								}
+								if sc.jszFilterSet[ConsumerNumPending] || !hasFilters {
+									metrics.newGaugeMetric(sc.descs.accJszConsumerNumPending,
+										consumerStat.consumerNumPending,
+										append(accLabels,
+											streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+											streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+										),
+									)
+								}
+								if sc.jszFilterSet[ConsumerAckFloorStreamSeq] || !hasFilters {
+									metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorStreamSeq,
+										consumerStat.consumerAckFloorStreamSeq,
+										append(accLabels,
+											streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+											streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+										),
+									)
+								}
+								if sc.jszFilterSet[ConsumerAckFloorConsumerSeq] || !hasFilters {
+									metrics.newGaugeMetric(sc.descs.accJszConsumerAckFloorConsumerSeq,
+										consumerStat.consumerAckFloorConsumerSeq,
+										append(accLabels,
+											streamStat.clusterName, raftGroup, streamStat.serverID, streamStat.serverName,
+											streamStat.streamName, streamStat.streamLeader, consumerStat.consumerName, consumerStat.consumerLeader,
+										),
+									)
+								}
+							}
+						}
+					}
 				}
 
-				for rgwName, gw := range gwStat.Data.OutboundGateways {
-					collectGatewayzMetrics(metrics, sc.descs.OutboundGateways, rgwName, gwStat, gw)
-				}
+				for _, jss := range sc.jsStats {
+					jsServerLabelValues := []string{jss.Server.ID, jss.Server.Name, jss.Server.Cluster}
+					var isJetStreamDisabled float64
+					if jss.Data.Disabled {
+						isJetStreamDisabled = 1
+					}
+					metrics.newGaugeMetric(sc.descs.JetstreamServerDisabled, isJetStreamDisabled, jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamServerStreams, float64(jss.Data.Streams), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamServerConsumers, float64(jss.Data.Consumers), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamServerMessages, float64(jss.Data.Messages), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamServerBytes, float64(jss.Data.Bytes), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamServerMaxMemory, float64(jss.Data.Config.MaxMemory), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamServerMaxStorage, float64(jss.Data.Config.MaxStore), jsServerLabelValues)
 
-				for rgwName, gws := range gwStat.Data.InboundGateways {
-					for _, gw := range gws {
-						collectGatewayzMetrics(metrics, sc.descs.InboundGateways, rgwName, gwStat, gw)
+					// Meta snaphost stats
+					if jss.Data.Meta != nil {
+						stats := jss.Data.Meta.Snapshot
+						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingEntries,
+							float64(stats.PendingEntries), jsServerLabelValues)
+						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingBytes,
+							float64(stats.PendingSize), jsServerLabelValues)
+						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastDuration,
+							stats.LastDuration.Seconds(), jsServerLabelValues)
+						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotLastTimestamp,
+							float64(stats.LastTime.Unix()), jsServerLabelValues)
 					}
 				}
 			}
-		}
+
+			// Raftz metrics
+			if sc.collectRaftz {
+				for _, raftStat := range sc.raftStats {
+					if raftStat == nil || raftStat.Data == nil {
+						continue
+					}
+					for _, group := range *(raftStat.Data) {
+						meta, ok := group["_meta_"]
+						if !ok {
+							continue
+						}
+						labels := sc.serverLabelValues(raftStat.Server)
+						metrics.newGaugeMetric(sc.descs.RaftzMetaCommitted, float64(meta.Committed), labels)
+						metrics.newGaugeMetric(sc.descs.RaftzMetaApplied, float64(meta.Applied), labels)
+						metrics.newGaugeMetric(sc.descs.RaftzMetaPindex, float64(meta.PIndex), labels)
+					}
+				}
+			}
+
+			// Gatewayz metrics
+			if sc.collectGatewayz {
+				for _, gwStat := range sc.gatewayStatz {
+					if gwStat == nil || gwStat.Data == nil {
+						continue
+					}
+
+					for rgwName, gw := range gwStat.Data.OutboundGateways {
+						collectGatewayzMetrics(metrics, sc.descs.OutboundGateways, rgwName, gwStat, gw)
+					}
+
+					for rgwName, gws := range gwStat.Data.InboundGateways {
+						for _, gw := range gws {
+							collectGatewayzMetrics(metrics, sc.descs.InboundGateways, rgwName, gwStat, gw)
+						}
+					}
+				}
+			}
+		})
 
 		collectCh := make(chan prometheus.Metric)
 
@@ -2192,6 +2212,7 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 	for _, m := range metrics {
 		ch <- m.Metric()
 	}
+	sc.logger.Debugf("StatszCollector.Collect took: %s", time.Since(start))
 }
 
 func collectGatewayzMetrics(metrics *metricSlice, gwDescs *gatewayzDescs, rgwName string, gwStat *gatewayStatz, gw *server.RemoteGatewayz) {
@@ -2228,13 +2249,19 @@ func collectGatewayzMetrics(metrics *metricSlice, gwDescs *gatewayzDescs, rgwNam
 	metrics.newGaugeMetric(gwDescs.connSubscriptions, float64(gw.Connection.NumSubs), labels)
 }
 
-func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte, compression bool) ([]*nats.Msg, error) {
+func requestMany(ctx context.Context, nc *nats.Conn,
+	sc *StatzCollector, subject string, data []byte, compression bool,
+) (res []*nats.Msg, err error) {
+	start := time.Now()
+	defer trace.StartRegion(ctx, "requestMany: "+subject).End()
+	defer func() {
+		sc.logger.Debugf("requestMany %s: %d responses in %s", subject, len(res), time.Since(start))
+	}()
 	if subject == "" {
 		return nil, fmt.Errorf("subject cannot be empty")
 	}
 
 	inbox := nats.NewInbox()
-	res := make([]*nats.Msg, 0)
 	msgsChan := make(chan *nats.Msg, 100)
 
 	intervalTimer := time.NewTimer(sc.pollTimeout)
@@ -2279,6 +2306,7 @@ func requestMany(nc *nats.Conn, sc *StatzCollector, subject string, data []byte,
 
 // Performs JSON Unmarshal, decompressing snappy encoding if necessary
 func unmarshalMsg(msg *nats.Msg, v any) error {
+	defer trace.StartRegion(context.Background(), fmt.Sprintf("unmarshalMsg: %T", v)).End()
 	if msg.Header.Get("Status") == "503" && len(msg.Data) == 0 {
 		return fmt.Errorf("got a message with status 503: No responders available: %v", msg)
 	}

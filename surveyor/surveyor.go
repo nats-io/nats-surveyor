@@ -214,6 +214,7 @@ func newSurveyorConnPool(opts *Options, registry *prometheus.Registry) *natsConn
 				opts.Logger.Warnf("Error: name=%q err=%v", c.Opts.Name, err)
 			}
 		}),
+		//TODO: this should be -1, right?
 		nats.MaxReconnects(10240),
 	)
 
