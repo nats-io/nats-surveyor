@@ -397,7 +397,7 @@ func (s *Surveyor) startHTTP() error {
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		s.logger.Infof("pprof enabled at /debug/pprof/")
+		s.logger.Infof("Unauthenticated pprof endpoint enabled at /debug/pprof/")
 	}
 
 	httpServer := &http.Server{

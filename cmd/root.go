@@ -286,7 +286,7 @@ func init() {
 	_ = viper.BindPFlag("sys-req-prefix", rootCmd.Flags().Lookup("sys-req-prefix"))
 
 	// pprof
-	rootCmd.Flags().Bool("pprof", false, "Enable pprof endpoint at /debug/pprof/")
+	rootCmd.Flags().Bool("pprof", false, "Enable unauthenticated pprof endpoint at /debug/pprof/")
 	_ = viper.BindPFlag("pprof", rootCmd.Flags().Lookup("pprof"))
 
 	// log-level
