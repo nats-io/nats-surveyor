@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -94,7 +95,8 @@ type Options struct {
 	Provider             ConnProvider      // not exposed by CLI
 	NATSOpts             []nats.Option     // not exposed by CLI
 	ConstLabels          prometheus.Labels // not exposed by CLI
-	DisableHTTPServer    bool              // not exposed by CLI
+	EnablePprof          bool
+	DisableHTTPServer    bool // not exposed by CLI
 }
 
 // GetDefaultOptions returns the default set of options
@@ -212,6 +214,7 @@ func newSurveyorConnPool(opts *Options, registry *prometheus.Registry) *natsConn
 				opts.Logger.Warnf("Error: name=%q err=%v", c.Opts.Name, err)
 			}
 		}),
+		//TODO: this should be -1, right?
 		nats.MaxReconnects(10240),
 	)
 
@@ -387,6 +390,15 @@ func (s *Surveyor) startHTTP() error {
 	mux.HandleFunc("/healthz", func(resp http.ResponseWriter, req *http.Request) {
 		resp.Write([]byte("ok"))
 	})
+	if s.opts.EnablePprof {
+		// copy of Init() from 	"net/http/pprof"
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		s.logger.Infof("Unauthenticated pprof endpoint enabled at /debug/pprof/")
+	}
 
 	httpServer := &http.Server{
 		Addr:           hp,
