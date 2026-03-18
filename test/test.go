@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -100,34 +101,52 @@ func StartBasicServer() *server.Server {
 	panic("Unable to start NATS Server in Go Routine")
 }
 
-// StartServer starts a a NATS server
-func StartServer(t *testing.T, confFile string) *server.Server {
+// startServerFromOpts starts a NATS server from pre-configured options.
+func startServerFromOpts(t *testing.T, opts *server.Options) *server.Server {
+	t.Helper()
 	resetPreviousHTTPConnections()
-	opts, err := server.ProcessConfigFile(confFile)
-	if err != nil {
-		t.Fatalf("Error processing config file: %v", err)
-	}
 
-	// remove this line for debugging
 	opts.NoLog = true
 
 	s, err := server.NewServer(opts)
 	if err != nil || s == nil {
-		panic(fmt.Sprintf("No NATS Server object returned: %v", err))
+		t.Fatalf("No NATS Server object returned: %v", err)
 	}
 
 	if !opts.NoLog {
 		s.ConfigureLogger()
 	}
 
-	// Run server in Go routine.
 	go s.Start()
 
-	// Wait for accept loop(s) to be started
 	if !s.ReadyForConnections(10 * time.Second) {
-		panic("Unable to start NATS Server in Go Routine")
+		t.Fatal("Unable to start NATS Server in Go Routine")
 	}
 	return s
+}
+
+// StartServer starts a NATS server with all ports randomized.
+// For clustered/gateway setups where servers must find each other, use NewSuperCluster instead.
+func StartServer(t *testing.T, confFile string) *server.Server {
+	t.Helper()
+	opts, err := server.ProcessConfigFile(confFile)
+	if err != nil {
+		t.Fatalf("Error processing config file: %v", err)
+	}
+
+	// Use random ports to avoid conflicts with other tests or locally
+	// running servers.
+	opts.Port = -1
+	opts.HTTPPort = -1
+	if opts.Cluster.Port > 0 {
+		opts.Cluster.Port = -1
+		opts.Cluster.NoAdvertise = true
+	}
+	if opts.Gateway.Name != "" {
+		opts.Gateway.Port = -1
+	}
+
+	return startServerFromOpts(t, opts)
 }
 
 // SuperCluster holds client connections and NATS servers
@@ -142,11 +161,50 @@ var (
 )
 
 // NewSuperCluster creates a small supercluster for testing, with one client per server.
+// All ports are randomized; routes and gateways are wired dynamically using actual ports.
 func NewSuperCluster(t *testing.T) *SuperCluster {
+	t.Helper()
 	sc := &SuperCluster{}
-	for _, f := range configFiles {
-		sc.Servers = append(sc.Servers, StartServer(t, f))
+
+	// Load all configs and randomize all ports.
+	allOpts := make([]*server.Options, len(configFiles))
+	for i, f := range configFiles {
+		opts, err := server.ProcessConfigFile(f)
+		if err != nil {
+			t.Fatalf("Error processing config file: %v", err)
+		}
+		opts.Port = -1
+		opts.HTTPPort = -1
+		opts.Cluster.Port = -1
+		opts.Gateway.Port = -1
+		// Clear pre-configured routes/gateways; we'll wire them dynamically.
+		opts.Routes = nil
+		opts.Gateway.Gateways = nil
+		allOpts[i] = opts
 	}
+
+	// Start r1s1 (seed for region1 cluster and gateway).
+	s0 := startServerFromOpts(t, allOpts[0])
+	sc.Servers = append(sc.Servers, s0)
+
+	// Start r1s2 with route pointing to r1s1's cluster port.
+	allOpts[1].Routes = server.RoutesFromStr(fmt.Sprintf("nats://127.0.0.1:%d", s0.ClusterAddr().Port))
+	s1 := startServerFromOpts(t, allOpts[1])
+	sc.Servers = append(sc.Servers, s1)
+
+	// Start r2s1 with gateways pointing to region1's actual gateway ports.
+	allOpts[2].Gateway.Gateways = []*server.RemoteGatewayOpts{
+		{
+			Name: "region1",
+			URLs: []*url.URL{
+				{Host: fmt.Sprintf("127.0.0.1:%d", s0.GatewayAddr().Port)},
+				{Host: fmt.Sprintf("127.0.0.1:%d", s1.GatewayAddr().Port)},
+			},
+		},
+	}
+	s2 := startServerFromOpts(t, allOpts[2])
+	sc.Servers = append(sc.Servers, s2)
+
 	sc.setupClientsAndVerify(t)
 	return sc
 }
@@ -177,6 +235,10 @@ func NewJetStreamCluster(t *testing.T) *SuperCluster {
 	cluster := SuperCluster{
 		Servers: make([]*server.Server, 0),
 	}
+
+	// JetStream cluster needs RAFT quorum, so all servers must know about
+	// each other upfront. Keep cluster ports from configs (fixed) and only
+	// randomize client/HTTP ports.
 	for _, confFile := range jetStreamConfigFiles {
 		srv := StartJetStreamServerFromConfig(t, confFile)
 		cluster.Servers = append(cluster.Servers, srv)
@@ -208,14 +270,18 @@ func NewJetStreamCluster(t *testing.T) *SuperCluster {
 	return &cluster
 }
 
-// StartJetStreamServerFromConfig starts a JetStream server using the provided configuration
-// StoreDir from config will not be used - instead, a tmp directory will be created for the test
+// StartJetStreamServerFromConfig starts a JetStream server using the provided configuration.
+// StoreDir from config will not be used - instead, a tmp directory will be created for the test.
+// Cluster ports are kept from config for RAFT quorum formation; only client/HTTP ports are randomized.
 func StartJetStreamServerFromConfig(t *testing.T, confFile string) *server.Server {
+	t.Helper()
 	opts, err := server.ProcessConfigFile(confFile)
 	if err != nil {
 		t.Fatalf("Error processing config file: %v", err)
 	}
 
+	opts.Port = -1
+	opts.HTTPPort = -1
 	opts.NoLog = true
 	tdir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("%s_%s-", opts.ServerName, opts.Cluster.Name))
 	if err != nil {
@@ -231,8 +297,40 @@ func StartJetStreamServerFromConfig(t *testing.T, confFile string) *server.Serve
 	s.Start()
 
 	if !s.ReadyForConnections(10 * time.Second) {
-		t.Fatal("Unable to start NATS Server")
+		t.Fatalf("Unable to start JetStream server %q", opts.ServerName)
 	}
+	return s
+}
+
+// ClientURL returns the client URL of the first server in the cluster.
+func (sc *SuperCluster) ClientURL() string {
+	return sc.Servers[0].ClientURL()
+}
+
+// NewSingleServerOnPort creates a single NATS server with a system account on a specific port.
+// Useful for reconnect tests where the server must restart on the same port.
+func NewSingleServerOnPort(t *testing.T, port int) *server.Server {
+	t.Helper()
+	resetPreviousHTTPConnections()
+	opts, err := server.ProcessConfigFile("../test/r1s1.conf")
+	if err != nil {
+		t.Fatalf("Error processing config file: %v", err)
+	}
+	opts.Port = port
+	opts.HTTPPort = -1
+	opts.NoLog = true
+
+	s, err := server.NewServer(opts)
+	if err != nil || s == nil {
+		t.Fatalf("No NATS Server object returned: %v", err)
+	}
+
+	go s.Start()
+
+	if !s.ReadyForConnections(10 * time.Second) {
+		t.Fatal("Unable to start NATS Server in Go Routine")
+	}
+	ConnectAndVerify(t, s.ClientURL(), nats.UserCredentials("../test/myuser.creds"))
 	return s
 }
 

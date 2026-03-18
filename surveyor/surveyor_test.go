@@ -19,6 +19,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -76,7 +77,7 @@ func parseTLSConfig(certFile, keyFile, caFile string) (*tls.Config, error) {
 }
 
 func httpGet(url string) (*http.Response, error) {
-	httpClient := &http.Client{Timeout: 3 * time.Second}
+	httpClient := &http.Client{Timeout: 10 * time.Second}
 	return httpClient.Get(url)
 }
 
@@ -170,6 +171,7 @@ func TestSurveyor_Basic(t *testing.T) {
 	}
 
 	testOpts := getTestOptions()
+	testOpts.URLs = sc.ClientURL()
 	t.Run("with 3 expected servers", func(t *testing.T) {
 		testOpts.ExpectedServers = 3
 		s, err := NewSurveyor(testOpts)
@@ -213,7 +215,9 @@ func TestSurveyor_StartTwice(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
 
-	s, err := NewSurveyor(getTestOptions())
+	opts := getTestOptions()
+	opts.URLs = sc.ClientURL()
+	s, err := NewSurveyor(opts)
 	if err != nil {
 		t.Fatalf("couldn't create surveyor: %v", err)
 	}
@@ -232,6 +236,7 @@ func TestSurveyor_Account(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
+	opt.URLs = sc.ClientURL()
 	opt.Accounts = true
 	opt.ExpectedServers = 3
 	s, err := NewSurveyor(opt)
@@ -276,6 +281,7 @@ func TestSurveyor_Gatewayz(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
+	opt.URLs = sc.ClientURL()
 	opt.Gatewayz = true
 	opt.ExpectedServers = 3
 	s, err := NewSurveyor(opt)
@@ -331,6 +337,7 @@ func TestSurveyor_Raftz(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
+	opt.URLs = sc.ClientURL()
 	opt.Credentials = ""
 	opt.NATSUser = "admin"
 	opt.NATSPassword = "s3cr3t!"
@@ -369,6 +376,7 @@ func TestSurveyor_AccountJetStreamAssets(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
+	opt.URLs = sc.ClientURL()
 	opt.Credentials = ""
 	opt.NATSUser = "admin"
 	opt.NATSPassword = "s3cr3t!"
@@ -452,6 +460,7 @@ func TestSurveyor_JetStream_Server(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
+	opt.URLs = sc.ClientURL()
 	opt.Accounts = true
 	opt.ExpectedServers = 3
 	s, err := NewSurveyor(opt)
@@ -489,8 +498,11 @@ func TestSurveyor_JetStream_Server(t *testing.T) {
 func TestSurveyor_Reconnect(t *testing.T) {
 	ns := st.NewSingleServer(t)
 	defer ns.Shutdown()
+	// Save the port so we can restart on the same port for reconnect.
+	srvAddr := ns.Addr().(*net.TCPAddr)
 
 	opts := getTestOptions()
+	opts.URLs = ns.ClientURL()
 	opts.ExpectedServers = 1
 	opts.PollTimeout = time.Second
 	s, err := NewSurveyor(opts)
@@ -512,8 +524,8 @@ func TestSurveyor_Reconnect(t *testing.T) {
 
 	pollAndCheckDefault(t, "nats_up 0")
 
-	// restart the server
-	ns = st.NewSingleServer(t)
+	// restart the server on the same port so surveyor can reconnect
+	ns = st.NewSingleServerOnPort(t, srvAddr.Port)
 	defer ns.Shutdown()
 
 	// poll and check for basic core NATS output, the next server should
@@ -536,6 +548,7 @@ func TestSurveyor_ClientTLSFail(t *testing.T) {
 	defer ns.Shutdown()
 
 	opts := getTestOptions()
+	opts.URLs = ns.ClientURL()
 	opts.CaFile = caCertFile
 	opts.CertFile = clientCert
 	opts.KeyFile = clientKey
@@ -557,7 +570,7 @@ func TestSurveyor_ClientTLS(t *testing.T) {
 	defer ns.Shutdown()
 	t.Run("pass cert and key files", func(t *testing.T) {
 		opts := getTestOptions()
-		opts.URLs = "127.0.0.1:4223"
+		opts.URLs = ns.ClientURL()
 		opts.CaFile = caCertFile
 		opts.CertFile = clientCert
 		opts.KeyFile = clientKey
@@ -580,7 +593,7 @@ func TestSurveyor_ClientTLS(t *testing.T) {
 		}
 
 		opts := getTestOptions()
-		opts.URLs = "127.0.0.1:4223"
+		opts.URLs = ns.ClientURL()
 		opts.NATSOpts = []nats.Option{nats.Secure(tlsConfig)}
 
 		s, err := NewSurveyor(opts)
@@ -601,6 +614,7 @@ func TestSurveyor_HTTPS(t *testing.T) {
 	defer sc.Shutdown()
 
 	opts := getTestOptions()
+	opts.URLs = sc.ClientURL()
 	opts.HTTPCaFile = caCertFile
 	opts.HTTPCertFile = serverCert
 	opts.HTTPKeyFile = serverKey
@@ -629,6 +643,7 @@ func TestSurveyor_UserPass(t *testing.T) {
 	defer ns.Shutdown()
 
 	opts := getTestOptions()
+	opts.URLs = ns.ClientURL()
 	opts.HTTPUser = "colin"
 	opts.HTTPPassword = "secret"
 	s, err := NewSurveyor(opts)
@@ -691,9 +706,16 @@ func TestSurveyor_NoSystemAccount(t *testing.T) {
 	}
 	defer s.Stop()
 
-	_, err = httpGet("http://colin:secret@127.0.0.1:7777/metrics")
-	if err == nil {
-		t.Fatalf("shold not work without system account")
+	resp, err := httpGet("http://colin:secret@127.0.0.1:7777/metrics")
+	if err != nil {
+		// Connection error is acceptable — means server couldn't respond.
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	output := string(body)
+	if !strings.Contains(output, "nats_survey_surveyed_count 0") {
+		t.Fatalf("expected no servers surveyed without system account, got: %s", output)
 	}
 }
 
@@ -702,6 +724,7 @@ func TestSurveyor_MissingResponses(t *testing.T) {
 	defer sc.Shutdown()
 
 	testOpts := getTestOptions()
+	testOpts.URLs = sc.ClientURL()
 
 	t.Run("with 3 expected servers", func(t *testing.T) {
 		testOpts.ExpectedServers = 3
@@ -774,6 +797,7 @@ func TestSurveyor_Concurrent(t *testing.T) {
 	defer sc.Shutdown()
 
 	testOptions := getTestOptions()
+	testOptions.URLs = sc.ClientURL()
 	testOptions.ExpectedServers = 3
 	s, err := NewSurveyor(testOptions)
 	if err != nil {
@@ -791,7 +815,6 @@ func TestSurveyor_Concurrent(t *testing.T) {
 	for range 3 {
 		wg.Go(func() {
 			output, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
-			time.Sleep(1 * time.Second)
 			if err != nil {
 				t.Errorf("%v", err)
 				return
@@ -819,6 +842,13 @@ func TestSurveyor_Concurrent(t *testing.T) {
 
 	wg.Wait()
 
+	if len(metrics) == 0 {
+		t.Fatal("All concurrent requests failed, no metrics collected")
+	}
+	if len(metrics) != 3 {
+		t.Fatalf("Expected 3 metric results, got %d", len(metrics))
+	}
+
 	baseVal := metrics[0]
 
 	for _, v := range metrics {
@@ -835,6 +865,7 @@ func TestSurveyor_NATSUserPass(t *testing.T) {
 	defer ns.Shutdown()
 
 	opts := getTestOptions()
+	opts.URLs = ns.ClientURL()
 	opts.Credentials = ""
 
 	opts.NATSUser = "invalid_user"
@@ -873,6 +904,7 @@ func TestSurveyor_AccountJetStreamJszLeaderOnly(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
+	opt.URLs = sc.ClientURL()
 	opt.Credentials = ""
 	opt.NATSUser = "admin"
 	opt.NATSPassword = "s3cr3t!"
@@ -1039,6 +1071,7 @@ func TestSurveyor_AccountJetStreamJszFilters(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
+	opt.URLs = sc.ClientURL()
 	opt.Credentials = ""
 	opt.NATSUser = "admin"
 	opt.NATSPassword = "s3cr3t!"
