@@ -41,6 +41,7 @@ func TestServiceObservation_Load(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
+	opt.URLs = sc.ClientURL()
 	registry := prometheus.NewRegistry()
 	metrics := NewServiceObservationMetrics(registry, nil)
 	cp := newSurveyorConnPool(opt, registry)
@@ -88,6 +89,7 @@ func TestServiceObservation_Handle(t *testing.T) {
 	defer sc.Shutdown()
 
 	opt := getTestOptions()
+	opt.URLs = sc.ClientURL()
 	registry := prometheus.NewRegistry()
 	metrics := NewServiceObservationMetrics(registry, nil)
 	cp := newSurveyorConnPool(opt, registry)
@@ -400,8 +402,23 @@ nats_latency_observations_count 1
 			}
 			defer replySub.Unsubscribe()
 			ncA.Flush()
-			// send a bunch of observations
-			for i := 0; i < 10; i++ {
+
+			// Wait for the subscription to propagate across accounts before
+			// sending requests (on some heavy-loaded systems/runners this can take a moment)
+			var lastReqErr error
+			for attempt := 0; attempt < 10; attempt++ {
+				_, lastReqErr = ncB.Request("test.service", []byte("hello"), time.Second*3)
+				if lastReqErr == nil {
+					break
+				}
+				time.Sleep(250 * time.Millisecond)
+			}
+			if lastReqErr != nil {
+				t.Fatalf("subscription did not propagate in time: %s", lastReqErr)
+			}
+
+			// send the remaining observations (first one already sent above)
+			for i := 0; i < 9; i++ {
 				_, err := ncB.Request("test.service", []byte("hello"), time.Second*3)
 				if err != nil {
 					t.Fatalf("request failed: %s", err)
@@ -434,6 +451,7 @@ func TestSurveyor_ObservationsFromFile(t *testing.T) {
 	defer sc.Shutdown()
 
 	opts := getTestOptions()
+	opts.URLs = sc.ClientURL()
 	opts.ObservationConfigDir = "testdata/goodobs"
 
 	s, err := NewSurveyor(opts)
@@ -455,6 +473,7 @@ func TestSurveyor_Observations(t *testing.T) {
 	defer sc.Shutdown()
 
 	opts := getTestOptions()
+	opts.URLs = sc.ClientURL()
 
 	s, err := NewSurveyor(opts)
 	if err != nil {
@@ -546,6 +565,7 @@ func TestSurveyor_ObservationsError(t *testing.T) {
 	defer sc.Shutdown()
 
 	opts := getTestOptions()
+	opts.URLs = sc.ClientURL()
 
 	s, err := NewSurveyor(opts)
 	if err != nil {
@@ -639,6 +659,7 @@ func TestSurveyor_ObservationsWatcher(t *testing.T) {
 	defer sc.Shutdown()
 
 	opts := getTestOptions()
+	opts.URLs = sc.ClientURL()
 
 	dirName := fmt.Sprintf("testdata/obs%d", time.Now().UnixNano())
 	if err := os.Mkdir(dirName, 0o700); err != nil {
