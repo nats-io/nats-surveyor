@@ -37,6 +37,7 @@ import (
 
 var (
 	cfgFile    string
+	collectJsz = surveyor.CollectJszNone
 	jszFilters []surveyor.JszFilter
 	rootCmd    = &cobra.Command{
 		Use:     "nats-surveyor",
@@ -261,7 +262,11 @@ func init() {
 	_ = viper.BindPFlag("raftz", rootCmd.Flags().Lookup("raftz"))
 
 	// jsz streams
-	rootCmd.Flags().String("jsz", "", "Export jsz metrics optionally, one of: all|streams|consumers")
+	rootCmd.Flags().Var(
+		enumflag.New(&collectJsz, "jsz", surveyor.CollectJszIds, enumflag.EnumCaseInsensitive),
+		"jsz",
+		"Export jsz metrics, one of: all|streams|consumers",
+	)
 	_ = viper.BindPFlag("jsz", rootCmd.Flags().Lookup("jsz"))
 
 	// jsz limit
@@ -332,7 +337,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.AccountsDetailed = viper.GetBool("accounts-detailed")
 	opts.Gatewayz = viper.GetBool("gatewayz")
 	opts.Raftz = viper.GetBool("raftz")
-	opts.Jsz = viper.GetString("jsz")
+	opts.Jsz = collectJsz
 	opts.JszLimit = viper.GetInt("jsz-limit")
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")
 	opts.JszFilters = jszFilters

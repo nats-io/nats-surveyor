@@ -86,7 +86,7 @@ type Options struct {
 	AccountsDetailed     bool
 	Gatewayz             bool
 	Raftz                bool
-	Jsz                  string
+	Jsz                  CollectJsz
 	JszLimit             int
 	JszLeadersOnly       bool
 	JszFilters           []JszFilter

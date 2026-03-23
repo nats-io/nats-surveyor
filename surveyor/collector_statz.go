@@ -37,14 +37,21 @@ import (
 // skip reporting account on a server after this many subsequent polls with 0 conns
 const accStatZeroConnSkip = 3
 
-type CollectJsz string
+type CollectJsz int
 
 const (
-	CollectJszNone      CollectJsz = ""
-	CollectJszAll       CollectJsz = "all"
-	CollectJszStreams   CollectJsz = "streams"
-	CollectJszConsumers CollectJsz = "consumers"
+	CollectJszNone CollectJsz = iota
+	CollectJszAll
+	CollectJszStreams
+	CollectJszConsumers
 )
+
+// CollectJszIds maps enum values to their string representations for enumflag.
+var CollectJszIds = map[CollectJsz][]string{
+	CollectJszAll:       {"all"},
+	CollectJszStreams:   {"streams"},
+	CollectJszConsumers: {"consumers"},
+}
 
 // statzDescs holds the metric descriptions
 type statzDescs struct {
@@ -886,7 +893,7 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 // Deprecated: NewStatzCollector is deprecated. Use NewStatzCollectorOpts instead.
 func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 	serverDiscoveryWait, pollTimeout time.Duration, accounts, accountsDetailed bool, gatewayz bool,
-	raftz bool, jsz string, jszLimit int, jszLeadersOnly bool, jszFilters []JszFilter, sysReqPrefix string,
+	raftz bool, jsz CollectJsz, jszLimit int, jszLeadersOnly bool, jszFilters []JszFilter, sysReqPrefix string,
 	constLabels prometheus.Labels,
 ) *StatzCollector {
 	sc, _ := NewStatzCollectorOpts(
@@ -898,7 +905,7 @@ func NewStatzCollector(nc *nats.Conn, logger *logrus.Logger, numServers int,
 		WithCollectAccounts(accounts, accountsDetailed),
 		WithCollectGatewayz(gatewayz),
 		WithCollectRaftz(raftz),
-		WithCollectJsz(CollectJsz(jsz), jszLeadersOnly, jszFilters),
+		WithCollectJsz(jsz, jszLeadersOnly, jszFilters),
 		WithJszLimit(jszLimit),
 		WithConstantLabels(constLabels),
 		WithSysRequestPrefix(sysReqPrefix),
@@ -1149,9 +1156,7 @@ func (sc *StatzCollector) poll(ctx context.Context) error {
 }
 
 func shouldCollectJsz(setting CollectJsz) (CollectJsz, bool) {
-	jsz := strings.TrimSpace(strings.ToLower(string(setting)))
-	enabled := jsz == "all" || jsz == "streams" || jsz == "consumers"
-	return CollectJsz(jsz), enabled
+	return setting, setting != CollectJszNone
 }
 
 func (sc *StatzCollector) pollAccountInfo(ctx context.Context) error {
