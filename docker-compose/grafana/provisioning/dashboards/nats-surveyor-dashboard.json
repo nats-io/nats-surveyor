@@ -2040,6 +2040,180 @@
       }
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Number of streams each server is the leader for (includes R1 streams). The top of the stack is the total unique stream count across the cluster.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Streams",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 50,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "id": 311,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "sortBy": "Name",
+          "sortDesc": false,
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "nats_core_jetstream_server_total_stream_leaders{server_cluster=~\"$cluster\"}",
+          "legendFormat": "{{server_name}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Stream Leaders by Server (stacked)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Number of consumers each server is the leader for (includes R1 consumers). The top of the stack is the total unique consumer count across the cluster.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Consumers",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 50,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "id": 312,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "sortBy": "Name",
+          "sortDesc": false,
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "nats_core_jetstream_server_total_consumer_leaders{server_cluster=~\"$cluster\"}",
+          "legendFormat": "{{server_name}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Consumer Leaders by Server (stacked)",
+      "type": "timeseries"
+    },
+    {
       "description": "Combined total messages for all servers",
       "fieldConfig": {
         "defaults": {
@@ -2097,7 +2271,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 37
       },
       "id": 31,
       "options": {
@@ -2193,7 +2367,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 37
       },
       "id": 29,
       "interval": "",
@@ -2290,7 +2464,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 32
       },
       "id": 8,
       "links": [],
@@ -2336,7 +2510,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 32
       },
       "heatmap": {},
       "hideZeroBuckets": false,
@@ -2382,7 +2556,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 47
       },
       "id": 18,
       "panels": [
@@ -2827,7 +3001,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 48
       },
       "id": 71,
       "panels": [
@@ -3190,7 +3364,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 43
       },
       "id": 60,
       "panels": [
@@ -3726,7 +3900,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 44
       },
       "id": 24,
       "panels": [
@@ -4092,7 +4266,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 45
       },
       "id": 77,
       "panels": [
@@ -4511,7 +4685,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 46
       },
       "id": 84,
       "panels": [
