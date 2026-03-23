@@ -129,8 +129,10 @@ type statzDescs struct {
 	JetstreamMetaSnapshotLastTimestamp  *GaugeVec
 	// JetStream server stats
 	JetstreamServerDisabled   *GaugeVec
-	JetstreamServerStreams    *GaugeVec
-	JetstreamServerConsumers  *GaugeVec
+	JetstreamServerStreams           *GaugeVec
+	JetstreamServerConsumers        *GaugeVec
+	JetstreamServerLeaderStreams    *GaugeVec
+	JetstreamServerLeaderConsumers  *GaugeVec
 	JetstreamServerMessages   *GaugeVec
 	JetstreamServerBytes      *GaugeVec
 	JetstreamServerMaxMemory  *GaugeVec
@@ -489,8 +491,10 @@ func (sc *StatzCollector) buildDescs() {
 
 	jsServerLabelKeys := []string{"server_id", "server_name", "cluster_name"}
 	sc.descs.JetstreamServerDisabled = newGaugeVec(newName("jetstream_server_jetstream_disabled"), "JetStream disabled or not", sc.constLabels, jsServerLabelKeys)
-	sc.descs.JetstreamServerStreams = newGaugeVec(newName("jetstream_server_total_streams"), "Total number of streams in JetStream", sc.constLabels, jsServerLabelKeys)
-	sc.descs.JetstreamServerConsumers = newGaugeVec(newName("jetstream_server_total_consumers"), "Total number of consumers in JetStream", sc.constLabels, jsServerLabelKeys)
+	sc.descs.JetstreamServerStreams = newGaugeVec(newName("jetstream_server_total_streams"), "Number of stream replicas on this server (includes R1 streams)", sc.constLabels, jsServerLabelKeys)
+	sc.descs.JetstreamServerConsumers = newGaugeVec(newName("jetstream_server_total_consumers"), "Number of consumer replicas on this server (includes R1 consumers)", sc.constLabels, jsServerLabelKeys)
+	sc.descs.JetstreamServerLeaderStreams = newGaugeVec(newName("jetstream_server_total_stream_leaders"), "Number of stream leaders on this server (sum across servers gives total stream count)", sc.constLabels, jsServerLabelKeys)
+	sc.descs.JetstreamServerLeaderConsumers = newGaugeVec(newName("jetstream_server_total_consumer_leaders"), "Number of consumer leaders on this server (sum across servers gives total consumer count)", sc.constLabels, jsServerLabelKeys)
 	sc.descs.JetstreamServerMessages = newGaugeVec(newName("jetstream_server_total_messages"), "Total number of stored messages in JetStream", sc.constLabels, jsServerLabelKeys)
 	sc.descs.JetstreamServerBytes = newGaugeVec(newName("jetstream_server_total_message_bytes"), "Total number of bytes stored in JetStream", sc.constLabels, jsServerLabelKeys)
 	sc.descs.JetstreamServerMaxMemory = newGaugeVec(newName("jetstream_server_max_memory"), "JetStream Max Memory", sc.constLabels, jsServerLabelKeys)
@@ -1638,6 +1642,8 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 			sc.descs.JetstreamServerDisabled,
 			sc.descs.JetstreamServerStreams,
 			sc.descs.JetstreamServerConsumers,
+			sc.descs.JetstreamServerLeaderStreams,
+			sc.descs.JetstreamServerLeaderConsumers,
 			sc.descs.JetstreamServerMessages,
 			sc.descs.JetstreamServerBytes,
 			sc.descs.JetstreamServerMaxMemory,
@@ -2103,6 +2109,8 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					metrics.newGaugeMetric(sc.descs.JetstreamServerDisabled, isJetStreamDisabled, jsServerLabelValues)
 					metrics.newGaugeMetric(sc.descs.JetstreamServerStreams, float64(jss.Data.Streams), jsServerLabelValues)
 					metrics.newGaugeMetric(sc.descs.JetstreamServerConsumers, float64(jss.Data.Consumers), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamServerLeaderStreams, float64(jss.Data.StreamsLeader), jsServerLabelValues)
+					metrics.newGaugeMetric(sc.descs.JetstreamServerLeaderConsumers, float64(jss.Data.ConsumersLeader), jsServerLabelValues)
 					metrics.newGaugeMetric(sc.descs.JetstreamServerMessages, float64(jss.Data.Messages), jsServerLabelValues)
 					metrics.newGaugeMetric(sc.descs.JetstreamServerBytes, float64(jss.Data.Bytes), jsServerLabelValues)
 					metrics.newGaugeMetric(sc.descs.JetstreamServerMaxMemory, float64(jss.Data.Config.MaxMemory), jsServerLabelValues)
