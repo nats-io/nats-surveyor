@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -855,7 +856,7 @@ func TestSurveyor_Concurrent(t *testing.T) {
 		if *(v.Gauge.Value) != *(baseVal.Gauge.Value) {
 			t.Fatalf("Expected that singleflight should have prevented concurrent polling,"+
 				" and all uptime values to be the same. "+
-				"Got baseVal: %v. current value: %v", baseVal, v)
+				"Got baseVal: %v. current value: %v (GOMAXPROCS=%d)", baseVal, v, runtime.GOMAXPROCS(0))
 		}
 	}
 }
