@@ -910,7 +910,7 @@ func TestSurveyor_AccountJetStreamJszLeaderOnly(t *testing.T) {
 	opt.NATSPassword = "s3cr3t!"
 	opt.Accounts = true
 	opt.ExpectedServers = 3
-	opt.Jsz = "all"
+	opt.Jsz = CollectJszAll
 	opt.JszLeadersOnly = true
 	s, err := NewSurveyor(opt)
 	if err != nil {
@@ -1077,7 +1077,7 @@ func TestSurveyor_AccountJetStreamJszFilters(t *testing.T) {
 	opt.NATSPassword = "s3cr3t!"
 	opt.Accounts = true
 	opt.ExpectedServers = 3
-	opt.Jsz = "all"
+	opt.Jsz = CollectJszAll
 	opt.JszLeadersOnly = true
 	opt.JszFilters = []JszFilter{
 		StreamConsumerCount,
