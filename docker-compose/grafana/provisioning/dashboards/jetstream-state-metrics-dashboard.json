@@ -253,80 +253,7 @@
         "type": "prometheus",
         "uid": "${prom_ds}"
       },
-      "description": "Highly Available Asset Distribution for replicated streams, objects, KV stores, and replicated consumers.  Not applicable to single server mode.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 5,
-        "x": 7,
-        "y": 1
-      },
-      "id": 293,
-      "options": {
-        "displayLabels": [
-          "percent",
-          "value"
-        ],
-        "legend": {
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true,
-          "values": []
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "9.1.3",
-      "targets": [
-        {
-          "editorMode": "builder",
-          "exemplar": false,
-          "expr": "nats_core_jetstream_ha_assets",
-          "format": "time_series",
-          "instant": true,
-          "interval": "1",
-          "legendFormat": "{{server_name}}",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "HA Asset Distribution by Server",
-      "transformations": [],
-      "type": "piechart"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${prom_ds}"
-      },
-      "description": "Highly Available Asset Count including replicated streams, objects, KV stores, and replicated consumers.  Not applicable to single server mode.",
+      "description": "Number of RAFT groups each server participates in (replicated streams, KV stores, object stores, and replicated consumers). Each raft group is one HA asset. This count includes the meta layer — a special raft group that tracks all stream and consumer assignments across the cluster. Useful for understanding load distribution across servers. Not applicable to single server mode.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -380,8 +307,8 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 6,
-        "x": 12,
+        "w": 11,
+        "x": 7,
         "y": 1
       },
       "id": 282,
@@ -393,7 +320,7 @@
             "mean"
           ],
           "displayMode": "table",
-          "placement": "right",
+          "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
@@ -1648,7 +1575,7 @@
         "type": "prometheus",
         "uid": "${prom_ds}"
       },
-      "description": "Number of Highly Available Assets by Stream.  A high number of HA Assets will place pressure on the system.",
+      "description": "Number of Highly Available Assets by Stream. A high number of HA Assets will place pressure on the system. Consumer count requires --accounts flag. Not applicable to single server mode.",
       "fieldConfig": {
         "defaults": {
           "color": {
