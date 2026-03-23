@@ -128,15 +128,15 @@ type statzDescs struct {
 	JetstreamMetaSnapshotLastDuration   *GaugeVec
 	JetstreamMetaSnapshotLastTimestamp  *GaugeVec
 	// JetStream server stats
-	JetstreamServerDisabled   *GaugeVec
-	JetstreamServerStreams           *GaugeVec
-	JetstreamServerConsumers        *GaugeVec
-	JetstreamServerLeaderStreams    *GaugeVec
-	JetstreamServerLeaderConsumers  *GaugeVec
-	JetstreamServerMessages   *GaugeVec
-	JetstreamServerBytes      *GaugeVec
-	JetstreamServerMaxMemory  *GaugeVec
-	JetstreamServerMaxStorage *GaugeVec
+	JetstreamServerDisabled        *GaugeVec
+	JetstreamServerStreams         *GaugeVec
+	JetstreamServerConsumers       *GaugeVec
+	JetstreamServerLeaderStreams   *GaugeVec
+	JetstreamServerLeaderConsumers *GaugeVec
+	JetstreamServerMessages        *GaugeVec
+	JetstreamServerBytes           *GaugeVec
+	JetstreamServerMaxMemory       *GaugeVec
+	JetstreamServerMaxStorage      *GaugeVec
 
 	// Account scope metrics
 	accCount             *GaugeVec
