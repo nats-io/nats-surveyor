@@ -483,6 +483,8 @@ func TestSurveyor_JetStream_Server(t *testing.T) {
 		"nats_core_jetstream_server_jetstream_disabled",
 		"nats_core_jetstream_server_total_streams",
 		"nats_core_jetstream_server_total_consumers",
+		"nats_core_jetstream_server_total_stream_leaders",
+		"nats_core_jetstream_server_total_consumer_leaders",
 		"nats_core_jetstream_server_total_messages",
 		"nats_core_jetstream_server_total_message_bytes",
 		"nats_core_jetstream_server_max_memory",
