@@ -37,6 +37,7 @@ import (
 
 var (
 	cfgFile    string
+	collectJsz = surveyor.CollectJszNone
 	jszFilters []surveyor.JszFilter
 	rootCmd    = &cobra.Command{
 		Use:     "nats-surveyor",
@@ -261,7 +262,11 @@ func init() {
 	_ = viper.BindPFlag("raftz", rootCmd.Flags().Lookup("raftz"))
 
 	// jsz streams
-	rootCmd.Flags().String("jsz", "", "Export jsz metrics optionally, one of: all|streams|consumers")
+	rootCmd.Flags().Var(
+		enumflag.New(&collectJsz, "jsz", surveyor.CollectJszIds, enumflag.EnumCaseInsensitive),
+		"jsz",
+		"Export jsz metrics, one of: all|streams|consumers",
+	)
 	_ = viper.BindPFlag("jsz", rootCmd.Flags().Lookup("jsz"))
 
 	// jsz limit
@@ -288,6 +293,10 @@ func init() {
 	// sys-req-prefix
 	rootCmd.Flags().String("sys-req-prefix", surveyor.DefaultSysReqPrefix, "Subject prefix for system requests ($SYS.REQ)")
 	_ = viper.BindPFlag("sys-req-prefix", rootCmd.Flags().Lookup("sys-req-prefix"))
+
+	// pprof
+	rootCmd.Flags().Bool("pprof", false, "Enable unauthenticated pprof endpoint at /debug/pprof/")
+	_ = viper.BindPFlag("pprof", rootCmd.Flags().Lookup("pprof"))
 
 	// log-level
 	rootCmd.Flags().String("log-level", "info", "Log level, one of: trace|debug|info|warn|error|fatal|panic")
@@ -332,12 +341,13 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.AccountsDetailed = viper.GetBool("accounts-detailed")
 	opts.Gatewayz = viper.GetBool("gatewayz")
 	opts.Raftz = viper.GetBool("raftz")
-	opts.Jsz = viper.GetString("jsz")
+	opts.Jsz = collectJsz
 	opts.JszLimit = viper.GetInt("jsz-limit")
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")
 	opts.JszReplicas = viper.GetBool("jsz-replicas")
 	opts.JszFilters = jszFilters
 
+	opts.EnablePprof = viper.GetBool("pprof")
 	opts.SysReqPrefix = viper.GetString("sys-req-prefix")
 	opts.ServerResponseWait = viper.GetDuration("server-discovery-timeout")
 	opts.TokenFile = viper.GetString("token-file")
