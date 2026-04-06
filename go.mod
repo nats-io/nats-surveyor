@@ -18,7 +18,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	github.com/thediveo/enumflag/v2 v2.1.0
+	github.com/thediveo/enumflag/v2 v2.2.0
 	golang.org/x/crypto v0.49.0
 	golang.org/x/sync v0.20.0
 )
