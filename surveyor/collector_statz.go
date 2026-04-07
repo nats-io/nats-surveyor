@@ -1062,23 +1062,24 @@ func (sc *StatzCollector) poll(ctx context.Context) error {
 	// For unlimited number of expected servers (-1), terminate once the interval between
 	// server responses reaches server-discovery-timeout value (defaults to 500ms) or we reach
 	// polling timeout.
-	timer := time.NewTimer(sc.serverDiscoveryWait)
+	serverDiscoveryTimer := time.NewTimer(sc.serverDiscoveryWait)
+	pollTimer := time.NewTimer(sc.pollTimeout)
 	var done bool
 	for !done {
 		select {
 		case stat := <-sc.statsChan:
-			timer.Reset(sc.serverDiscoveryWait)
+			serverDiscoveryTimer.Reset(sc.serverDiscoveryWait)
 			sc.stats = append(sc.stats, stat)
 			if expectedServers != -1 && len(sc.stats) == expectedServers {
 				done = true
 			}
 		case <-sc.doneCh:
 			done = true
-		case <-timer.C:
+		case <-serverDiscoveryTimer.C:
 			if expectedServers == -1 {
 				done = true
 			}
-		case <-time.After(sc.pollTimeout):
+		case <-pollTimer.C:
 			done = true
 			if expectedServers != -1 {
 				sc.logger.Warnf("Poll timeout after %v while waiting for responses", sc.pollTimeout)
