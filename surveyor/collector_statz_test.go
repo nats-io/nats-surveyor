@@ -470,7 +470,7 @@ func TestPollTime(t *testing.T) {
 	opt.Credentials = ""
 	opt.NATSUser = "admin"
 	opt.NATSPassword = "s3cr3t!"
-	// opt.Accounts = true
+	opt.ServerResponseWait = 500 * time.Millisecond
 	// Set expected to 4 to simulate situation when one of the servers is down
 	opt.ExpectedServers = 4
 	s, err := NewSurveyor(opt)
@@ -483,16 +483,19 @@ func TestPollTime(t *testing.T) {
 	defer s.Stop()
 
 	start := time.Now()
-	_, err = PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
+	output, err := PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 	took := time.Since(start)
 	t.Logf("Response took: %v", took)
 	if took >= opt.PollTimeout+opt.ServerResponseWait {
-		t.Fatalf("PollTimeout should limit total wait time."+
+		t.Fatalf("PollTimeout should limit total wait time. "+
 			"PollTimeout:%v, ServerResponseWait:%v, Response took: %v",
 			opt.PollTimeout, opt.ServerResponseWait, took)
+	}
+	if !strings.Contains(output, `nats_survey_surveyed_count 3`) {
+		t.Fatalf("Expected response from 3 servers:  %v\n", output)
 	}
 
 }
