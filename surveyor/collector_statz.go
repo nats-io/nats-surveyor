@@ -1063,7 +1063,8 @@ func (sc *StatzCollector) poll(ctx context.Context) error {
 	// server responses reaches server-discovery-timeout value (defaults to 500ms) or we reach
 	// polling timeout.
 	serverDiscoveryTimer := time.NewTimer(sc.serverDiscoveryWait)
-	pollTimer := time.NewTimer(sc.pollTimeout)
+	ctx, cancel := context.WithTimeout(ctx, sc.pollTimeout)
+	defer cancel()
 	var done bool
 	for !done {
 		select {
@@ -1079,7 +1080,7 @@ func (sc *StatzCollector) poll(ctx context.Context) error {
 			if expectedServers == -1 {
 				done = true
 			}
-		case <-pollTimer.C:
+		case <-ctx.Done():
 			done = true
 			if expectedServers != -1 {
 				sc.logger.Warnf("Poll timeout after %v while waiting for responses", sc.pollTimeout)
@@ -2279,7 +2280,6 @@ func requestMany(ctx context.Context, nc *nats.Conn,
 	msgsChan := make(chan *nats.Msg, 100)
 
 	intervalTimer := time.NewTimer(sc.pollTimeout)
-	pollTimer := time.NewTimer(sc.pollTimeout)
 
 	sub, err := nc.Subscribe(inbox, func(msg *nats.Msg) {
 		intervalTimer.Reset(sc.serverDiscoveryWait)
@@ -2314,7 +2314,7 @@ func requestMany(ctx context.Context, nc *nats.Conn,
 			}
 		case <-intervalTimer.C:
 			return res, nil
-		case <-pollTimer.C:
+		case <-ctx.Done():
 			return res, nil
 		}
 	}
