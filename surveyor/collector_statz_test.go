@@ -471,6 +471,8 @@ func TestPollTime(t *testing.T) {
 	opt.NATSUser = "admin"
 	opt.NATSPassword = "s3cr3t!"
 	opt.ServerResponseWait = 500 * time.Millisecond
+	opt.Raftz = true
+	// opt.Jsz = CollectJszStreams
 	// Set expected to 4 to simulate situation when one of the servers is down
 	opt.ExpectedServers = 4
 	s, err := NewSurveyor(opt)

@@ -2279,6 +2279,8 @@ func requestMany(ctx context.Context, nc *nats.Conn,
 	msgsChan := make(chan *nats.Msg, 100)
 
 	intervalTimer := time.NewTimer(sc.pollTimeout)
+	pollTimer := time.NewTimer(sc.pollTimeout)
+
 	sub, err := nc.Subscribe(inbox, func(msg *nats.Msg) {
 		intervalTimer.Reset(sc.serverDiscoveryWait)
 		msgsChan <- msg
@@ -2312,7 +2314,7 @@ func requestMany(ctx context.Context, nc *nats.Conn,
 			}
 		case <-intervalTimer.C:
 			return res, nil
-		case <-time.After(sc.pollTimeout):
+		case <-pollTimer.C:
 			return res, nil
 		}
 	}
