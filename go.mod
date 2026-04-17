@@ -7,7 +7,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/klauspost/compress v1.18.5
 	github.com/nats-io/jsm.go v0.3.0
-	github.com/nats-io/nats-server/v2 v2.12.6
+	github.com/nats-io/nats-server/v2 v2.12.7
 	github.com/nats-io/nats.go v1.50.0
 	github.com/nats-io/nuid v1.0.1
 	github.com/prometheus/client_golang v1.23.2
