@@ -3,12 +3,15 @@ package surveyor
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"os"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
+	st "github.com/nats-io/nats-surveyor/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
 )
@@ -456,4 +459,43 @@ func gatherStatzCollectorMetrics(t *testing.T, sc *StatzCollector) string {
 	}
 	output := buf.String()
 	return output
+}
+
+func TestPollTime(t *testing.T) {
+	sc := st.NewJetStreamCluster(t)
+	defer sc.Shutdown()
+
+	opt := getTestOptions()
+	opt.URLs = sc.ClientURL()
+	opt.Credentials = ""
+	opt.NATSUser = "admin"
+	opt.NATSPassword = "s3cr3t!"
+	opt.ServerResponseWait = 500 * time.Millisecond
+	// Set expected to 4 to simulate situation when one of the servers is down
+	opt.ExpectedServers = 4
+	s, err := NewSurveyor(opt)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	start := time.Now()
+	output, err := PollSurveyorEndpoint(t, "http://127.0.0.1:7777/metrics", false, http.StatusOK)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	took := time.Since(start)
+	t.Logf("Response took: %v", took)
+	if took >= opt.PollTimeout+opt.ServerResponseWait {
+		t.Fatalf("PollTimeout should limit total wait time. "+
+			"PollTimeout:%v, ServerResponseWait:%v, Response took: %v",
+			opt.PollTimeout, opt.ServerResponseWait, took)
+	}
+	if !strings.Contains(output, `nats_survey_surveyed_count 3`) {
+		t.Fatalf("Expected response from 3 servers:  %v\n", output)
+	}
+
 }
