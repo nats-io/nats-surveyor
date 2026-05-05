@@ -12,6 +12,9 @@ components or sidecars.  Surveyor has been used extensively by [Synadia](https:/
 [System accounts](https://docs.nats.io/nats-server/configuration/sys_accounts)
 must be enabled to use surveyor.
 
+### Commercial Options
+If you want a "batteries-included" approach to high-cardinality NATS monitoring and observability, try the standalone [Synadia Insights](https://www.synadia.com/insights).
+
 ## Usage
 
 ```text
