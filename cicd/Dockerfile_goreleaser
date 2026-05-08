@@ -1,5 +1,5 @@
 #syntax=docker/dockerfile:1.13
-FROM --platform=$BUILDPLATFORM golang:1.26.2-trixie
+FROM --platform=$BUILDPLATFORM golang:1.26.3-trixie
 
 ARG CI
 ARG GITHUB_TOKEN
