@@ -3986,7 +3986,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_sent_client_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_sent_to_client_bytes_total{server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4076,7 +4076,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_recv_client_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_recv_from_client_bytes_total{server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4166,7 +4166,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_sent_client_msgs_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_sent_to_client_msgs_total{server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4256,7 +4256,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_recv_client_msgs_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_recv_from_client_msgs_total{server_cluster=~\"$cluster\"}[1m])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }

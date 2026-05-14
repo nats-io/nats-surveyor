@@ -55,29 +55,29 @@ var CollectJszIds = map[CollectJsz][]string{
 
 // statzDescs holds the metric descriptions
 type statzDescs struct {
-	Info             *GaugeVec
-	Start            *GaugeVec
-	Uptime           *GaugeVec
-	Mem              *GaugeVec
-	GoMemLimit       *GaugeVec
-	Cores            *GaugeVec
-	CPU              *GaugeVec
-	Connections      *GaugeVec
-	TotalConnections *CounterVec
-	ActiveAccounts   *GaugeVec
-	NumSubs          *GaugeVec
-	SentMsgs         *CounterVec
-	SentBytes        *CounterVec
-	SentClientMsgs   *CounterVec
-	SentClientBytes  *CounterVec
-	RecvMsgs         *CounterVec
-	RecvBytes        *CounterVec
-	RecvClientMsgs   *CounterVec
-	RecvClientBytes  *CounterVec
-	SlowConsumers    *GaugeVec
-	RTT              *GaugeVec
-	Routes           *GaugeVec
-	Gateways         *GaugeVec
+	Info                *GaugeVec
+	Start               *GaugeVec
+	Uptime              *GaugeVec
+	Mem                 *GaugeVec
+	GoMemLimit          *GaugeVec
+	Cores               *GaugeVec
+	CPU                 *GaugeVec
+	Connections         *GaugeVec
+	TotalConnections    *CounterVec
+	ActiveAccounts      *GaugeVec
+	NumSubs             *GaugeVec
+	SentMsgs            *CounterVec
+	SentBytes           *CounterVec
+	SentToClientMsgs    *CounterVec
+	SentToClientBytes   *CounterVec
+	RecvMsgs            *CounterVec
+	RecvBytes           *CounterVec
+	RecvFromClientMsgs  *CounterVec
+	RecvFromClientBytes *CounterVec
+	SlowConsumers       *GaugeVec
+	RTT                 *GaugeVec
+	Routes              *GaugeVec
+	Gateways            *GaugeVec
 
 	// Routes
 	RouteSentMsgs  *CounterVec
@@ -406,12 +406,13 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.NumSubs = newGaugeVec(newName("subs_count"), "Current number of subscriptions gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.SentMsgs = newCounterVec(newName("sent_msgs_count"), "Number of messages sent by the server to all connections including clients, routes, gateways and leafnodes counter", sc.constLabels, sc.serverLabels)
 	sc.descs.SentBytes = newCounterVec(newName("sent_bytes"), "Number of bytes sent by the server to all connections including clients, routes, gateways and leafnodes counter", sc.constLabels, sc.serverLabels)
-	sc.descs.SentClientMsgs = newCounterVec(newName("sent_client_msgs_count"), "Number of messages sent by the server to clients only counter", sc.constLabels, sc.serverLabels)
-	sc.descs.SentClientBytes = newCounterVec(newName("sent_client_bytes"), "Number of bytes sent by the server to clients only counter", sc.constLabels, sc.serverLabels)
+	// New counters use _total per Prometheus convention; legacy counters keep _count for backwards compat.
+	sc.descs.SentToClientMsgs = newCounterVec(newName("sent_to_client_msgs_total"), "Number of messages sent by the server to clients only counter", sc.constLabels, sc.serverLabels)
+	sc.descs.SentToClientBytes = newCounterVec(newName("sent_to_client_bytes_total"), "Number of bytes sent by the server to clients only counter", sc.constLabels, sc.serverLabels)
 	sc.descs.RecvMsgs = newCounterVec(newName("recv_msgs_count"), "Number of messages received by the server from all connections including clients, routes, gateways and leafnodes counter", sc.constLabels, sc.serverLabels)
 	sc.descs.RecvBytes = newCounterVec(newName("recv_bytes"), "Number of bytes received by the server from all connections including clients, routes, gateways and leafnodes counter", sc.constLabels, sc.serverLabels)
-	sc.descs.RecvClientMsgs = newCounterVec(newName("recv_client_msgs_count"), "Number of messages received by the server from clients only counter", sc.constLabels, sc.serverLabels)
-	sc.descs.RecvClientBytes = newCounterVec(newName("recv_client_bytes"), "Number of bytes received by the server from clients only counter", sc.constLabels, sc.serverLabels)
+	sc.descs.RecvFromClientMsgs = newCounterVec(newName("recv_from_client_msgs_total"), "Number of messages received by the server from clients only counter", sc.constLabels, sc.serverLabels)
+	sc.descs.RecvFromClientBytes = newCounterVec(newName("recv_from_client_bytes_total"), "Number of bytes received by the server from clients only counter", sc.constLabels, sc.serverLabels)
 	sc.descs.SlowConsumers = newGaugeVec(newName("slow_consumer_count"), "Number of slow consumers gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.RTT = newGaugeVec(newName("rtt_nanoseconds"), "RTT in nanoseconds gauge", sc.constLabels, sc.serverLabels)
 	sc.descs.Routes = newGaugeVec(newName("route_count"), "Number of active routes gauge", sc.constLabels, sc.serverLabels)
@@ -1544,12 +1545,12 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 		sc.descs.NumSubs,
 		sc.descs.SentMsgs,
 		sc.descs.SentBytes,
-		sc.descs.SentClientMsgs,
-		sc.descs.SentClientBytes,
+		sc.descs.SentToClientMsgs,
+		sc.descs.SentToClientBytes,
 		sc.descs.RecvMsgs,
 		sc.descs.RecvBytes,
-		sc.descs.RecvClientMsgs,
-		sc.descs.RecvClientBytes,
+		sc.descs.RecvFromClientMsgs,
+		sc.descs.RecvFromClientBytes,
 		sc.descs.SlowConsumers,
 		sc.descs.RTT,
 		sc.descs.Routes,
@@ -1803,12 +1804,12 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 				metrics.newGaugeMetric(sc.descs.NumSubs, float64(sm.Stats.NumSubs), labels)
 				metrics.newCounterMetric(sc.descs.SentMsgs, float64(sm.Stats.Sent.Msgs), labels)
 				metrics.newCounterMetric(sc.descs.SentBytes, float64(sm.Stats.Sent.Bytes), labels)
-				metrics.newCounterMetric(sc.descs.SentClientMsgs, float64(sm.Stats.SentToClients.Msgs), labels)
-				metrics.newCounterMetric(sc.descs.SentClientBytes, float64(sm.Stats.SentToClients.Bytes), labels)
+				metrics.newCounterMetric(sc.descs.SentToClientMsgs, float64(sm.Stats.SentToClients.Msgs), labels)
+				metrics.newCounterMetric(sc.descs.SentToClientBytes, float64(sm.Stats.SentToClients.Bytes), labels)
 				metrics.newCounterMetric(sc.descs.RecvMsgs, float64(sm.Stats.Received.Msgs), labels)
 				metrics.newCounterMetric(sc.descs.RecvBytes, float64(sm.Stats.Received.Bytes), labels)
-				metrics.newCounterMetric(sc.descs.RecvClientMsgs, float64(sm.Stats.ReceivedFromClients.Msgs), labels)
-				metrics.newCounterMetric(sc.descs.RecvClientBytes, float64(sm.Stats.ReceivedFromClients.Bytes), labels)
+				metrics.newCounterMetric(sc.descs.RecvFromClientMsgs, float64(sm.Stats.ReceivedFromClients.Msgs), labels)
+				metrics.newCounterMetric(sc.descs.RecvFromClientBytes, float64(sm.Stats.ReceivedFromClients.Bytes), labels)
 				metrics.newGaugeMetric(sc.descs.SlowConsumers, float64(sm.Stats.SlowConsumers), labels)
 				metrics.newGaugeMetric(sc.descs.RTT, float64(sc.rtts[sm.Server.ID]), labels)
 				metrics.newGaugeMetric(sc.descs.Routes, float64(len(sm.Stats.Routes)), labels)
