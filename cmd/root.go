@@ -286,6 +286,10 @@ func init() {
 	)
 	_ = viper.BindPFlag("jsz-filter", rootCmd.Flags().Lookup("jsz-filter"))
 
+	// jsz-config-poll-interval
+	rootCmd.Flags().Duration("jsz-config-poll-interval", 0, "Poll JetStream stream/consumer configuration, state, and Raft info at this interval (0 disables)")
+	_ = viper.BindPFlag("jsz-config-poll-interval", rootCmd.Flags().Lookup("jsz-config-poll-interval"))
+
 	// sys-req-prefix
 	rootCmd.Flags().String("sys-req-prefix", surveyor.DefaultSysReqPrefix, "Subject prefix for system requests ($SYS.REQ)")
 	_ = viper.BindPFlag("sys-req-prefix", rootCmd.Flags().Lookup("sys-req-prefix"))
@@ -341,6 +345,7 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.JszLimit = viper.GetInt("jsz-limit")
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")
 	opts.JszFilters = jszFilters
+	opts.JSConfigPollInterval = viper.GetDuration("jsz-config-poll-interval")
 
 	opts.EnablePprof = viper.GetBool("pprof")
 	opts.SysReqPrefix = viper.GetString("sys-req-prefix")
