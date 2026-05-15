@@ -3905,187 +3905,7 @@
       "id": 24,
       "panels": [
         {
-          "description": "Data sent to clients per second",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 10,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": true,
-                "stacking": {
-                  "group": "A",
-                  "mode": "none"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              },
-              "links": [],
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "Bps"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 9,
-            "w": 12,
-            "x": 0,
-            "y": 9
-          },
-          "id": 26,
-          "interval": "",
-          "options": {
-            "legend": {
-              "calcs": [
-                "mean",
-                "lastNotNull",
-                "max",
-                "min"
-              ],
-              "displayMode": "table",
-              "placement": "bottom",
-              "sortBy": "Name",
-              "sortDesc": false
-            },
-            "tooltip": {
-              "mode": "single"
-            }
-          },
-          "pluginVersion": "8.3.4",
-          "targets": [
-            {
-              "expr": "rate(nats_core_sent_to_client_bytes_total{server_cluster=~\"$cluster\"}[1m])",
-              "legendFormat": "{{server_name}}",
-              "refId": "A"
-            }
-          ],
-          "title": "Bytes Sent to Clients",
-          "type": "timeseries"
-        },
-        {
-          "description": "Data received from clients per second",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 10,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": true,
-                "stacking": {
-                  "group": "A",
-                  "mode": "none"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              },
-              "links": [],
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "Bps"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 9,
-            "w": 12,
-            "x": 12,
-            "y": 9
-          },
-          "id": 27,
-          "interval": "",
-          "options": {
-            "legend": {
-              "calcs": [
-                "mean",
-                "lastNotNull",
-                "max",
-                "min"
-              ],
-              "displayMode": "table",
-              "placement": "bottom",
-              "sortBy": "Name",
-              "sortDesc": false
-            },
-            "tooltip": {
-              "mode": "single"
-            }
-          },
-          "pluginVersion": "8.3.4",
-          "targets": [
-            {
-              "expr": "rate(nats_core_recv_from_client_bytes_total{server_cluster=~\"$cluster\"}[1m])",
-              "legendFormat": "{{server_name}}",
-              "refId": "A"
-            }
-          ],
-          "title": "Bytes Received from Clients",
-          "type": "timeseries"
-        },
-        {
-          "description": "Messages sent to clients per second",
+          "description": "Messages/s sent by servers to client connections (excludes routes, gateways, leafnodes)",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -4110,7 +3930,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -4142,7 +3962,7 @@
             "h": 9,
             "w": 12,
             "x": 0,
-            "y": 18
+            "y": 9
           },
           "id": 68,
           "interval": "",
@@ -4160,7 +3980,8 @@
               "sortDesc": false
             },
             "tooltip": {
-              "mode": "single"
+              "mode": "multi",
+              "sort": "none"
             }
           },
           "pluginVersion": "8.3.4",
@@ -4175,7 +3996,7 @@
           "type": "timeseries"
         },
         {
-          "description": "Messages received from clients per second",
+          "description": "Messages/s received by servers from client connections (excludes routes, gateways, leafnodes)",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -4200,7 +4021,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -4232,7 +4053,7 @@
             "h": 9,
             "w": 12,
             "x": 12,
-            "y": 18
+            "y": 9
           },
           "id": 69,
           "interval": "",
@@ -4250,7 +4071,8 @@
               "sortDesc": false
             },
             "tooltip": {
-              "mode": "single"
+              "mode": "multi",
+              "sort": "none"
             }
           },
           "pluginVersion": "8.3.4",
@@ -4262,6 +4084,188 @@
             }
           ],
           "title": "Messages Received from Clients",
+          "type": "timeseries"
+        },
+        {
+          "description": "Bytes/s sent by servers to client connections (excludes routes, gateways, leafnodes)",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "Bps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 18
+          },
+          "id": 26,
+          "interval": "",
+          "options": {
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max",
+                "min"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "sortBy": "Name",
+              "sortDesc": false
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "8.3.4",
+          "targets": [
+            {
+              "expr": "rate(nats_core_sent_to_client_bytes_total{server_cluster=~\"$cluster\"}[1m])",
+              "legendFormat": "{{server_name}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Bytes Sent to Clients",
+          "type": "timeseries"
+        },
+        {
+          "description": "Bytes/s received by servers from client connections (excludes routes, gateways, leafnodes)",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "Bps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 18
+          },
+          "id": 27,
+          "interval": "",
+          "options": {
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max",
+                "min"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "sortBy": "Name",
+              "sortDesc": false
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "8.3.4",
+          "targets": [
+            {
+              "expr": "rate(nats_core_recv_from_client_bytes_total{server_cluster=~\"$cluster\"}[1m])",
+              "legendFormat": "{{server_name}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Bytes Received from Clients",
           "type": "timeseries"
         }
       ],
