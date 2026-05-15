@@ -421,6 +421,44 @@ func TestStatzCollector_GoMemLimit(t *testing.T) {
 	}
 }
 
+func TestStatzCollector_ClientTrafficMetrics(t *testing.T) {
+	const (
+		sentMsgs  = 11
+		sentBytes = 23
+		recvMsgs  = 37
+		recvBytes = 53
+	)
+
+	stats := &server.ServerStatsMsg{
+		Server: server.ServerInfo{ID: "test-server", Name: "test-server"},
+		Stats: server.ServerStats{
+			SentToClients:       server.DataStats{MsgBytes: server.MsgBytes{Msgs: sentMsgs, Bytes: sentBytes}},
+			ReceivedFromClients: server.DataStats{MsgBytes: server.MsgBytes{Msgs: recvMsgs, Bytes: recvBytes}},
+		},
+	}
+
+	sc, err := NewStatzCollectorOpts(
+		WithStats(WithStatsBatch{Stats: []*server.ServerStatsMsg{stats}}),
+	)
+	if err != nil {
+		t.Fatalf("error creating statz collector: %v", err)
+	}
+
+	output := gatherStatzCollectorMetrics(t, sc)
+
+	want := []string{
+		`nats_core_sent_to_client_msgs_total{server_cluster="",server_id="test-server",server_name="test-server"} 11`,
+		`nats_core_sent_to_client_bytes_total{server_cluster="",server_id="test-server",server_name="test-server"} 23`,
+		`nats_core_recv_from_client_msgs_total{server_cluster="",server_id="test-server",server_name="test-server"} 37`,
+		`nats_core_recv_from_client_bytes_total{server_cluster="",server_id="test-server",server_name="test-server"} 53`,
+	}
+	for _, w := range want {
+		if !strings.Contains(output, w) {
+			t.Errorf("missing or wrong metric line:\n  want: %s\n  output:\n%v", w, output)
+		}
+	}
+}
+
 func TestStatzCollector_MetricInfos(t *testing.T) {
 	sc, err := NewStatzCollectorOpts(
 		WithStats(WithStatsBatch{
