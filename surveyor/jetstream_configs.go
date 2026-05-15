@@ -53,19 +53,19 @@ type JSStreamConfigMetrics struct {
 	jsStreamStateDeletedNum  *prometheus.GaugeVec
 	jsStreamStateSubjectNum  *prometheus.GaugeVec
 
-	jsConsumerConfig                 *prometheus.GaugeVec
-	jsConsumerState                  *prometheus.GaugeVec
-	jsConsumerRaftInfo               *prometheus.GaugeVec
-	jsConsumerRaftPeerInfo           *prometheus.GaugeVec
-	jsConsumerReplicationLag         *prometheus.GaugeVec
-	jsConsumerAckPendingNum          *prometheus.GaugeVec
-	jsConsumerPendingNum             *prometheus.GaugeVec
-	jsConsumerRedeliveredNum         *prometheus.GaugeVec
-	jsConsumerWaitingNum             *prometheus.GaugeVec
-	jsConsumerLastAckFloorConsumer   *prometheus.GaugeVec
-	jsConsumerLastAckFloorStream     *prometheus.GaugeVec
-	jsConsumerLastDeliveredConsumer  *prometheus.GaugeVec
-	jsConsumerLastDeliveredStream    *prometheus.GaugeVec
+	jsConsumerConfig                *prometheus.GaugeVec
+	jsConsumerState                 *prometheus.GaugeVec
+	jsConsumerRaftInfo              *prometheus.GaugeVec
+	jsConsumerRaftPeerInfo          *prometheus.GaugeVec
+	jsConsumerReplicationLag        *prometheus.GaugeVec
+	jsConsumerAckPendingNum         *prometheus.GaugeVec
+	jsConsumerPendingNum            *prometheus.GaugeVec
+	jsConsumerRedeliveredNum        *prometheus.GaugeVec
+	jsConsumerWaitingNum            *prometheus.GaugeVec
+	jsConsumerLastAckFloorConsumer  *prometheus.GaugeVec
+	jsConsumerLastAckFloorStream    *prometheus.GaugeVec
+	jsConsumerLastDeliveredConsumer *prometheus.GaugeVec
+	jsConsumerLastDeliveredStream   *prometheus.GaugeVec
 
 	jsStreamLimitMaxMsgs      *prometheus.GaugeVec
 	jsStreamLimitMaxMsgsPer   *prometheus.GaugeVec
