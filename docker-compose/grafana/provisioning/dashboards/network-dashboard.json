@@ -75,7 +75,7 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "(sum(rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[1m])) + sum(rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[1m])))",
+          "expr": "(sum(rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[$__rate_interval])) + sum(rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[$__rate_interval])))",
           "interval": "",
           "legendFormat": "Bits/sec",
           "refId": "A"
@@ -132,7 +132,7 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "(sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[1m])) + sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[1m])))",
+          "expr": "(sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval])) + sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval])))",
           "interval": "",
           "legendFormat": "Messages/sec",
           "refId": "A"
@@ -218,13 +218,13 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[1m]))",
+              "expr": "sum(rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[$__rate_interval]))",
               "interval": "",
               "legendFormat": "Sent",
               "refId": "A"
             },
             {
-              "expr": "sum(rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[1m]))",
+              "expr": "sum(rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[$__rate_interval]))",
               "interval": "",
               "legendFormat": "Received",
               "refId": "B"
@@ -332,14 +332,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+              "expr": "sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
               "hide": false,
               "interval": "",
               "legendFormat": "Sent",
               "refId": "A"
             },
             {
-              "expr": "sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+              "expr": "sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
               "interval": "",
               "legendFormat": "Received",
               "refId": "B"
@@ -443,7 +443,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "interval": "",
               "legendFormat": "{{server_name}}",
               "refId": "A"
@@ -546,7 +546,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -666,7 +666,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "interval": "",
               "legendFormat": "{{server_name}}",
               "refId": "A"
@@ -769,7 +769,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -885,7 +885,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_rtt_nanoseconds[1m])",
+              "expr": "rate(nats_core_rtt_nanoseconds[$__rate_interval])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }

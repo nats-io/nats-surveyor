@@ -165,7 +165,7 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_total_connection_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_total_connection_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "interval": "",
           "legendFormat": "Connections / sec",
           "refId": "A"
@@ -222,7 +222,7 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "(sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[1m])) + sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[1m])))",
+          "expr": "(sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval])) + sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval])))",
           "interval": "",
           "legendFormat": "Messages/sec",
           "refId": "A"

@@ -88,7 +88,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "legendFormat": "Received",
           "refId": "A"
         }
@@ -162,7 +162,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "legendFormat": "Sent",
           "refId": "A"
         }
@@ -236,7 +236,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "legendFormat": "Received",
           "refId": "A"
         }
@@ -310,7 +310,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "legendFormat": "Sent",
           "refId": "A"
         }
@@ -457,7 +457,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "legendFormat": "Slow",
           "refId": "A"
         }
@@ -1794,7 +1794,7 @@
               "type": "linear"
             },
             "showPoints": "never",
-            "spanNulls": true,
+            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -1847,7 +1847,7 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "legendFormat": "Slow Consumers",
           "refId": "A"
         }
@@ -1885,7 +1885,7 @@
               "type": "linear"
             },
             "showPoints": "never",
-            "spanNulls": true,
+            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "normal"
@@ -1976,7 +1976,7 @@
               "type": "linear"
             },
             "showPoints": "never",
-            "spanNulls": true,
+            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "normal"
@@ -2243,7 +2243,7 @@
               "type": "linear"
             },
             "showPoints": "never",
-            "spanNulls": true,
+            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -2297,12 +2297,12 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_sent_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "legendFormat": "Sent",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_recv_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "legendFormat": "Received",
           "refId": "B"
         }
@@ -2340,7 +2340,7 @@
               "type": "linear"
             },
             "showPoints": "never",
-            "spanNulls": true,
+            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -2395,12 +2395,12 @@
       "pluginVersion": "8.3.4",
       "targets": [
         {
-          "expr": "sum(rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_sent_bytes{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "legendFormat": "Sent",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_recv_bytes{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "legendFormat": "Received",
           "refId": "B"
         }
@@ -2438,7 +2438,7 @@
               "type": "linear"
             },
             "showPoints": "never",
-            "spanNulls": true,
+            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -2593,7 +2593,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -2680,7 +2680,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -2768,7 +2768,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -2822,7 +2822,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_total_connection_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_total_connection_count{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -2856,7 +2856,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -2941,7 +2941,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -2995,7 +2995,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_slow_consumer_count{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -3043,7 +3043,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -3098,7 +3098,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_gateway_sent_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_gateway_sent_bytes{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
@@ -3132,7 +3132,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -3186,7 +3186,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_gateway_recv_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_gateway_recv_bytes{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
@@ -3220,7 +3220,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -3274,7 +3274,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_gateway_sent_msgs_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_gateway_sent_msgs_count{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
@@ -3308,7 +3308,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -3362,7 +3362,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_gateway_recv_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_gateway_recv_msg_count{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}} - {{server_cluster}} -> {{server_gateway_name}}",
               "refId": "A"
             }
@@ -3410,7 +3410,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -3464,7 +3464,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_route_sent_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_sent_bytes{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -3498,7 +3498,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -3552,7 +3552,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_route_recv_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_recv_bytes{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -3586,7 +3586,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -3640,7 +3640,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_route_sent_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_sent_msg_count{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -3674,7 +3674,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -3728,7 +3728,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_route_recv_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_recv_msg_count{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
@@ -3762,7 +3762,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -3850,7 +3850,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -4009,7 +4009,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_sent_to_client_msgs_total{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_sent_to_client_msgs_total{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4100,7 +4100,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_recv_from_client_msgs_total{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_recv_from_client_msgs_total{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4191,7 +4191,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_sent_to_client_bytes_total{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_sent_to_client_bytes_total{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4282,7 +4282,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_recv_from_client_bytes_total{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_recv_from_client_bytes_total{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4334,7 +4334,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -4425,7 +4425,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -4548,7 +4548,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -4635,7 +4635,7 @@
                 "lineWidth": 2,
                 "fillOpacity": 10,
                 "gradientMode": "none",
-                "spanNulls": true,
+                "spanNulls": false,
                 "insertNulls": false,
                 "showPoints": "never",
                 "pointSize": 5,
@@ -4752,7 +4752,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -4844,7 +4844,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -4897,7 +4897,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_rtt_nanoseconds[1m])",
+              "expr": "rate(nats_core_rtt_nanoseconds[$__rate_interval])",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
@@ -4931,7 +4931,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"
@@ -5015,7 +5015,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
-                "spanNulls": true,
+                "spanNulls": false,
                 "stacking": {
                   "group": "A",
                   "mode": "none"

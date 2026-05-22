@@ -206,13 +206,13 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(nats_core_route_sent_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_route_sent_bytes{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "interval": "",
           "legendFormat": "Sent",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(nats_core_route_recv_bytes{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_route_recv_bytes{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "interval": "",
           "legendFormat": "Received",
           "refId": "B"
@@ -320,14 +320,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(nats_core_route_sent_msg_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_route_sent_msg_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "hide": false,
           "interval": "",
           "legendFormat": "Sent",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(nats_core_route_recv_msg_count{server_cluster=~\"$cluster\"}[1m]))",
+          "expr": "sum(rate(nats_core_route_recv_msg_count{server_cluster=~\"$cluster\"}[$__rate_interval]))",
           "interval": "",
           "legendFormat": "Received",
           "refId": "B"
@@ -444,7 +444,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_route_sent_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_sent_msg_count{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "interval": "",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
@@ -546,7 +546,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_route_recv_msg_count{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_recv_msg_count{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "interval": "",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
@@ -666,7 +666,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_route_sent_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_sent_bytes{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "interval": "",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
@@ -768,7 +768,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_route_recv_bytes{server_cluster=~\"$cluster\"}[1m])",
+              "expr": "rate(nats_core_route_recv_bytes{server_cluster=~\"$cluster\"}[$__rate_interval])",
               "legendFormat": "Server {{server_name}} - Route {{server_route_name}}",
               "refId": "A"
             }
