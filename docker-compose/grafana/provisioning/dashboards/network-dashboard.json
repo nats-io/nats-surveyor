@@ -885,7 +885,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(nats_core_rtt_nanoseconds[$__rate_interval])",
+              "expr": "nats_core_rtt_nanoseconds",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }

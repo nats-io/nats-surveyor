@@ -4897,12 +4897,12 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "rate(nats_core_rtt_nanoseconds[$__rate_interval])",
+              "expr": "nats_core_rtt_nanoseconds",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
           ],
-          "title": "Cluster RTT",
+          "title": "Cluster RTT per server",
           "type": "timeseries"
         },
         {
