@@ -4981,7 +4981,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "increase(nats_survey_nats_reconnects[5m])",
+              "expr": "increase(nats_survey_nats_reconnects[1m])",
               "legendFormat": "Reconnections",
               "refId": "A"
             }
@@ -5069,7 +5069,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": " rate(nats_survey_duration_seconds_sum[5m])\n/\n  rate(nats_survey_duration_seconds_count[5m])",
+              "expr": " rate(nats_survey_duration_seconds_sum[$__rate_interval])\n/\n  rate(nats_survey_duration_seconds_count[$__rate_interval])",
               "legendFormat": "Poll Time",
               "refId": "A"
             }
