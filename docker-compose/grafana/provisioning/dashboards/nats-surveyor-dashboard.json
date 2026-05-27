@@ -4523,7 +4523,7 @@
             "type": "prometheus",
             "uid": "${prom_ds}"
           },
-          "description": "CPU used by the NATS Server process normalized by GOMAXPROCS",
+          "description": "CPU usage divided by GOMAXPROCS. 100% = all GOMAXPROCS threads fully utilized.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -4607,7 +4607,7 @@
               "refId": "A"
             }
           ],
-          "title": "CPU Usage (% normalized by GOMAXPROCS)",
+          "title": "CPU Utilization (% of GOMAXPROCS)",
           "type": "timeseries"
         },
         {
@@ -4615,9 +4615,10 @@
             "type": "prometheus",
             "uid": "${prom_ds}"
           },
+          "description": "Memory usage (RSS) divided by GOMEMLIMIT. 100% = process at memory limit.",
           "id": 85,
           "type": "timeseries",
-          "title": "Memory Usage (% of GOMEMLIMIT)",
+          "title": "Memory Utilization (% of GOMEMLIMIT)",
           "gridPos": {
             "x": 12,
             "y": 17,
