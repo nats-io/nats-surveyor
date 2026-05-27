@@ -421,6 +421,34 @@ func TestStatzCollector_GoMemLimit(t *testing.T) {
 	}
 }
 
+func TestStatzCollector_GoMaxProcs(t *testing.T) {
+	stats := &server.ServerStatsMsg{
+		Server: server.ServerInfo{
+			ID:   "test-server",
+			Name: "test-server",
+		},
+		Stats: server.ServerStats{
+			MaxProcs: 4,
+		},
+	}
+
+	sc, err := NewStatzCollectorOpts(
+		WithStats(WithStatsBatch{
+			Stats: []*server.ServerStatsMsg{stats},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("error creating statz collector: %v", err)
+	}
+
+	output := gatherStatzCollectorMetrics(t, sc)
+
+	expectedMetric := "nats_core_gomaxprocs{server_cluster=\"\",server_id=\"test-server\",server_name=\"test-server\"} 4"
+	if !strings.Contains(output, expectedMetric) {
+		t.Fatalf("expected metric value not found. Expected: %s\nActual output:\n%v", expectedMetric, output)
+	}
+}
+
 func TestStatzCollector_ClientTrafficMetrics(t *testing.T) {
 	const (
 		sentMsgs  = 11
