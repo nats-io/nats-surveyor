@@ -4523,14 +4523,14 @@
             "type": "prometheus",
             "uid": "${prom_ds}"
           },
-          "description": "CPU used by the NATS Server process normalized by number of cores (% of total machine capacity)",
+          "description": "CPU used by the NATS Server process normalized by GOMAXPROCS",
           "fieldConfig": {
             "defaults": {
               "color": {
                 "mode": "palette-classic"
               },
               "custom": {
-                "axisLabel": "% of total CPU",
+                "axisLabel": "% usge of GOMAXPROCS CPU cores",
                 "axisPlacement": "auto",
                 "barAlignment": 0,
                 "drawStyle": "line",
@@ -4603,7 +4603,7 @@
           "pluginVersion": "8.3.4",
           "targets": [
             {
-              "expr": "nats_core_cpu_percentage{server_cluster=~\"$cluster\"} / nats_core_core_count{server_cluster=~\"$cluster\"}",
+              "expr": "nats_core_cpu_percentage{server_cluster=~\"$cluster\"} / nats_core_gomaxprocs{server_cluster=~\"$cluster\"}",
               "legendFormat": "{{server_name}}",
               "refId": "A"
             }
