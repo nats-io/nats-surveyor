@@ -4530,7 +4530,6 @@
                 "mode": "palette-classic"
               },
               "custom": {
-                "axisLabel": "% usge of GOMAXPROCS CPU cores",
                 "axisPlacement": "auto",
                 "barAlignment": 0,
                 "drawStyle": "line",
@@ -4608,7 +4607,7 @@
               "refId": "A"
             }
           ],
-          "title": "CPU Usage (Normalized)",
+          "title": "CPU Usage (% normalized by GOMAXPROCS)",
           "type": "timeseries"
         },
         {
