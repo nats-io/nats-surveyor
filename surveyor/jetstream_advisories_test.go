@@ -312,6 +312,24 @@ func TestJetStream_AggMetrics(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid config, metrics token position is not a wildcard",
+			advisoryConfig: &JSAdvisoryConfig{
+				ID:          "test_advisory",
+				AccountName: "aggregate_service",
+				Username:    "agg_service",
+				Password:    "agg_service",
+				ExternalAccountConfig: &JSAdvisoriesExternalAccountConfig{
+					MetricsSubject:               "$JS.EVENT.METRIC.ACC.*.>",
+					MetricsAccountTokenPosition:  4,
+					AdvisorySubject:              "$JS.EVENT.ADVISORY.ACC.*.>",
+					AdvisoryAccountTokenPosition: 5,
+				},
+			},
+			configErrors: []string{
+				"external_account_config.metrics_subject must have a wildcard token at the position specified by external_account_config.metrics_account_token_position",
+			},
+		},
+		{
 			name: "invalid config, token position is not a wildcard",
 			advisoryConfig: &JSAdvisoryConfig{
 				ID:          "test_advisory",

@@ -36,6 +36,56 @@ const (
 	defaultTick    = time.Millisecond * 100
 )
 
+func TestGetTokenFromSubject(t *testing.T) {
+	tests := []struct {
+		name    string
+		subject string
+		token   int
+		want    string
+		wantErr string
+	}{
+		{
+			name:    "valid token",
+			subject: "$JS.EVENT.ADVISORY.ACC.a.API",
+			token:   5,
+			want:    "a",
+		},
+		{
+			name:    "token position is out of range",
+			subject: "$JS.EVENT.ADVISORY.API",
+			token:   5,
+			wantErr: `invalid subject: "$JS.EVENT.ADVISORY.API": expected token on position 5`,
+		},
+		{
+			name:    "token position is zero",
+			subject: "$JS.EVENT.ADVISORY.API",
+			token:   0,
+			wantErr: `invalid subject: "$JS.EVENT.ADVISORY.API": expected token on position 0`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getTokenFromSubject(tt.subject, tt.token)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if err.Error() != tt.wantErr {
+					t.Fatalf("expected error %q, got %q", tt.wantErr, err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected token %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestServiceObservation_Load(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()

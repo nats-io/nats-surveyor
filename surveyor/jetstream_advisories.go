@@ -352,7 +352,7 @@ func (o *JSAdvisoryConfig) Validate() error {
 			errs = append(errs, fmt.Errorf("external_account_config.metrics_account_token_position is required when importing metrics from external accounts"))
 		case o.ExternalAccountConfig.MetricsAccountTokenPosition > len(metricsTokens):
 			errs = append(errs, fmt.Errorf("external_account_config.metrics_account_token_position is greater than the number of tokens in external_account_config.metrics_subject"))
-		case metricsTokens[o.ExternalAccountConfig.AdvisoryAccountTokenPosition-1] != "*":
+		case metricsTokens[o.ExternalAccountConfig.MetricsAccountTokenPosition-1] != "*":
 			errs = append(errs, fmt.Errorf("external_account_config.metrics_subject must have a wildcard token at the position specified by external_account_config.metrics_account_token_position"))
 		}
 
