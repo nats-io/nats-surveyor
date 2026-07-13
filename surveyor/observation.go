@@ -397,8 +397,8 @@ func (o *serviceObsListener) observationHandler(m *nats.Msg) {
 
 func getTokenFromSubject(subject string, token int) (string, error) {
 	parts := strings.Split(subject, ".")
-	if token-1 > len(parts) {
-		return "", fmt.Errorf("invalid subject: %q: expected service name on token position %d", subject, token)
+	if token <= 0 || token > len(parts) {
+		return "", fmt.Errorf("invalid subject: %q: expected token on position %d", subject, token)
 	}
 	return parts[token-1], nil
 }
