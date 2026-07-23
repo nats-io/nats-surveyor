@@ -2137,9 +2137,9 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 					metrics.newGaugeMetric(sc.descs.JetstreamServerMaxMemory, float64(jss.Data.Config.MaxMemory), jsServerLabelValues)
 					metrics.newGaugeMetric(sc.descs.JetstreamServerMaxStorage, float64(jss.Data.Config.MaxStore), jsServerLabelValues)
 
-					// Meta snaphost stats
-					if jss.Data.Meta != nil {
-						stats := jss.Data.Meta.Snapshot
+					// Meta snapshot stats
+					if meta := jss.Data.Meta; meta != nil && meta.Snapshot != nil {
+						stats := meta.Snapshot
 						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingEntries,
 							float64(stats.PendingEntries), jsServerLabelValues)
 						metrics.newGaugeMetric(sc.descs.JetstreamMetaSnapshotPendingBytes,
