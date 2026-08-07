@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/klauspost/compress v1.19.1
+	github.com/klauspost/compress v1.19.2
 	github.com/nats-io/jsm.go v0.4.1
 	github.com/nats-io/nats-server/v2 v2.14.3
 	github.com/nats-io/nats.go v1.52.0
