@@ -56,6 +56,10 @@ Flags:
       --jsz-limit int                       Limit the number of returned account jsz metrics (NATS_SURVEYOR_JSZ_LIMIT) (default 1024)
       --jsz-leaders-only                    Fetch jsz metrics from stream and consumer leaders only (NATS_SURVEYOR_JSZ_LEADERS_ONLY)
       --jsz-filter jsz-filter               Fetch selected jsz metrics only(comma separated list). Metrics: stream_total_messages,stream_total_bytes,stream_first_seq,stream_last_seq,stream_consumer_count,stream_subject_count,consumer_delivered_consumer_seq,consumer_delivered_stream_seq,consumer_ack_floor_consumer_seq,consumer_ack_floor_stream_seq,consumer_num_ack_pending,consumer_num_pending,consumer_num_redelivered,consumer_num_waiting (NATS_SURVEYOR_JSZ_FILTER) (default [])
+      --js-config-poll-interval duration    Poll JetStream stream and consumer configuration, limits and Raft peer state at this interval, 0 disables it.
+                                            Unlike the jsz options this uses the JetStream API and so needs credentials for a JetStream account rather than
+                                            the system account. Every poll lists all streams and the consumers of each of them through the meta leader, so
+                                            keep the interval generous on large clusters, 60s is a reasonable starting point (NATS_SURVEYOR_JS_CONFIG_POLL_INTERVAL)
       --sys-req-prefix string               Subject prefix for system requests ($SYS.REQ) (NATS_SURVEYOR_SYS_REQ_PREFIX) (default "$SYS.REQ")
       --log-level string                    Log level, one of: trace|debug|info|warn|error|fatal|panic (NATS_SURVEYOR_LOG_LEVEL) (default "info")
       --config string                       config file (default is ./nats-surveyor.yaml)
@@ -170,6 +174,35 @@ and picking up `num_pending`, `num_ack_pending` and `num_waiting` from the consu
                 --jsz-leaders-only \
                 --jsz-filter=consumer_num_pending,consumer_num_ack_pending,consumer_num_waiting
 ```
+
+## JetStream Configuration Metrics
+
+`--js-config-poll-interval` enables a second, opt-in JetStream collector. Where the jsz metrics describe what the streams
+and consumers are *doing*, this one describes how they are *configured* and how healthy their Raft groups are, which the
+jsz endpoint does not cover:
+
+- `nats_jetstream_stream_configuration` and `nats_jetstream_consumer_configuration`, always `1`, with the configuration
+  in the labels.
+- `nats_jetstream_stream_limit_*` and `nats_jetstream_consumer_limit_max_ack_pending`, so that saturation can be alerted
+  on, for example `nats_stream_total_messages / nats_jetstream_stream_limit_max_msgs > 0.9`.
+- `nats_jetstream_stream_peer_*` and `nats_jetstream_consumer_peer_*` plus `nats_jetstream_{stream,consumer}_replication_lag`,
+  which report per peer whether it leads the group, is current, is offline and how many operations it is behind.
+
+Two things to keep in mind before enabling it:
+
+- **It needs JetStream credentials.** This collector calls the JetStream API rather than the `$SYS` monitoring endpoints,
+  and the system account the surveyor normally connects with cannot use that API. It reuses the main `--creds` / `--user`
+  / `--password` options, so those have to belong to the JetStream account being observed. Surveyor refuses to start if
+  the credentials cannot reach the JetStream API.
+- **It costs meta leader work.** Every poll issues one `$JS.API.STREAM.LIST` page per 256 streams plus one
+  `$JS.API.CONSUMER.LIST` per stream that has consumers, and in a clustered deployment the meta leader serves all of them
+  by asking every stream and consumer leader in turn. This is unlike the jsz collector, which polls each server directly.
+  Streams without consumers are skipped, but on a large multi-tenant cluster the interval should still be measured in
+  tens of seconds rather than seconds.
+
+Cardinality scales with streams x consumers x replicas. Sequence numbers and lag are only ever gauge values, never label
+values, so the number of series is bounded by the assets themselves and series of deleted assets are removed on the
+following poll.
 
 ## Docker Compose
 
