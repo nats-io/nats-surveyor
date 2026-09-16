@@ -86,6 +86,9 @@ type Options struct {
 	AccountsDetailed     bool
 	Gatewayz             bool
 	Raftz                bool
+	RaftzGroups          bool
+	RaftzActiveOnly      bool
+	RaftzAccount         string
 	Jsz                  CollectJsz
 	JszLimit             int
 	JszLeadersOnly       bool
@@ -240,23 +243,27 @@ func (s *Surveyor) createStatszCollector() error {
 		s.logger.Debugln("Skipping per-account exports")
 	}
 
-	s.statzC = NewStatzCollector(
-		s.conn.Conn(),
-		s.logger,
-		s.opts.ExpectedServers,
-		s.opts.ServerResponseWait,
-		s.opts.PollTimeout,
-		s.opts.Accounts,
-		s.opts.AccountsDetailed,
-		s.opts.Gatewayz,
-		s.opts.Raftz,
-		s.opts.Jsz,
-		s.opts.JszLimit,
-		s.opts.JszLeadersOnly,
-		s.opts.JszFilters,
-		s.opts.SysReqPrefix,
-		s.opts.ConstLabels,
+	statzC, err := NewStatzCollectorOpts(
+		WithNATSConnection(s.conn.Conn()),
+		WithLogger(s.logger),
+		WithNumServers(s.opts.ExpectedServers),
+		WithServerDiscoveryWait(s.opts.ServerResponseWait),
+		WithPollTimeout(s.opts.PollTimeout),
+		WithCollectAccounts(s.opts.Accounts, s.opts.AccountsDetailed),
+		WithCollectGatewayz(s.opts.Gatewayz),
+		WithCollectRaftz(s.opts.Raftz),
+		WithCollectRaftzGroups(s.opts.RaftzGroups),
+		WithRaftzGroupsActiveOnly(s.opts.RaftzActiveOnly),
+		WithRaftzAccountFilter(s.opts.RaftzAccount),
+		WithCollectJsz(s.opts.Jsz, s.opts.JszLeadersOnly, s.opts.JszFilters),
+		WithJszLimit(s.opts.JszLimit),
+		WithSysRequestPrefix(s.opts.SysReqPrefix),
+		WithConstantLabels(s.opts.ConstLabels),
 	)
+	if err != nil {
+		return err
+	}
+	s.statzC = statzC
 
 	return s.promRegistry.Register(s.statzC)
 }
