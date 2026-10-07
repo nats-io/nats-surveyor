@@ -3,10 +3,12 @@ package surveyor
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -941,4 +943,191 @@ func TestSurveyor_AdvisoriesMetrics(t *testing.T) {
 
 	infos := metrics.MetricInfos()
 	assertMetricInfos(t, infos)
+}
+
+// flakyConnProvider fails the first `failures` Get calls, then delegates to the wrapped provider
+type flakyConnProvider struct {
+	ConnProvider
+	mu       sync.Mutex
+	failures int
+	calls    int
+}
+
+func (p *flakyConnProvider) Get(ctx *NatsContext) (Conn, error) {
+	p.mu.Lock()
+	p.calls++
+	if p.failures > 0 {
+		p.failures--
+		p.mu.Unlock()
+		return nil, errors.New("flaky provider: connection refused")
+	}
+	p.mu.Unlock()
+	return p.ConnProvider.Get(ctx)
+}
+
+func (p *flakyConnProvider) getCalls() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.calls
+}
+
+// shortenListenerRetry makes listener retries fast for tests and restores the defaults on cleanup
+func shortenListenerRetry(t *testing.T) {
+	t.Helper()
+	tick, minBackoff, maxBackoff := listenerRetryTick, listenerRetryMinBackoff, listenerRetryMaxBackoff
+	listenerRetryTick = 20 * time.Millisecond
+	listenerRetryMinBackoff = 50 * time.Millisecond
+	listenerRetryMaxBackoff = 200 * time.Millisecond
+	t.Cleanup(func() {
+		listenerRetryTick, listenerRetryMinBackoff, listenerRetryMaxBackoff = tick, minBackoff, maxBackoff
+	})
+}
+
+func TestListenerRetryDelay(t *testing.T) {
+	expected := []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 32 * time.Second, time.Minute, time.Minute}
+	for i, want := range expected {
+		if got := listenerRetryDelay(i + 1); got != want {
+			t.Errorf("attempt %d: expected %v, got %v", i+1, want, got)
+		}
+	}
+}
+
+func TestSurveyor_AdvisoriesStartupWalkContinues(t *testing.T) {
+	js := st.NewJetStreamServer(t)
+	defer js.Shutdown()
+
+	opts := getTestOptions()
+	opts.URLs = js.ClientURL()
+
+	dirName := fmt.Sprintf("testdata/advwalk%d", time.Now().UnixNano())
+	if err := os.Mkdir(dirName, 0o700); err != nil {
+		t.Fatalf("Error creating advisories dir: %s", err)
+	}
+	defer os.RemoveAll(dirName)
+	opts.JetStreamConfigDir = dirName
+
+	// files are walked in lexical order: an invalid file, a file that cannot connect, a good file
+	invalidPath := fmt.Sprintf("%s/00-invalid.json", dirName)
+	if err := os.WriteFile(invalidPath, []byte(`{"name": "a", "username": "a"`), 0o600); err != nil {
+		t.Fatalf("Error writing advisory config file: %s", err)
+	}
+	badCredsPath := fmt.Sprintf("%s/01-badcreds.json", dirName)
+	badCreds := &JSAdvisoryConfig{AccountName: "a", Username: "a", Password: "wrong"}
+	badCredsJSON, _ := json.Marshal(badCreds)
+	if err := os.WriteFile(badCredsPath, badCredsJSON, 0o600); err != nil {
+		t.Fatalf("Error writing advisory config file: %s", err)
+	}
+	goodPath := fmt.Sprintf("%s/02-good.json", dirName)
+	good := &JSAdvisoryConfig{AccountName: "a", Username: "a", Password: "a"}
+	goodJSON, _ := json.Marshal(good)
+	if err := os.WriteFile(goodPath, goodJSON, 0o600); err != nil {
+		t.Fatalf("Error writing advisory config file: %s", err)
+	}
+
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	am := s.JetStreamAdvisoryManager()
+
+	// the good file after the failing ones is loaded
+	good.ID = goodPath
+	waitForAdvUpdate(t, am, map[string]*JSAdvisoryConfig{goodPath: good})
+
+	// the file that could not connect is kept for retry, the invalid one is not
+	pending := am.pendingIDs()
+	if len(pending) != 1 || pending[0] != badCredsPath {
+		t.Fatalf("expected %s pending retry, got %v", badCredsPath, pending)
+	}
+
+	// removing the pending file drops it from the retry set
+	if err := os.Remove(badCredsPath); err != nil {
+		t.Fatalf("Error removing advisory config file: %s", err)
+	}
+	waitFor(t, 5*time.Second, func() bool { return len(am.pendingIDs()) == 0 })
+	waitForAdvUpdate(t, am, map[string]*JSAdvisoryConfig{goodPath: good})
+}
+
+func TestSurveyor_AdvisoriesRetry(t *testing.T) {
+	shortenListenerRetry(t)
+
+	js := st.NewJetStreamServer(t)
+	defer js.Shutdown()
+
+	opts := getTestOptions()
+	opts.URLs = js.ClientURL()
+
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	am := s.JetStreamAdvisoryManager()
+	provider := &flakyConnProvider{ConnProvider: s.connProvider, failures: 2}
+	config := &JSAdvisoryConfig{
+		ID:           "retry",
+		AccountName:  "a",
+		Username:     "a",
+		Password:     "a",
+		ConnProvider: provider,
+	}
+
+	// first attempt fails and the advisory is kept for retry
+	if err := am.Set(config); err == nil {
+		t.Fatal("Expected error; got nil")
+	}
+	if pending := am.pendingIDs(); len(pending) != 1 || pending[0] != "retry" {
+		t.Fatalf("expected advisory pending retry, got %v", pending)
+	}
+	if len(am.ConfigMap()) != 0 {
+		t.Fatalf("expected no running advisories, got %v", am.ConfigMap())
+	}
+
+	// the retry loop starts it once the provider recovers
+	waitForAdvUpdate(t, am, map[string]*JSAdvisoryConfig{"retry": config})
+	if pending := am.pendingIDs(); len(pending) != 0 {
+		t.Fatalf("expected no pending advisories, got %v", pending)
+	}
+	if calls := provider.getCalls(); calls != 3 {
+		t.Fatalf("expected 3 connection attempts, got %d", calls)
+	}
+
+	// deleting a pending advisory stops the retries
+	neverProvider := &flakyConnProvider{ConnProvider: s.connProvider, failures: 1 << 30}
+	never := &JSAdvisoryConfig{ID: "never", AccountName: "a", Username: "a", Password: "a", ConnProvider: neverProvider}
+	if err := am.Set(never); err == nil {
+		t.Fatal("Expected error; got nil")
+	}
+	if err := am.Delete("never"); err != nil {
+		t.Fatalf("Unexpected error deleting pending advisory: %s", err)
+	}
+	if pending := am.pendingIDs(); len(pending) != 0 {
+		t.Fatalf("expected no pending advisories, got %v", pending)
+	}
+	calls := neverProvider.getCalls()
+	time.Sleep(10 * listenerRetryMaxBackoff)
+	if got := neverProvider.getCalls(); got != calls {
+		t.Fatalf("expected no further connection attempts after delete, got %d", got-calls)
+	}
+}
+
+func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for condition")
 }

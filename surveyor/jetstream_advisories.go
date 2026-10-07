@@ -652,8 +652,17 @@ type JSAdvisoryManager struct {
 	sync.Mutex
 	provider    ConnProvider
 	listenerMap map[string]*jsAdvisoryListener
+	// retryMap holds advisories whose listener failed to start; they are retried with backoff
+	retryMap    map[string]*jsAdvisoryRetry
+	retryStopCh chan struct{}
 	logger      *logrus.Logger
 	metrics     *JSAdvisoryMetrics
+}
+
+type jsAdvisoryRetry struct {
+	config   *JSAdvisoryConfig
+	attempts int
+	next     time.Time
 }
 
 // NewJetStreamAdvisoryManager creates a JSAdvisoryManager for managing JetStream advisories
@@ -674,6 +683,9 @@ func (am *JSAdvisoryManager) Start() {
 	}
 
 	am.listenerMap = map[string]*jsAdvisoryListener{}
+	am.retryMap = map[string]*jsAdvisoryRetry{}
+	am.retryStopCh = make(chan struct{})
+	go am.retryLoop(am.retryStopCh)
 }
 
 // IsRunning returns true if the advisory manager is running or false if it is stopped
@@ -690,6 +702,10 @@ func (am *JSAdvisoryManager) Stop() {
 		// already stopped
 		return
 	}
+
+	close(am.retryStopCh)
+	am.retryStopCh = nil
+	am.retryMap = nil
 
 	for _, adv := range am.listenerMap {
 		adv.Stop()
@@ -752,7 +768,8 @@ func (am *JSAdvisoryManager) Set(config *JSAdvisoryConfig) error {
 	}
 
 	if err := adv.Start(); err != nil {
-		return fmt.Errorf("could not start advisory for id: %s, account name: %s, error: %v", config.ID, config.AccountName, err)
+		delay := am.scheduleRetry(config)
+		return fmt.Errorf("could not start advisory for id: %s, account name: %s, retrying in %v, error: %v", config.ID, config.AccountName, delay, err)
 	}
 
 	am.Lock()
@@ -762,7 +779,19 @@ func (am *JSAdvisoryManager) Set(config *JSAdvisoryConfig) error {
 		return fmt.Errorf("advisory manager is stopped; could not set advisory for id: %s, account name: %s", config.ID, config.AccountName)
 	}
 
+	if current, ok := am.listenerMap[config.ID]; ok && current != existingAdv {
+		// a concurrent Set for the same ID (e.g. a file event and a retry) won while this
+		// listener was starting; keep the one already stored if it has the same config
+		if reflect.DeepEqual(config, current.config) {
+			am.Unlock()
+			adv.Stop()
+			return nil
+		}
+		existingAdv, found = current, true
+	}
+
 	am.listenerMap[config.ID] = adv
+	delete(am.retryMap, config.ID)
 	am.Unlock()
 
 	if found {
@@ -779,9 +808,16 @@ func (am *JSAdvisoryManager) Delete(id string) error {
 		return fmt.Errorf("advisory manager is stopped; could not delete advisory id: %s", id)
 	}
 
+	_, pending := am.retryMap[id]
+	delete(am.retryMap, id)
+
 	existingAdv, found := am.listenerMap[id]
 	if !found {
 		am.Unlock()
+		if pending {
+			// never started; nothing to stop
+			return nil
+		}
 		return fmt.Errorf("advisory with given ID does not exist: %s", id)
 	}
 
@@ -790,6 +826,73 @@ func (am *JSAdvisoryManager) Delete(id string) error {
 
 	existingAdv.Stop()
 	return nil
+}
+
+// scheduleRetry records a config whose listener failed to start so that the retry loop
+// picks it up again after a backoff delay. It returns the delay until the next attempt.
+func (am *JSAdvisoryManager) scheduleRetry(config *JSAdvisoryConfig) time.Duration {
+	am.Lock()
+	defer am.Unlock()
+	if am.retryMap == nil {
+		// manager is stopped
+		return 0
+	}
+
+	entry, found := am.retryMap[config.ID]
+	if !found {
+		entry = &jsAdvisoryRetry{}
+		am.retryMap[config.ID] = entry
+	}
+	entry.config = config
+	entry.attempts++
+	delay := listenerRetryDelay(entry.attempts)
+	entry.next = time.Now().Add(delay)
+	return delay
+}
+
+// pendingIDs returns the IDs of advisories waiting for a retry
+func (am *JSAdvisoryManager) pendingIDs() []string {
+	am.Lock()
+	defer am.Unlock()
+	ids := make([]string, 0, len(am.retryMap))
+	for id := range am.retryMap {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func (am *JSAdvisoryManager) retryLoop(stopCh chan struct{}) {
+	ticker := time.NewTicker(listenerRetryTick)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			am.retryPending()
+		}
+	}
+}
+
+// retryPending attempts to start every advisory whose backoff delay has elapsed
+func (am *JSAdvisoryManager) retryPending() {
+	am.Lock()
+	now := time.Now()
+	due := make([]*JSAdvisoryConfig, 0, len(am.retryMap))
+	for _, entry := range am.retryMap {
+		if !now.Before(entry.next) {
+			due = append(due, entry.config)
+		}
+	}
+	am.Unlock()
+
+	for _, config := range due {
+		if err := am.Set(config); err != nil {
+			am.logger.Warn(err)
+			continue
+		}
+		am.logger.Infof("started JetStream advisory after retry for id: %s, account name: %s", config.ID, config.AccountName)
+	}
 }
 
 type jsAdvisoryFSWatcher struct {
@@ -857,7 +960,8 @@ func (w *jsAdvisoryFSWatcher) stop() {
 func (w *jsAdvisoryFSWatcher) startAdvisoriesInDir() fs.WalkDirFunc {
 	return func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			w.logger.Warnf("could not read advisory path: %s, error: %v", path, err)
+			return nil
 		}
 
 		// skip directories starting with '..'
@@ -878,12 +982,17 @@ func (w *jsAdvisoryFSWatcher) startAdvisoriesInDir() fs.WalkDirFunc {
 			return nil
 		}
 
+		// a bad file must not stop the walk: log it and continue with the remaining files
 		adv, err := NewJetStreamAdvisoryConfigFromFile(path)
 		if err != nil {
-			return fmt.Errorf("could not create advisory from path: %s, error: %v", path, err)
+			w.logger.Warnf("could not create advisory from path: %s, error: %v", path, err)
+			return nil
 		}
 
-		return w.am.Set(adv)
+		if err := w.am.Set(adv); err != nil {
+			w.logger.Warn(err)
+		}
+		return nil
 	}
 }
 
@@ -942,9 +1051,12 @@ func (w *jsAdvisoryFSWatcher) handleWriteEvent(path string) error {
 
 func (w *jsAdvisoryFSWatcher) handleRemoveEvent(path string) error {
 	var removeIDs []string
-	configMap := w.am.ConfigMap()
+	ids := w.am.pendingIDs()
+	for id := range w.am.ConfigMap() {
+		ids = append(ids, id)
+	}
 	dir := strings.TrimSuffix(path, string(filepath.Separator)) + string(filepath.Separator)
-	for id := range configMap {
+	for _, id := range ids {
 		if id == path {
 			// file
 			removeIDs = append(removeIDs, id)

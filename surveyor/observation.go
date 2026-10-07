@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nats-io/nats.go"
 
@@ -428,8 +429,17 @@ type ServiceObsManager struct {
 	sync.Mutex
 	provider    ConnProvider
 	listenerMap map[string]*serviceObsListener
+	// retryMap holds observations whose listener failed to start; they are retried with backoff
+	retryMap    map[string]*serviceObsRetry
+	retryStopCh chan struct{}
 	logger      *logrus.Logger
 	metrics     *ServiceObsMetrics
+}
+
+type serviceObsRetry struct {
+	config   *ServiceObsConfig
+	attempts int
+	next     time.Time
 }
 
 // NewServiceObservationManager creates a ServiceObsManager for managing Service Observations
@@ -450,6 +460,9 @@ func (om *ServiceObsManager) Start() {
 	}
 
 	om.listenerMap = map[string]*serviceObsListener{}
+	om.retryMap = map[string]*serviceObsRetry{}
+	om.retryStopCh = make(chan struct{})
+	go om.retryLoop(om.retryStopCh)
 }
 
 // IsRunning returns true if the observation manager is running or false if it is stopped
@@ -466,6 +479,10 @@ func (om *ServiceObsManager) Stop() {
 		// already stopped
 		return
 	}
+
+	close(om.retryStopCh)
+	om.retryStopCh = nil
+	om.retryMap = nil
 
 	for _, obs := range om.listenerMap {
 		obs.Stop()
@@ -528,7 +545,8 @@ func (om *ServiceObsManager) Set(config *ServiceObsConfig) error {
 	}
 
 	if err := obs.Start(); err != nil {
-		return fmt.Errorf("could not start observation for id: %s, service name: %s, error: %v", config.ID, config.ServiceName, err)
+		delay := om.scheduleRetry(config)
+		return fmt.Errorf("could not start observation for id: %s, service name: %s, retrying in %v, error: %v", config.ID, config.ServiceName, delay, err)
 	}
 
 	om.Lock()
@@ -538,7 +556,19 @@ func (om *ServiceObsManager) Set(config *ServiceObsConfig) error {
 		return fmt.Errorf("observation manager is stopped; could not set observation for id: %s, service name: %s", config.ID, config.ServiceName)
 	}
 
+	if current, ok := om.listenerMap[config.ID]; ok && current != existingObs {
+		// a concurrent Set for the same ID (e.g. a file event and a retry) won while this
+		// listener was starting; keep the one already stored if it has the same config
+		if reflect.DeepEqual(config, current.config) {
+			om.Unlock()
+			obs.Stop()
+			return nil
+		}
+		existingObs, found = current, true
+	}
+
 	om.listenerMap[config.ID] = obs
+	delete(om.retryMap, config.ID)
 	om.Unlock()
 
 	if found {
@@ -555,9 +585,16 @@ func (om *ServiceObsManager) Delete(id string) error {
 		return fmt.Errorf("could not delete observation id: %s: observation manager is stopped", id)
 	}
 
+	_, pending := om.retryMap[id]
+	delete(om.retryMap, id)
+
 	existingObs, found := om.listenerMap[id]
 	if !found {
 		om.Unlock()
+		if pending {
+			// never started; nothing to stop
+			return nil
+		}
 		return fmt.Errorf("observation with given ID does not exist: %s", id)
 	}
 
@@ -566,6 +603,73 @@ func (om *ServiceObsManager) Delete(id string) error {
 
 	existingObs.Stop()
 	return nil
+}
+
+// scheduleRetry records a config whose listener failed to start so that the retry loop
+// picks it up again after a backoff delay. It returns the delay until the next attempt.
+func (om *ServiceObsManager) scheduleRetry(config *ServiceObsConfig) time.Duration {
+	om.Lock()
+	defer om.Unlock()
+	if om.retryMap == nil {
+		// manager is stopped
+		return 0
+	}
+
+	entry, found := om.retryMap[config.ID]
+	if !found {
+		entry = &serviceObsRetry{}
+		om.retryMap[config.ID] = entry
+	}
+	entry.config = config
+	entry.attempts++
+	delay := listenerRetryDelay(entry.attempts)
+	entry.next = time.Now().Add(delay)
+	return delay
+}
+
+// pendingIDs returns the IDs of observations waiting for a retry
+func (om *ServiceObsManager) pendingIDs() []string {
+	om.Lock()
+	defer om.Unlock()
+	ids := make([]string, 0, len(om.retryMap))
+	for id := range om.retryMap {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func (om *ServiceObsManager) retryLoop(stopCh chan struct{}) {
+	ticker := time.NewTicker(listenerRetryTick)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			om.retryPending()
+		}
+	}
+}
+
+// retryPending attempts to start every observation whose backoff delay has elapsed
+func (om *ServiceObsManager) retryPending() {
+	om.Lock()
+	now := time.Now()
+	due := make([]*ServiceObsConfig, 0, len(om.retryMap))
+	for _, entry := range om.retryMap {
+		if !now.Before(entry.next) {
+			due = append(due, entry.config)
+		}
+	}
+	om.Unlock()
+
+	for _, config := range due {
+		if err := om.Set(config); err != nil {
+			om.logger.Warn(err)
+			continue
+		}
+		om.logger.Infof("started service observation after retry for id: %s, service name: %s", config.ID, config.ServiceName)
+	}
 }
 
 type serviceObsFSWatcher struct {
@@ -633,7 +737,8 @@ func (w *serviceObsFSWatcher) stop() {
 func (w *serviceObsFSWatcher) startObservationsInDir() fs.WalkDirFunc {
 	return func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			w.logger.Warnf("could not read observation path: %s, error: %v", path, err)
+			return nil
 		}
 
 		// skip directories starting with '..'
@@ -654,12 +759,17 @@ func (w *serviceObsFSWatcher) startObservationsInDir() fs.WalkDirFunc {
 			return nil
 		}
 
+		// a bad file must not stop the walk: log it and continue with the remaining files
 		obs, err := NewServiceObservationConfigFromFile(path)
 		if err != nil {
-			return fmt.Errorf("could not create observation from path: %s, error: %v", path, err)
+			w.logger.Warnf("could not create observation from path: %s, error: %v", path, err)
+			return nil
 		}
 
-		return w.om.Set(obs)
+		if err := w.om.Set(obs); err != nil {
+			w.logger.Warn(err)
+		}
+		return nil
 	}
 }
 
@@ -718,9 +828,12 @@ func (w *serviceObsFSWatcher) handleWriteEvent(path string) error {
 
 func (w *serviceObsFSWatcher) handleRemoveEvent(path string) error {
 	var removeIDs []string
-	configMap := w.om.ConfigMap()
+	ids := w.om.pendingIDs()
+	for id := range w.om.ConfigMap() {
+		ids = append(ids, id)
+	}
 	dir := strings.TrimSuffix(path, string(filepath.Separator)) + string(filepath.Separator)
-	for id := range configMap {
+	for _, id := range ids {
 		if id == path {
 			// file
 			removeIDs = append(removeIDs, id)

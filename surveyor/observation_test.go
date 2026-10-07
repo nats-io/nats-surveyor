@@ -949,3 +949,131 @@ func eventually(t *testing.T, condition eventuallyF, waitFor time.Duration, tick
 	}
 
 }
+
+func TestSurveyor_ObservationsStartupWalkContinues(t *testing.T) {
+	sc := st.NewSuperCluster(t)
+	defer sc.Shutdown()
+
+	opts := getTestOptions()
+	opts.URLs = sc.ClientURL()
+
+	dirName := fmt.Sprintf("testdata/obswalk%d", time.Now().UnixNano())
+	if err := os.Mkdir(dirName, 0o700); err != nil {
+		t.Fatalf("Error creating observations dir: %s", err)
+	}
+	defer os.RemoveAll(dirName)
+	opts.ObservationConfigDir = dirName
+
+	// files are walked in lexical order: an invalid file, a file that cannot connect, a good file
+	invalidPath := fmt.Sprintf("%s/00-invalid.json", dirName)
+	if err := os.WriteFile(invalidPath, []byte(`{"name": "srv", "topic": "testing.topic"`), 0o600); err != nil {
+		t.Fatalf("Error writing observation config file: %s", err)
+	}
+	badCredsPath := fmt.Sprintf("%s/01-badcreds.json", dirName)
+	badCreds := &ServiceObsConfig{ServiceName: "srv1", Topic: "testing.topic", Credentials: "../test/does-not-exist.creds"}
+	badCredsJSON, _ := json.Marshal(badCreds)
+	if err := os.WriteFile(badCredsPath, badCredsJSON, 0o600); err != nil {
+		t.Fatalf("Error writing observation config file: %s", err)
+	}
+	goodPath := fmt.Sprintf("%s/02-good.json", dirName)
+	good := &ServiceObsConfig{ServiceName: "srv2", Topic: "testing.topic", Credentials: "../test/myuser.creds"}
+	goodJSON, _ := json.Marshal(good)
+	if err := os.WriteFile(goodPath, goodJSON, 0o600); err != nil {
+		t.Fatalf("Error writing observation config file: %s", err)
+	}
+
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	om := s.ServiceObservationManager()
+
+	// the good file after the failing ones is loaded
+	good.ID = goodPath
+	waitForObsUpdate(t, om, map[string]*ServiceObsConfig{goodPath: good})
+
+	// the file that could not connect is kept for retry, the invalid one is not
+	pending := om.pendingIDs()
+	if len(pending) != 1 || pending[0] != badCredsPath {
+		t.Fatalf("expected %s pending retry, got %v", badCredsPath, pending)
+	}
+
+	// removing the pending file drops it from the retry set
+	if err := os.Remove(badCredsPath); err != nil {
+		t.Fatalf("Error removing observation config file: %s", err)
+	}
+	waitFor(t, 5*time.Second, func() bool { return len(om.pendingIDs()) == 0 })
+	waitForObsUpdate(t, om, map[string]*ServiceObsConfig{goodPath: good})
+}
+
+func TestSurveyor_ObservationsRetry(t *testing.T) {
+	shortenListenerRetry(t)
+
+	sc := st.NewSuperCluster(t)
+	defer sc.Shutdown()
+
+	opts := getTestOptions()
+	opts.URLs = sc.ClientURL()
+
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	om := s.ServiceObservationManager()
+	provider := &flakyConnProvider{ConnProvider: s.connProvider, failures: 2}
+	config := &ServiceObsConfig{
+		ID:           "retry",
+		ServiceName:  "srv1",
+		Topic:        "testing.topic",
+		Credentials:  "../test/myuser.creds",
+		ConnProvider: provider,
+	}
+
+	// first attempt fails and the observation is kept for retry
+	if err := om.Set(config); err == nil {
+		t.Fatal("Expected error; got nil")
+	}
+	if pending := om.pendingIDs(); len(pending) != 1 || pending[0] != "retry" {
+		t.Fatalf("expected observation pending retry, got %v", pending)
+	}
+	if len(om.ConfigMap()) != 0 {
+		t.Fatalf("expected no running observations, got %v", om.ConfigMap())
+	}
+
+	// the retry loop starts it once the provider recovers
+	waitForObsUpdate(t, om, map[string]*ServiceObsConfig{"retry": config})
+	if pending := om.pendingIDs(); len(pending) != 0 {
+		t.Fatalf("expected no pending observations, got %v", pending)
+	}
+	if calls := provider.getCalls(); calls != 3 {
+		t.Fatalf("expected 3 connection attempts, got %d", calls)
+	}
+
+	// deleting a pending observation stops the retries
+	neverProvider := &flakyConnProvider{ConnProvider: s.connProvider, failures: 1 << 30}
+	never := &ServiceObsConfig{ID: "never", ServiceName: "srv2", Topic: "testing.topic", Credentials: "../test/myuser.creds", ConnProvider: neverProvider}
+	if err := om.Set(never); err == nil {
+		t.Fatal("Expected error; got nil")
+	}
+	if err := om.Delete("never"); err != nil {
+		t.Fatalf("Unexpected error deleting pending observation: %s", err)
+	}
+	if pending := om.pendingIDs(); len(pending) != 0 {
+		t.Fatalf("expected no pending observations, got %v", pending)
+	}
+	calls := neverProvider.getCalls()
+	time.Sleep(10 * listenerRetryMaxBackoff)
+	if got := neverProvider.getCalls(); got != calls {
+		t.Fatalf("expected no further connection attempts after delete, got %d", got-calls)
+	}
+}
