@@ -474,7 +474,7 @@ func (sc *StatzCollector) buildDescs() {
 	sc.descs.JetstreamMemstoreReservedUsedBytes = newGaugeVec(newName("jetstream_memstore_reserved_used_bytes"), "Consumption of Account Reservation of jetstream in-memory store in bytes. ", sc.constLabels, sc.jsServerLabels)
 	sc.descs.JetstreamAccounts = newGaugeVec(newName("jetstream_accounts"), "Number of NATS Accounts present on a Jetstream server", sc.constLabels, sc.jsServerLabels)
 	sc.descs.JetstreamHAAssets = newGaugeVec(newName("jetstream_ha_assets"), "Number of HA (R>1) assets used by NATS", sc.constLabels, sc.jsServerLabels)
-	sc.descs.JetstreamAPIRequests = newCounterVec(newName("jetstream_api_requests"), "Number of Jetstream API Requests processed. Value is 0 when server starts", sc.constLabels, sc.jsServerLabels)
+	sc.descs.JetstreamAPIRequests = newCounterVec(newName("jetstream_api_request_total"), "Number of Jetstream API Requests processed. Value is 0 when server starts", sc.constLabels, sc.jsServerLabels)
 	sc.descs.JetstreamAPIPending = newGaugeVec(newName("jetstream_api_pending"), "Number of Jetstream API in the queue waiting to be processed", sc.constLabels, sc.jsServerLabels)
 	sc.descs.JetstreamAPIErrors = newCounterVec(newName("jetstream_api_errors"), "Number of Jetstream API Errors. Value is 0 when server starts", sc.constLabels, sc.jsServerLabels)
 
