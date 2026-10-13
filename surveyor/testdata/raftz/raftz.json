@@ -1,0 +1,98 @@
+{
+  "server": {
+    "name": "n1",
+    "host": "127.0.0.1",
+    "id": "NAAA",
+    "cluster": "C1",
+    "ver": "2.14.5"
+  },
+  "data": {
+    "$SYS": {
+      "_meta_": {
+        "id": "S1Nunr6R",
+        "state": "LEADER",
+        "size": 3,
+        "quorum_needed": 2,
+        "committed": 120,
+        "applied": 120,
+        "ever_had_leader": true,
+        "term": 4,
+        "pterm": 4,
+        "pindex": 118,
+        "system_account": true,
+        "traffic_account": "$SYS",
+        "ipq_proposal_len": 0,
+        "ipq_entry_len": 0,
+        "ipq_resp_len": 0,
+        "ipq_apply_len": 0,
+        "wal": {
+          "messages": 12,
+          "bytes": 3456,
+          "first_seq": 109,
+          "last_seq": 120,
+          "consumer_count": 0
+        },
+        "peers": {}
+      }
+    },
+    "ACC": {
+      "S-IDLE": {
+        "id": "KDzYHAiG",
+        "state": "FOLLOWER",
+        "size": 3,
+        "quorum_needed": 2,
+        "committed": 5000,
+        "applied": 5000,
+        "ever_had_leader": true,
+        "term": 7,
+        "pterm": 7,
+        "pindex": 4980,
+        "system_account": false,
+        "traffic_account": "ACC",
+        "ipq_proposal_len": 0,
+        "ipq_entry_len": 0,
+        "ipq_resp_len": 0,
+        "ipq_apply_len": 0,
+        "wal": {
+          "messages": 20,
+          "bytes": 8192,
+          "first_seq": 4981,
+          "last_seq": 5000,
+          "consumer_count": 0
+        },
+        "peers": {}
+      },
+      "C-BEHIND": {
+        "id": "yrzKKRBu",
+        "state": "CANDIDATE",
+        "size": 3,
+        "quorum_needed": 2,
+        "paused": true,
+        "overrun": true,
+        "overrun_count": 3,
+        "catching_up": true,
+        "observer": true,
+        "committed": 9100,
+        "applied": 9000,
+        "ever_had_leader": true,
+        "term": 7,
+        "pterm": 7,
+        "pindex": 8900,
+        "system_account": false,
+        "traffic_account": "ACC",
+        "ipq_proposal_len": 1,
+        "ipq_entry_len": 2,
+        "ipq_resp_len": 4,
+        "ipq_apply_len": 42,
+        "wal": {
+          "messages": 100,
+          "bytes": 65536,
+          "first_seq": 9001,
+          "last_seq": 9100,
+          "consumer_count": 0
+        },
+        "peers": {}
+      }
+    }
+  }
+}

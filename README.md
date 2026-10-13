@@ -52,6 +52,9 @@ Flags:
       --accounts-detailed                   Export granular per-account bytes and message metrics (NATS_SURVEYOR_ACCOUNTS_DETAILED)
       --gatewayz                            Export gateway metrics (NATS_SURVEYOR_GATEWAYZ)
       --raftz                               Export metalayer Raft group metrics from raftz endpoint (NATS_SURVEYOR_RAFTZ)
+      --raftz-groups                        Export per Raft group metrics from raftz endpoint, requires --raftz (high cardinality) (NATS_SURVEYOR_RAFTZ_GROUPS)
+      --raftz-groups-active-only            Export per Raft group metrics only for groups that are not idle, requires --raftz-groups (NATS_SURVEYOR_RAFTZ_GROUPS_ACTIVE_ONLY)
+      --raftz-account string                Restrict raftz collection to this account, defaults to the system account (NATS_SURVEYOR_RAFTZ_ACCOUNT)
       --jsz string                          Export jsz metrics optionally, one of: all|streams|consumers (NATS_SURVEYOR_JSZ)
       --jsz-limit int                       Limit the number of returned account jsz metrics (NATS_SURVEYOR_JSZ_LIMIT) (default 1024)
       --jsz-leaders-only                    Fetch jsz metrics from stream and consumer leaders only (NATS_SURVEYOR_JSZ_LEADERS_ONLY)
@@ -170,6 +173,69 @@ and picking up `num_pending`, `num_ack_pending` and `num_waiting` from the consu
                 --jsz-leaders-only \
                 --jsz-filter=consumer_num_pending,consumer_num_ack_pending,consumer_num_waiting
 ```
+
+## RAFTZ Metrics
+
+`--raftz` exports the state of the metalayer Raft group (`_meta_`) of every server as
+`nats_core_raftz_meta_committed`, `nats_core_raftz_meta_applied` and `nats_core_raftz_meta_pindex`.
+
+The metalayer is the least loaded Raft group in a cluster: it only carries metadata such as
+stream and consumer create, update and peer assignment. A node that is falling behind
+internally is usually falling behind on the *asset* groups, that is the per stream and per
+consumer Raft groups, while the metalayer stays perfectly current. `--raftz-groups` adds a
+per group family covering those, using the same `server_cluster`, `server_name` and
+`server_id` labels plus `account` and `group`:
+
+```
+nats_core_raftz_group_state                 0 follower, 1 leader, 2 candidate, 3 closed, -1 unknown
+nats_core_raftz_group_size                  peers in the group
+nats_core_raftz_group_quorum_needed         peers needed for quorum
+nats_core_raftz_group_committed             highest committed log entry index
+nats_core_raftz_group_applied               highest applied log entry index
+nats_core_raftz_group_pindex                log entry index at last snapshot
+nats_core_raftz_group_term                  current term
+nats_core_raftz_group_observer              1 if this node is an observer
+nats_core_raftz_group_paused                1 if quorum is paused because this node is too far behind
+nats_core_raftz_group_catching_up           1 if this node is catching up
+nats_core_raftz_group_overrun               1 if committed is too far ahead of applied
+nats_core_raftz_group_overrun_count         counter, times the server decided the group was overrun
+nats_core_raftz_group_ipq_proposal_len      outbound proposals queued
+nats_core_raftz_group_ipq_entry_len         inbound append entries queued
+nats_core_raftz_group_ipq_resp_len          inbound append entry responses queued
+nats_core_raftz_group_ipq_apply_len         committed entries queued for the asset layer to apply
+nats_core_raftz_group_wal_msgs              entries in the write ahead log
+nats_core_raftz_group_wal_bytes             size of the write ahead log
+```
+
+`ipq_apply_len` is the one to watch: it grows when Raft has committed entries but the stream
+or consumer monitor cannot keep up, which is almost always disk or a blocked monitor
+goroutine. `overrun_count` is the server's own verdict that a group got into trouble, and it
+is exported as a counter, so any increase is worth an alert. Everything else is a gauge.
+
+Apply lag is not precomputed, since it is a subtraction in PromQL over the raw gauges:
+
+```
+nats_core_raftz_group_committed - nats_core_raftz_group_applied
+```
+
+### Cardinality
+
+`--raftz-groups` is off by default because it is expensive. Every Raft group of every
+account is exported for every server that hosts a replica of it, which means one series set
+per stream replica and one per consumer replica, times 18 series. A cluster with 500 streams
+at R3 and 5 consumers each is around 9000 groups and roughly 160k series per scrape.
+
+Two options narrow it down:
+
+- `--raftz-account` restricts collection to a single account, which is passed through to the
+  server as the raftz account filter. Note that the metalayer group lives in the system
+  account, so setting this to any other account also stops the `raftz_meta_*` series.
+
+- `--raftz-groups-active-only` exports a group only when it is not idle, that is when it has
+  committed entries waiting to be applied, or the server has flagged it as paused, catching
+  up or overrun. This keeps the healthy majority of groups out of the scrape entirely, at the
+  cost of series that appear and disappear, which breaks `rate()` and `increase()` across the
+  gaps. Use it for capacity reasons, not as the basis for rate based alerting.
 
 ## Docker Compose
 
