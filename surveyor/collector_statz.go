@@ -2433,6 +2433,10 @@ func mapJSStreamDetailToStats(server *server.ServerInfo, accDetail *server.Accou
 	if sts == nil {
 		return nil
 	}
+	consumerCounts := make(map[string]float64, len(sts.jetstreamStreams))
+	for _, s := range sts.jetstreamStreams {
+		consumerCounts[s.streamName] = s.consumerCount
+	}
 	for _, stream := range accDetail.Streams {
 		var streamLeader string
 		if stream.Cluster != nil {
@@ -2452,7 +2456,7 @@ func mapJSStreamDetailToStats(server *server.ServerInfo, accDetail *server.Accou
 			streamBytes:         float64(stream.State.Bytes),
 			streamFirstSeq:      float64(stream.State.FirstSeq),
 			streamLastSeq:       float64(stream.State.LastSeq),
-			streamConsumerCount: float64(stream.State.Consumers),
+			streamConsumerCount: consumerCounts[stream.Name],
 			streamSubjectCount:  float64(stream.State.NumSubjects),
 			streamLeader:        streamLeader,
 			consumerStats:       make([]*consumerStats, 0),
