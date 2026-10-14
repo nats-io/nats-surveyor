@@ -77,7 +77,7 @@
       "pluginVersion": "7.1.1",
       "targets": [
         {
-          "expr": "max(nats_core_gateway_count)",
+          "expr": "count(sum(nats_core_info{server_cluster=~\"$cluster\", server_cluster!=\"\"}) by (server_cluster))",
           "interval": "",
           "legendFormat": "Clusters",
           "refId": "A"
