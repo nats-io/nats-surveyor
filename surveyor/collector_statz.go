@@ -2433,28 +2433,33 @@ func mapJSStreamDetailToStats(server *server.ServerInfo, accDetail *server.Accou
 	if sts == nil {
 		return nil
 	}
+	consumerCounts := make(map[string]float64, len(sts.jetstreamStreams))
+	for _, s := range sts.jetstreamStreams {
+		consumerCounts[s.streamName] = s.consumerCount
+	}
 	for _, stream := range accDetail.Streams {
 		var streamLeader string
 		if stream.Cluster != nil {
 			streamLeader = stream.Cluster.Leader
 		}
 		sas := streamAccountStats{
-			accountID:          accDetail.Id,
-			accountName:        accDetail.Name,
-			serverID:           server.ID,
-			serverName:         server.Name,
-			clusterName:        server.Cluster,
-			streamName:         stream.Name,
-			raftGroup:          stream.RaftGroup,
-			consumerCount:      float64(stream.State.Consumers),
-			replicaCount:       float64(stream.Config.Replicas),
-			streamMessages:     float64(stream.State.Msgs),
-			streamBytes:        float64(stream.State.Bytes),
-			streamFirstSeq:     float64(stream.State.FirstSeq),
-			streamLastSeq:      float64(stream.State.LastSeq),
-			streamSubjectCount: float64(stream.State.NumSubjects),
-			streamLeader:       streamLeader,
-			consumerStats:      make([]*consumerStats, 0),
+			accountID:           accDetail.Id,
+			accountName:         accDetail.Name,
+			serverID:            server.ID,
+			serverName:          server.Name,
+			clusterName:         server.Cluster,
+			streamName:          stream.Name,
+			raftGroup:           stream.RaftGroup,
+			consumerCount:       float64(stream.State.Consumers),
+			replicaCount:        float64(stream.Config.Replicas),
+			streamMessages:      float64(stream.State.Msgs),
+			streamBytes:         float64(stream.State.Bytes),
+			streamFirstSeq:      float64(stream.State.FirstSeq),
+			streamLastSeq:       float64(stream.State.LastSeq),
+			streamConsumerCount: consumerCounts[stream.Name],
+			streamSubjectCount:  float64(stream.State.NumSubjects),
+			streamLeader:        streamLeader,
+			consumerStats:       make([]*consumerStats, 0),
 		}
 
 		for _, consumer := range stream.Consumer {
