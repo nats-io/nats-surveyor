@@ -565,3 +565,12 @@ func TestPollTime(t *testing.T) {
 	}
 
 }
+
+func TestStatzCollector_JetstreamAPIRequestsMetricName(t *testing.T) {
+	sc := NewStatzCollector(nil, nil, 0, 0, 0, false, false, false, false, CollectJszNone, 0, false, nil, "", nil)
+
+	want := "nats_core_jetstream_api_request_total"
+	if got := sc.descs.JetstreamAPIRequests.Name(); got != want {
+		t.Fatalf("JetStream API request counter name = %q, want %q", got, want)
+	}
+}
