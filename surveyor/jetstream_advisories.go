@@ -595,7 +595,7 @@ func (o *jsAdvisoryListener) advisoryHandler(m *nats.Msg) {
 		o.metrics.jsRestoreDuration.WithLabelValues(accountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
 
 	case *advisory.JSSnapshotCreateAdvisoryV1:
-		o.metrics.jsSnapshotSizeCtr.WithLabelValues(accountName, event.Stream).Add(float64(event.BlkSize * event.NumBlks))
+		o.metrics.jsSnapshotSizeCtr.WithLabelValues(accountName, event.Stream).Add(float64(event.State.Bytes))
 
 	case *advisory.JSSnapshotCompleteAdvisoryV1:
 		o.metrics.jsSnapthotDuration.WithLabelValues(accountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
