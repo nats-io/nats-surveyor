@@ -90,6 +90,7 @@ type Options struct {
 	JszLimit             int
 	JszLeadersOnly       bool
 	JszFilters           []JszFilter
+	JSConfigPollInterval time.Duration
 	SysReqPrefix         string
 	Logger               *logrus.Logger    // not exposed by CLI
 	Provider             ConnProvider      // not exposed by CLI
@@ -125,6 +126,7 @@ type Surveyor struct {
 	httpServer          *http.Server
 	jsAdvisoryManager   *JSAdvisoryManager
 	jsAdvisoryFSWatcher *jsAdvisoryFSWatcher
+	jsConfigListener    *jsConfigListener
 	listener            net.Listener
 	logger              *logrus.Logger
 	opts                Options
@@ -157,11 +159,22 @@ func NewSurveyor(opts *Options) (*Surveyor, error) {
 	jsAdvisoryManager := NewJetStreamAdvisoryManager(opts.Provider, opts.Logger, jsAdvisoryMetrics)
 	jsFsWatcher := newJetStreamAdvisoryFSWatcher(opts.Logger, jsAdvisoryManager)
 
+	var configListener *jsConfigListener
+	if opts.JSConfigPollInterval > 0 {
+		jsConfigMetrics := NewJetStreamConfigMetrics(promRegistry, opts.ConstLabels)
+		listener, err := newJetStreamConfigListener(opts.Provider, opts.Logger, jsConfigMetrics, opts.JSConfigPollInterval)
+		if err != nil {
+			return nil, err
+		}
+		configListener = listener
+	}
+
 	return &Surveyor{
 		connProvider:        opts.Provider,
 		openConnections:     make([]Conn, 0),
 		jsAdvisoryManager:   jsAdvisoryManager,
 		jsAdvisoryFSWatcher: jsFsWatcher,
+		jsConfigListener:    configListener,
 		logger:              opts.Logger,
 		opts:                *opts,
 		promRegistry:        promRegistry,
@@ -175,6 +188,9 @@ func (s *Surveyor) MetricInfos() []MetricInfo {
 	infos = append(infos, s.statzC.MetricInfos()...)
 	infos = append(infos, s.serviceObsManager.metrics.MetricInfos()...)
 	infos = append(infos, s.jsAdvisoryManager.metrics.MetricInfos()...)
+	if s.jsConfigListener != nil {
+		infos = append(infos, s.jsConfigListener.metrics.MetricInfos()...)
+	}
 	return infos
 }
 
@@ -452,6 +468,25 @@ func (s *Surveyor) startJetStreamAdvisories() {
 	}
 }
 
+func (s *Surveyor) startJetStreamConfigListener() error {
+	if s.jsConfigListener == nil {
+		return nil
+	}
+	natsCtx := &NatsContext{
+		Credentials: s.opts.Credentials,
+		Nkey:        s.opts.Nkey,
+		JWT:         s.opts.JWT,
+		Seed:        s.opts.Seed,
+		Username:    s.opts.NATSUser,
+		Password:    s.opts.NATSPassword,
+		TokenFile:   s.opts.TokenFile,
+	}
+	if err := s.jsConfigListener.Start(natsCtx); err != nil {
+		return fmt.Errorf("could not start JetStream config poll listener: %w", err)
+	}
+	return nil
+}
+
 func (s *Surveyor) startServiceObservations() {
 	if s.serviceObsManager.IsRunning() {
 		return
@@ -536,6 +571,9 @@ func (s *Surveyor) Start() error {
 
 	s.startServiceObservations()
 	s.startJetStreamAdvisories()
+	if err := s.startJetStreamConfigListener(); err != nil {
+		return err
+	}
 
 	if !s.opts.DisableHTTPServer && s.listener == nil && s.httpServer == nil {
 		if err := s.startHTTP(); err != nil {
@@ -578,6 +616,10 @@ func (s *Surveyor) Stop() {
 
 	s.jsAdvisoryFSWatcher.stop()
 	s.jsAdvisoryManager.Stop()
+
+	if s.jsConfigListener != nil {
+		s.jsConfigListener.Stop()
+	}
 
 	s.connProvider.Close(true)
 	s.running = false
