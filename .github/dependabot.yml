@@ -6,10 +6,14 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
   - package-ecosystem: "docker"
     directory: "cicd"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7
 
 
   # version updates: enabled
@@ -22,3 +26,4 @@ updates:
       semver-major-days: 7
       semver-minor-days: 3
       semver-patch-days: 1
+      default-days: 7
