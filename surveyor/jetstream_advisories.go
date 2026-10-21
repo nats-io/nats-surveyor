@@ -598,7 +598,10 @@ func (o *jsAdvisoryListener) advisoryHandler(m *nats.Msg) {
 		o.metrics.jsSnapshotSizeCtr.WithLabelValues(accountName, event.Stream).Add(float64(event.State.Bytes))
 
 	case *advisory.JSSnapshotCompleteAdvisoryV1:
-		o.metrics.jsSnapthotDuration.WithLabelValues(accountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
+		// Since nats-server 2.15 failed snapshots also send a complete advisory, with Error set.
+		if event.Error == "" {
+			o.metrics.jsSnapthotDuration.WithLabelValues(accountName, event.Stream).Observe(event.End.Sub(event.Start).Seconds())
+		}
 
 	case *advisory.JSConsumerLeaderElectedV1:
 		o.metrics.jsConsumerLeaderElected.WithLabelValues(accountName, event.Stream).Inc()

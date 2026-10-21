@@ -945,7 +945,7 @@ func TestSurveyor_AdvisoriesMetrics(t *testing.T) {
 	assertMetricInfos(t, infos)
 }
 
-func TestJetStream_SnapshotCreateAdvisory(t *testing.T) {
+func TestJetStream_SnapshotAdvisories(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	metrics := NewJetStreamAdvisoryMetrics(registry, nil)
 	adv := &jsAdvisoryListener{
@@ -979,5 +979,33 @@ nats_jetstream_snapshot_size_bytes{account="global",stream="SURVEYOR"} 8192
 	err = ptu.CollectAndCompare(metrics.jsSnapshotSizeCtr, strings.NewReader(expected))
 	if err != nil {
 		t.Fatalf("metrics failed: %s", err)
+	}
+
+	// A failed snapshot sends a complete advisory with Error set, which must not be timed.
+	complete := func(snapshotErr string) {
+		data, err := json.Marshal(&server.JSSnapshotCompleteAdvisory{
+			TypedEvent: server.TypedEvent{
+				Type: server.JSSnapshotCompleteAdvisoryType,
+				ID:   "id",
+				Time: time.Now().UTC(),
+			},
+			Stream: "SURVEYOR",
+			Start:  time.Now().Add(-time.Second),
+			End:    time.Now(),
+			Error:  snapshotErr,
+		})
+		if err != nil {
+			t.Fatalf("could not marshal advisory: %s", err)
+		}
+		adv.advisoryHandler(&nats.Msg{Subject: server.JSAdvisoryStreamSnapshotCompletePre + ".SURVEYOR", Data: data})
+	}
+
+	complete("snapshot failed")
+	if n := ptu.CollectAndCount(metrics.jsSnapthotDuration); n != 0 {
+		t.Fatalf("expected no snapshot duration for a failed snapshot, got %d series", n)
+	}
+	complete("")
+	if n := ptu.CollectAndCount(metrics.jsSnapthotDuration); n != 1 {
+		t.Fatalf("expected a snapshot duration for a completed snapshot, got %d series", n)
 	}
 }
