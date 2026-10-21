@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
+	"github.com/sirupsen/logrus"
 
 	"github.com/nats-io/jsm.go"
 	st "github.com/nats-io/nats-surveyor/test"
@@ -941,4 +943,69 @@ func TestSurveyor_AdvisoriesMetrics(t *testing.T) {
 
 	infos := metrics.MetricInfos()
 	assertMetricInfos(t, infos)
+}
+
+func TestJetStream_SnapshotAdvisories(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	metrics := NewJetStreamAdvisoryMetrics(registry, nil)
+	adv := &jsAdvisoryListener{
+		config:  &JSAdvisoryConfig{AccountName: "global"},
+		logger:  logrus.New(),
+		metrics: metrics,
+	}
+
+	// Build the advisory with the server's own type so the test follows the wire format.
+	data, err := json.Marshal(&server.JSSnapshotCreateAdvisory{
+		TypedEvent: server.TypedEvent{
+			Type: server.JSSnapshotCreatedAdvisoryType,
+			ID:   "id",
+			Time: time.Now().UTC(),
+		},
+		Stream: "SURVEYOR",
+		State:  server.StreamState{Msgs: 10, Bytes: 4096},
+	})
+	if err != nil {
+		t.Fatalf("could not marshal advisory: %s", err)
+	}
+
+	adv.advisoryHandler(&nats.Msg{Subject: server.JSAdvisoryStreamSnapshotCreatePre + ".SURVEYOR", Data: data})
+	adv.advisoryHandler(&nats.Msg{Subject: server.JSAdvisoryStreamSnapshotCreatePre + ".SURVEYOR", Data: data})
+
+	expected := `
+# HELP nats_jetstream_snapshot_size_bytes The size of snapshots being created
+# TYPE nats_jetstream_snapshot_size_bytes counter
+nats_jetstream_snapshot_size_bytes{account="global",stream="SURVEYOR"} 8192
+`
+	err = ptu.CollectAndCompare(metrics.jsSnapshotSizeCtr, strings.NewReader(expected))
+	if err != nil {
+		t.Fatalf("metrics failed: %s", err)
+	}
+
+	// A failed snapshot sends a complete advisory with Error set, which must not be timed.
+	complete := func(snapshotErr string) {
+		data, err := json.Marshal(&server.JSSnapshotCompleteAdvisory{
+			TypedEvent: server.TypedEvent{
+				Type: server.JSSnapshotCompleteAdvisoryType,
+				ID:   "id",
+				Time: time.Now().UTC(),
+			},
+			Stream: "SURVEYOR",
+			Start:  time.Now().Add(-time.Second),
+			End:    time.Now(),
+			Error:  snapshotErr,
+		})
+		if err != nil {
+			t.Fatalf("could not marshal advisory: %s", err)
+		}
+		adv.advisoryHandler(&nats.Msg{Subject: server.JSAdvisoryStreamSnapshotCompletePre + ".SURVEYOR", Data: data})
+	}
+
+	complete("snapshot failed")
+	if n := ptu.CollectAndCount(metrics.jsSnapthotDuration); n != 0 {
+		t.Fatalf("expected no snapshot duration for a failed snapshot, got %d series", n)
+	}
+	complete("")
+	if n := ptu.CollectAndCount(metrics.jsSnapthotDuration); n != 1 {
+		t.Fatalf("expected a snapshot duration for a completed snapshot, got %d series", n)
+	}
 }
