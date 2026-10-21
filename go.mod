@@ -2,6 +2,8 @@ module github.com/nats-io/nats-surveyor
 
 go 1.26.0
 
+toolchain go1.27.3
+
 require (
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
 	github.com/fsnotify/fsnotify v1.10.1
