@@ -857,10 +857,13 @@ func (w *jsAdvisoryFSWatcher) stop() {
 	w.watcher = nil
 }
 
+// startAdvisoriesInDir logs paths that fail to load instead of returning the
+// error, so one bad file or directory does not stop the rest from loading.
 func (w *jsAdvisoryFSWatcher) startAdvisoriesInDir() fs.WalkDirFunc {
 	return func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			w.logger.Warnf("could not read advisory path: %s, error: %v", path, err)
+			return nil
 		}
 
 		// skip directories starting with '..'
@@ -883,10 +886,14 @@ func (w *jsAdvisoryFSWatcher) startAdvisoriesInDir() fs.WalkDirFunc {
 
 		adv, err := NewJetStreamAdvisoryConfigFromFile(path)
 		if err != nil {
-			return fmt.Errorf("could not create advisory from path: %s, error: %v", path, err)
+			w.logger.Warnf("could not create advisory from path: %s, error: %v", path, err)
+			return nil
 		}
 
-		return w.am.Set(adv)
+		if err := w.am.Set(adv); err != nil {
+			w.logger.Warn(err)
+		}
+		return nil
 	}
 }
 

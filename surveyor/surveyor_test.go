@@ -19,11 +19,14 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -35,6 +38,7 @@ import (
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
 	"github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 )
 
 // Testing constants
@@ -859,6 +863,138 @@ func TestSurveyor_Concurrent(t *testing.T) {
 			t.Fatalf("Expected that singleflight should have prevented concurrent polling,"+
 				" and all uptime values to be the same. "+
 				"Got baseVal: %v. current value: %v (GOMAXPROCS=%d)", baseVal, v, runtime.GOMAXPROCS(0))
+		}
+	}
+}
+
+// A config file or directory that cannot be loaded must not stop the rest of
+// the config directory from being loaded and watched.
+func TestSurveyor_ConfigDirSkipsFailingEntries(t *testing.T) {
+	js := st.NewJetStreamServer(t)
+	defer js.Shutdown()
+
+	kinds := []struct {
+		name       string
+		goodConfig string
+		badAuth    string
+		setDir     func(opts *Options, dir string)
+		loaded     func(s *Surveyor) []string
+	}{
+		{
+			name:       "advisories",
+			goodConfig: `{"name":"a","username":"a","password":"a"}`,
+			badAuth:    `{"name":"z","username":"z","password":"z"}`,
+			setDir:     func(opts *Options, dir string) { opts.JetStreamConfigDir = dir },
+			loaded: func(s *Surveyor) []string {
+				return slices.Sorted(maps.Keys(s.JetStreamAdvisoryManager().ConfigMap()))
+			},
+		},
+		{
+			name:       "observations",
+			goodConfig: `{"name":"a","topic":"a.topic","username":"a","password":"a"}`,
+			badAuth:    `{"name":"z","topic":"z.topic","username":"z","password":"z"}`,
+			setDir:     func(opts *Options, dir string) { opts.ObservationConfigDir = dir },
+			loaded: func(s *Surveyor) []string {
+				return slices.Sorted(maps.Keys(s.ServiceObservationManager().ConfigMap()))
+			},
+		},
+	}
+
+	writeConfig := func(t *testing.T, path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatalf("create config dir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+	}
+
+	// each failing entry sorts before the valid ones, so the walk reaches it first
+	failures := []struct {
+		name   string
+		create func(t *testing.T, dir, badAuth string)
+	}{
+		{
+			name: "invalid config",
+			create: func(t *testing.T, dir, _ string) {
+				writeConfig(t, filepath.Join(dir, "a_failing.json"), `{}`)
+			},
+		},
+		{
+			name: "listener fails to start",
+			create: func(t *testing.T, dir, badAuth string) {
+				writeConfig(t, filepath.Join(dir, "a_failing.json"), badAuth)
+			},
+		},
+		{
+			name: "unreadable directory",
+			create: func(t *testing.T, dir, _ string) {
+				unreadable := filepath.Join(dir, "a_failing")
+				if err := os.Mkdir(unreadable, 0o000); err != nil {
+					t.Fatalf("create unreadable dir: %v", err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(unreadable, 0o700) })
+				if _, err := os.ReadDir(unreadable); err == nil {
+					t.Skip("directory with mode 000 is readable, e.g. when running as root")
+				}
+			},
+		},
+	}
+
+	for _, kind := range kinds {
+		for _, failure := range failures {
+			t.Run(kind.name+"/"+failure.name, func(t *testing.T) {
+				dir := t.TempDir()
+				failure.create(t, dir, kind.badAuth)
+				want := []string{
+					filepath.Join(dir, "b_good.json"),
+					filepath.Join(dir, "c_sub", "d_good.json"),
+				}
+				for _, path := range want {
+					writeConfig(t, path, kind.goodConfig)
+				}
+
+				logger, logs := logtest.NewNullLogger()
+				opts := getTestOptions()
+				opts.URLs = js.ClientURL()
+				opts.DisableHTTPServer = true
+				opts.Logger = logger
+				kind.setDir(opts, dir)
+				s, err := NewSurveyor(opts)
+				if err != nil {
+					t.Fatalf("couldn't create surveyor: %v", err)
+				}
+				if err = s.Start(); err != nil {
+					t.Fatalf("start error: %v", err)
+				}
+				defer s.Stop()
+
+				if got := kind.loaded(s); !slices.Equal(got, want) {
+					t.Fatalf("loaded %v, want %v", got, want)
+				}
+				failing := filepath.Join(dir, "a_failing")
+				if !slices.ContainsFunc(logs.AllEntries(), func(e *logrus.Entry) bool {
+					return e.Level == logrus.WarnLevel && strings.Contains(e.Message, failing)
+				}) {
+					t.Errorf("no warning logged for %s", failing)
+				}
+
+				// the subdirectory walked after the failing entry is watched
+				added := filepath.Join(dir, "c_sub", "e_good.json")
+				// rename into place so the watcher never reads a partly written file
+				writeConfig(t, added+".tmp", kind.goodConfig)
+				if err := os.Rename(added+".tmp", added); err != nil {
+					t.Fatalf("rename config: %v", err)
+				}
+				want = append(want, added)
+				eventually(t, func() (string, error) {
+					if got := kind.loaded(s); !slices.Equal(got, want) {
+						return "waiting for config written after start", fmt.Errorf("loaded %v, want %v", got, want)
+					}
+					return "", nil
+				}, 5*time.Second, 50*time.Millisecond)
+			})
 		}
 	}
 }
