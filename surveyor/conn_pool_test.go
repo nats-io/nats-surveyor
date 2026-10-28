@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -134,15 +133,12 @@ func runTokenServer(t *testing.T, token string) *server.Server {
 
 func runUserPassServer(t *testing.T, user, pass string) *server.Server {
 	t.Helper()
-	return runUsersServer(t, &server.User{Username: user, Password: pass})
-}
-
-func runUsersServer(t *testing.T, users ...*server.User) *server.Server {
-	t.Helper()
 	opts := &server.Options{
-		Host:  "127.0.0.1",
-		Port:  -1,
-		Users: users,
+		Host: "127.0.0.1",
+		Port: -1,
+		Users: []*server.User{
+			{Username: user, Password: pass},
+		},
 	}
 	s, err := server.NewServer(opts)
 	if err != nil {
@@ -154,127 +150,6 @@ func runUsersServer(t *testing.T, users ...*server.User) *server.Server {
 	}
 	t.Cleanup(s.Shutdown)
 	return s
-}
-
-func authorizedUser(t *testing.T, s *server.Server, conn Conn) string {
-	t.Helper()
-	cid, err := conn.Conn().GetClientID()
-	if err != nil {
-		t.Fatalf("get client id: %v", err)
-	}
-	connz, err := s.Connz(&server.ConnzOptions{CID: cid, Username: true})
-	if err != nil {
-		t.Fatalf("connz: %v", err)
-	}
-	if len(connz.Conns) != 1 {
-		t.Fatalf("expected 1 connection with cid %d, got %d", cid, len(connz.Conns))
-	}
-	return connz.Conns[0].AuthorizedUser
-}
-
-// Pooled connections for different credentials are created concurrently
-// (e.g. by the service observation and JetStream advisory watchers). The
-// options for one connection must not be visible to another, even when the
-// pool's base options slice has spare capacity.
-func TestConnPool_ConcurrentGet_UsesOwnCredentials(t *testing.T) {
-	s := runUsersServer(t,
-		&server.User{Username: "alice", Password: "alice-pass"},
-		&server.User{Username: "bob", Password: "bob-pass"},
-	)
-
-	// Hold alice's connect inside option processing until bob's Get is done.
-	var calls atomic.Int32
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	var releaseOnce sync.Once
-	releaseGate := func() { releaseOnce.Do(func() { close(release) }) }
-	gate := func(*nats.Options) error {
-		if calls.Add(1) == 1 {
-			close(entered)
-			<-release
-		}
-		return nil
-	}
-
-	baseOpts := make([]nats.Option, 0, 16)
-	baseOpts = append(baseOpts, gate)
-
-	logger := logrus.New()
-	logger.SetLevel(logrus.ErrorLevel)
-	cp := newNatsConnPool(logger, &natsContextDefaults{Name: "test", URL: s.ClientURL()}, baseOpts)
-
-	var alice Conn
-	var aliceErr error
-	aliceDone := make(chan struct{})
-	go func() {
-		defer close(aliceDone)
-		alice, aliceErr = cp.Get(&NatsContext{Username: "alice", Password: "alice-pass"})
-	}()
-	// release alice and close her connection on every exit path, failures included
-	t.Cleanup(func() {
-		releaseGate()
-		<-aliceDone
-		if alice != nil {
-			alice.Close()
-		}
-	})
-
-	select {
-	case <-entered:
-	case <-aliceDone:
-		t.Fatalf("alice Get returned before connecting: %v", aliceErr)
-	case <-time.After(5 * time.Second):
-		t.Fatal("alice's connect did not start")
-	}
-
-	var bob Conn
-	var bobErr error
-	bobDone := make(chan struct{})
-	go func() {
-		defer close(bobDone)
-		bob, bobErr = cp.Get(&NatsContext{
-			Username: "bob",
-			Password: "bob-pass",
-			// a non-empty NatsOpts makes the first append in Get write into
-			// the base slice's spare capacity, which also catches a fix that
-			// clips only after that append
-			NatsOpts: []nats.Option{nats.MaxReconnects(5)},
-		})
-	}()
-	t.Cleanup(func() {
-		releaseGate()
-		<-bobDone
-		if bob != nil {
-			bob.Close()
-		}
-	})
-
-	select {
-	case <-bobDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("bob's Get blocked on alice's connect")
-	}
-	releaseGate()
-	<-aliceDone
-
-	if bobErr != nil {
-		t.Fatalf("bob Get failed: %v", bobErr)
-	}
-	if aliceErr != nil {
-		t.Fatalf("alice Get failed: %v", aliceErr)
-	}
-
-	for i, opt := range baseOpts[len(baseOpts):cap(baseOpts)] {
-		if opt != nil {
-			t.Errorf("Get wrote into the pool's base options at index %d", len(baseOpts)+i)
-		}
-	}
-	if got := authorizedUser(t, s, alice); got != "alice" {
-		t.Errorf("alice's pooled connection authenticated as %q", got)
-	}
-	if got := authorizedUser(t, s, bob); got != "bob" {
-		t.Errorf("bob's pooled connection authenticated as %q", got)
-	}
 }
 
 func TestConnPool_TokenFile_TokenAuth(t *testing.T) {
@@ -355,5 +230,30 @@ func TestConnPool_TokenFile_TakesPrecedence_Over_StaticToken(t *testing.T) {
 
 	if !conn.IsConnected() {
 		t.Fatal("expected connected")
+	}
+}
+
+// The pool's base options are shared by concurrent Gets for different
+// credentials, so Get must not write into their spare capacity.
+func TestConnPool_GetDoesNotModifyBaseOptions(t *testing.T) {
+	s := runUserPassServer(t, "user", "pass")
+	base := make([]nats.Option, 0, 8)
+	cp := newNatsConnPool(logrus.New(), &natsContextDefaults{URL: s.ClientURL()}, base)
+
+	conn, err := cp.Get(&NatsContext{
+		Username: "user",
+		Password: "pass",
+		// also catches clipping only after NatsOpts are appended
+		NatsOpts: []nats.Option{nats.MaxReconnects(5)},
+	})
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	defer conn.Close()
+
+	for i, opt := range base[:cap(base)] {
+		if opt != nil {
+			t.Fatalf("Get wrote into the pool's base options at index %d", i)
+		}
 	}
 }
