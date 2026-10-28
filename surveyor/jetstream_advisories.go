@@ -857,8 +857,7 @@ func (w *jsAdvisoryFSWatcher) stop() {
 	w.watcher = nil
 }
 
-// startAdvisoriesInDir logs paths that fail to load instead of returning the
-// error, so one bad file or directory does not stop the rest from loading.
+// startAdvisoriesInDir logs entries that fail to load and continues the walk.
 func (w *jsAdvisoryFSWatcher) startAdvisoriesInDir() fs.WalkDirFunc {
 	return func(path string, info fs.DirEntry, err error) error {
 		if err != nil {

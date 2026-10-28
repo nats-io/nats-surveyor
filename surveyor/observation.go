@@ -630,8 +630,7 @@ func (w *serviceObsFSWatcher) stop() {
 	w.watcher = nil
 }
 
-// startObservationsInDir logs paths that fail to load instead of returning
-// the error, so one bad file or directory does not stop the rest from loading.
+// startObservationsInDir logs entries that fail to load and continues the walk.
 func (w *serviceObsFSWatcher) startObservationsInDir() fs.WalkDirFunc {
 	return func(path string, info fs.DirEntry, err error) error {
 		if err != nil {

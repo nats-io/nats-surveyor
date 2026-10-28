@@ -445,7 +445,6 @@ func (s *Surveyor) startJetStreamAdvisories() {
 		s.logger.Warnf("could not start JetStream advisories filesystem watcher: %s", err)
 	}
 
-	// the walk logs entries that fail to load and never returns an error
 	_ = filepath.WalkDir(dir, s.jsAdvisoryFSWatcher.startAdvisoriesInDir())
 }
 
@@ -476,7 +475,6 @@ func (s *Surveyor) startServiceObservations() {
 		s.logger.Warnf("could not start service observations filesystem watcher: %s", err)
 	}
 
-	// the walk logs entries that fail to load and never returns an error
 	_ = filepath.WalkDir(dir, s.serviceObsFSWatcher.startObservationsInDir())
 }
 
