@@ -214,8 +214,10 @@ func newSurveyorConnPool(opts *Options, registry *prometheus.Registry) *natsConn
 				opts.Logger.Warnf("Error: name=%q err=%v", c.Opts.Name, err)
 			}
 		}),
-		//TODO: this should be -1, right?
-		nats.MaxReconnects(10240),
+		// Nothing replaces a closed pooled connection, so never give up on one,
+		// not even on repeated auth errors (e.g. a rolled back password change).
+		nats.MaxReconnects(-1),
+		nats.IgnoreAuthErrorAbort(),
 	)
 
 	if opts.TLSFirst {
@@ -492,7 +494,7 @@ func (s *Surveyor) Start() error {
 	defer s.Unlock()
 
 	if s.running {
-		if s.conn != nil && s.conn.IsConnected() {
+		if s.conn != nil && !s.conn.IsClosed() {
 			// already running
 			return nil
 		}
@@ -570,6 +572,11 @@ func (s *Surveyor) Stop() {
 
 	s.jsAdvisoryFSWatcher.stop()
 	s.jsAdvisoryManager.Stop()
+
+	if s.conn != nil {
+		s.conn.Close()
+		s.conn = nil
+	}
 
 	s.connProvider.Close(true)
 	s.running = false

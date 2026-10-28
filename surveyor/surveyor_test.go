@@ -33,8 +33,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats-server/v2/server"
 	st "github.com/nats-io/nats-surveyor/test"
 	"github.com/nats-io/nats.go"
+	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
@@ -230,11 +232,124 @@ func TestSurveyor_StartTwice(t *testing.T) {
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
+	s.Lock()
+	statzConn := s.conn.Conn()
+	s.Unlock()
 	s.Stop()
+	if !statzConn.IsClosed() {
+		t.Fatal("Stop left the statz connection open")
+	}
 	if err = s.Start(); err != nil {
 		t.Fatalf("second start error: %v", err)
 	}
 	s.Stop()
+}
+
+// The statz connection never gives up reconnecting, so starting a running
+// Surveyor must keep it rather than replace it.
+func TestSurveyor_StartWhileReconnecting(t *testing.T) {
+	ns := st.NewSingleServer(t)
+	defer ns.Shutdown()
+
+	opts := getTestOptions()
+	opts.URLs = ns.ClientURL()
+	opts.DisableHTTPServer = true
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+	s.Lock()
+	statzConn := s.conn.Conn()
+	s.Unlock()
+
+	ns.Shutdown()
+	eventually(t, func() (string, error) {
+		if statzConn.IsConnected() {
+			return "waiting for disconnect", fmt.Errorf("status %v", statzConn.Status())
+		}
+		return "", nil
+	}, 5*time.Second, 10*time.Millisecond)
+	if err = s.Start(); err != nil {
+		t.Fatalf("start while reconnecting: %v", err)
+	}
+	if statzConn.IsClosed() {
+		t.Fatal("Start closed the reconnecting statz connection")
+	}
+}
+
+// A password rotated on the server and rolled back makes it reject the
+// credentials for a while. Nothing replaces a closed pooled connection, so it
+// must keep retrying.
+func TestSurveyor_PooledConnSurvivesAuthorizationViolation(t *testing.T) {
+	confFile := filepath.Join(t.TempDir(), "server.conf")
+	writeConf := func(pass string) {
+		t.Helper()
+		conf := fmt.Sprintf("listen: 127.0.0.1:-1\nauthorization { users: [ { user: app, password: %q } ] }\n", pass)
+		if err := os.WriteFile(confFile, []byte(conf), 0o600); err != nil {
+			t.Fatalf("write server config: %v", err)
+		}
+	}
+	writeConf("s3cret")
+	serverOpts, err := server.ProcessConfigFile(confFile)
+	if err != nil {
+		t.Fatalf("process server config: %v", err)
+	}
+	serverOpts.NoLog, serverOpts.NoSigs = true, true
+	ns, err := server.NewServer(serverOpts)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	go ns.Start()
+	if !ns.ReadyForConnections(10 * time.Second) {
+		t.Fatal("server not ready")
+	}
+	defer ns.Shutdown()
+	reload := func(pass string) {
+		t.Helper()
+		writeConf(pass)
+		if err := ns.Reload(); err != nil {
+			t.Fatalf("reload server: %v", err)
+		}
+	}
+
+	opts := getTestOptions()
+	opts.URLs = ns.ClientURL()
+	opts.NATSOpts = []nats.Option{nats.ReconnectWait(50 * time.Millisecond)}
+	conn, err := newSurveyorConnPool(opts, prometheus.NewRegistry()).Get(&NatsContext{Username: "app", Password: "s3cret"})
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	defer conn.Close()
+	nc := conn.Conn()
+	if nc.Opts.MaxReconnect != -1 {
+		t.Fatalf("MaxReconnect = %d, want -1", nc.Opts.MaxReconnect)
+	}
+
+	reload("rotated")
+	eventually(t, func() (string, error) {
+		if nc.IsConnected() {
+			return "waiting for the server to reject the credentials", fmt.Errorf("status %v", nc.Status())
+		}
+		return "", nil
+	}, 5*time.Second, 10*time.Millisecond)
+	// without IgnoreAuthErrorAbort nats.go closes on the second rejection,
+	// within one ReconnectWait plus jitter
+	time.Sleep(time.Second)
+	if nc.IsClosed() {
+		t.Fatalf("connection closed while credentials were rejected: %v", nc.LastError())
+	}
+
+	reload("s3cret")
+	eventually(t, func() (string, error) {
+		if !nc.IsConnected() {
+			return "waiting for reconnect", fmt.Errorf("status %v", nc.Status())
+		}
+		return "", nil
+	}, 5*time.Second, 10*time.Millisecond)
 }
 
 func TestSurveyor_Account(t *testing.T) {
