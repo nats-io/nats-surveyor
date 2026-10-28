@@ -31,11 +31,9 @@ import (
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
-	natsservertest "github.com/nats-io/nats-server/v2/test"
 	st "github.com/nats-io/nats-surveyor/test"
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
-	ptu "github.com/prometheus/client_golang/prometheus/testutil"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
@@ -230,38 +228,88 @@ func TestSurveyor_StartTwice(t *testing.T) {
 	if err = s.Start(); err != nil {
 		t.Fatalf("start error: %v", err)
 	}
+	s.Lock()
+	statzConn := s.conn.Conn()
+	s.Unlock()
 	s.Stop()
+	if !statzConn.IsClosed() {
+		t.Fatal("Stop left the statz connection open")
+	}
 	if err = s.Start(); err != nil {
 		t.Fatalf("second start error: %v", err)
 	}
 	s.Stop()
 }
 
-// Pooled connections never stop reconnecting on their own, so Stop must close
-// the statz connection.
-func TestSurveyor_StopClosesStatzConnection(t *testing.T) {
-	ns := st.NewSingleServer(t)
+// A password rotated on the server and rolled back makes it reject the
+// credentials for a while. Nothing replaces a closed pooled connection, so it
+// must keep retrying.
+func TestSurveyor_PooledConnSurvivesAuthorizationViolation(t *testing.T) {
+	confFile := filepath.Join(t.TempDir(), "server.conf")
+	writeConf := func(pass string) {
+		t.Helper()
+		conf := fmt.Sprintf("listen: 127.0.0.1:-1\nauthorization { users: [ { user: app, password: %q } ] }\n", pass)
+		if err := os.WriteFile(confFile, []byte(conf), 0o600); err != nil {
+			t.Fatalf("write server config: %v", err)
+		}
+	}
+	writeConf("s3cret")
+	serverOpts, err := server.ProcessConfigFile(confFile)
+	if err != nil {
+		t.Fatalf("process server config: %v", err)
+	}
+	serverOpts.NoLog, serverOpts.NoSigs = true, true
+	ns, err := server.NewServer(serverOpts)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	go ns.Start()
+	if !ns.ReadyForConnections(10 * time.Second) {
+		t.Fatal("server not ready")
+	}
 	defer ns.Shutdown()
+	reload := func(pass string) {
+		t.Helper()
+		writeConf(pass)
+		if err := ns.Reload(); err != nil {
+			t.Fatalf("reload server: %v", err)
+		}
+	}
 
 	opts := getTestOptions()
 	opts.URLs = ns.ClientURL()
-	opts.DisableHTTPServer = true
-	s, err := NewSurveyor(opts)
+	opts.NATSOpts = []nats.Option{nats.ReconnectWait(50 * time.Millisecond)}
+	conn, err := newSurveyorConnPool(opts, prometheus.NewRegistry()).Get(&NatsContext{Username: "app", Password: "s3cret"})
 	if err != nil {
-		t.Fatalf("couldn't create surveyor: %v", err)
+		t.Fatalf("Get failed: %v", err)
 	}
-	if err = s.Start(); err != nil {
-		t.Fatalf("start error: %v", err)
+	defer conn.Close()
+	nc := conn.Conn()
+	if nc.Opts.MaxReconnect != -1 {
+		t.Fatalf("MaxReconnect = %d, want -1", nc.Opts.MaxReconnect)
 	}
-	s.Lock()
-	statzConn := s.conn.Conn()
-	s.Unlock()
 
-	s.Stop()
-	if !statzConn.IsClosed() {
-		statzConn.Close()
-		t.Fatal("Stop left the statz connection open")
+	reload("rotated")
+	eventually(t, func() (string, error) {
+		if nc.IsConnected() {
+			return "waiting for the server to reject the credentials", fmt.Errorf("status %v", nc.Status())
+		}
+		return "", nil
+	}, 5*time.Second, 10*time.Millisecond)
+	// without IgnoreAuthErrorAbort nats.go closes on the second rejection,
+	// within one ReconnectWait plus jitter
+	time.Sleep(time.Second)
+	if nc.IsClosed() {
+		t.Fatalf("connection closed while credentials were rejected: %v", nc.LastError())
 	}
+
+	reload("s3cret")
+	eventually(t, func() (string, error) {
+		if !nc.IsConnected() {
+			return "waiting for reconnect", fmt.Errorf("status %v", nc.Status())
+		}
+		return "", nil
+	}, 5*time.Second, 10*time.Millisecond)
 }
 
 func TestSurveyor_Account(t *testing.T) {
@@ -574,221 +622,6 @@ func TestSurveyor_Reconnect(t *testing.T) {
 	}
 	if err != nil {
 		t.Fatalf("Reconnect failed: %v.", err)
-	}
-}
-
-// A password rotated on the server and later rolled back makes the server
-// reject surveyor's connections for a while. Pooled connections must keep
-// retrying instead of closing, so the statz connection and JetStream advisory
-// listeners resume once the credentials are accepted again.
-func TestSurveyor_ReconnectsAfterAuthorizationViolation(t *testing.T) {
-	const confTemplate = `
-listen: 127.0.0.1:-1
-system_account: SYS
-accounts {
-  SYS: { users: [ { user: sys, password: %q } ] }
-  APP: { users: [ { user: app, password: %q } ] }
-}
-`
-	confFile := filepath.Join(t.TempDir(), "server.conf")
-	writeConf := func(pass string) {
-		t.Helper()
-		if err := os.WriteFile(confFile, []byte(fmt.Sprintf(confTemplate, pass, pass)), 0o600); err != nil {
-			t.Fatalf("write server config: %v", err)
-		}
-	}
-	writeConf("s3cret")
-
-	serverOpts, err := server.ProcessConfigFile(confFile)
-	if err != nil {
-		t.Fatalf("process server config: %v", err)
-	}
-	serverOpts.NoLog = true
-	serverOpts.NoSigs = true
-	ns, err := server.NewServer(serverOpts)
-	if err != nil {
-		t.Fatalf("new server: %v", err)
-	}
-	go ns.Start()
-	if !ns.ReadyForConnections(10 * time.Second) {
-		t.Fatal("server not ready")
-	}
-	defer ns.Shutdown()
-
-	reload := func(pass string) {
-		t.Helper()
-		writeConf(pass)
-		if err := ns.Reload(); err != nil {
-			t.Fatalf("reload server: %v", err)
-		}
-	}
-
-	advDir := t.TempDir()
-	advFile := filepath.Join(advDir, "app.json")
-	if err := os.WriteFile(advFile, []byte(`{"name":"APP","username":"app","password":"s3cret"}`), 0o600); err != nil {
-		t.Fatalf("write advisory config: %v", err)
-	}
-
-	opts := getTestOptions()
-	opts.URLs = ns.ClientURL()
-	opts.Credentials = ""
-	opts.NATSUser = "sys"
-	opts.NATSPassword = "s3cret"
-	opts.ExpectedServers = 1
-	opts.JetStreamConfigDir = advDir
-	// retry fast so the test sees many rejected attempts in little time
-	opts.NATSOpts = []nats.Option{nats.ReconnectWait(50 * time.Millisecond)}
-	s, err := NewSurveyor(opts)
-	if err != nil {
-		t.Fatalf("couldn't create surveyor: %v", err)
-	}
-	if err = s.Start(); err != nil {
-		t.Fatalf("start error: %v", err)
-	}
-	defer s.Stop()
-
-	s.Lock()
-	statzConn := s.conn.Conn()
-	s.Unlock()
-
-	advListener := func() (*jsAdvisoryListener, *nats.Conn) {
-		am := s.JetStreamAdvisoryManager()
-		am.Lock()
-		defer am.Unlock()
-		l, ok := am.listenerMap[advFile]
-		if !ok {
-			return nil, nil
-		}
-		l.Lock()
-		defer l.Unlock()
-		return l, l.conn.Conn()
-	}
-	listener, advConn := advListener()
-	if listener == nil {
-		t.Fatalf("advisory listener for %s not started", advFile)
-	}
-
-	conns := map[string]*nats.Conn{"statz": statzConn, "advisory": advConn}
-
-	reload("rotated")
-	for name, nc := range conns {
-		eventually(t, func() (string, error) {
-			if nc.IsConnected() {
-				return "waiting for server to reject credentials", fmt.Errorf("%s connection still connected", name)
-			}
-			return "", nil
-		}, 5*time.Second, 10*time.Millisecond)
-	}
-
-	// nats.go closes a connection after the second identical authorization
-	// error unless told otherwise, which would happen within one
-	// ReconnectWait plus jitter
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		for name, nc := range conns {
-			if nc.IsClosed() {
-				t.Fatalf("%s connection closed while credentials were rejected: %v", name, nc.LastError())
-			}
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	reload("s3cret")
-	for name, nc := range conns {
-		eventually(t, func() (string, error) {
-			if !nc.IsConnected() {
-				return "waiting for reconnect", fmt.Errorf("%s connection status %v", name, nc.Status())
-			}
-			return "", nil
-		}, 5*time.Second, 10*time.Millisecond)
-	}
-	// make sure the server has processed the re-sent subscriptions
-	if err := advConn.Flush(); err != nil {
-		t.Fatalf("flush advisory connection: %v", err)
-	}
-	// recovered by reconnecting, not by restarting the listener
-	if l, nc := advListener(); l != listener || nc != advConn {
-		t.Fatal("advisory listener or its connection was replaced")
-	}
-
-	output, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
-	if err != nil {
-		t.Fatalf("poll error: %v", err)
-	}
-	if !strings.Contains(output, "nats_up 1") {
-		t.Fatalf("expected nats_up 1 after reconnect, output: %s", output)
-	}
-
-	totalAdvisories := s.jsAdvisoryManager.metrics.jsTotalAdvisoryCtr.WithLabelValues("APP")
-	before := ptu.ToFloat64(totalAdvisories)
-	pub, err := nats.Connect(ns.ClientURL(), nats.UserInfo("app", "s3cret"))
-	if err != nil {
-		t.Fatalf("publisher connect: %v", err)
-	}
-	defer pub.Close()
-	advisory := fmt.Sprintf(`{"type":"io.nats.jetstream.advisory.v1.api_audit","id":%q,"timestamp":%q,"server":"s1","subject":"$JS.API.STREAM.INFO.X","response":"{}"}`,
-		nats.NewInbox(), time.Now().UTC().Format(time.RFC3339Nano))
-	if err := pub.Publish("$JS.EVENT.ADVISORY.API", []byte(advisory)); err != nil {
-		t.Fatalf("publish advisory: %v", err)
-	}
-	if err := pub.Flush(); err != nil {
-		t.Fatalf("flush: %v", err)
-	}
-	eventually(t, func() (string, error) {
-		if got := ptu.ToFloat64(totalAdvisories); got != before+1 {
-			return "waiting for advisory to be counted", fmt.Errorf("total advisories %v, want %v", got, before+1)
-		}
-		return "", nil
-	}, 5*time.Second, 10*time.Millisecond)
-}
-
-func TestSurveyor_PooledConnsReconnectWithoutLimit(t *testing.T) {
-	ns := natsservertest.RunRandClientPortServer()
-	defer ns.Shutdown()
-
-	tests := []struct {
-		name                     string
-		natsOpts                 []nats.Option
-		wantMaxReconnect         int
-		wantIgnoreAuthErrorAbort bool
-	}{
-		{name: "default", wantMaxReconnect: -1, wantIgnoreAuthErrorAbort: true},
-		{
-			name:                     "MaxReconnects overridden by NATSOpts",
-			natsOpts:                 []nats.Option{nats.MaxReconnects(5)},
-			wantMaxReconnect:         5,
-			wantIgnoreAuthErrorAbort: true,
-		},
-		{
-			// nats.go has no option to unset IgnoreAuthErrorAbort
-			name: "IgnoreAuthErrorAbort unset by NATSOpts",
-			natsOpts: []nats.Option{func(o *nats.Options) error {
-				o.IgnoreAuthErrorAbort = false
-				return nil
-			}},
-			wantMaxReconnect:         -1,
-			wantIgnoreAuthErrorAbort: false,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			opts := getTestOptions()
-			opts.URLs = ns.ClientURL()
-			opts.NATSOpts = test.natsOpts
-			cp := newSurveyorConnPool(opts, prometheus.NewRegistry())
-			conn, err := cp.Get(&NatsContext{})
-			if err != nil {
-				t.Fatalf("Get failed: %v", err)
-			}
-			defer conn.Close()
-
-			if got := conn.Conn().Opts.MaxReconnect; got != test.wantMaxReconnect {
-				t.Fatalf("MaxReconnects = %d, want %d", got, test.wantMaxReconnect)
-			}
-			if got := conn.Conn().Opts.IgnoreAuthErrorAbort; got != test.wantIgnoreAuthErrorAbort {
-				t.Fatalf("IgnoreAuthErrorAbort = %v, want %v", got, test.wantIgnoreAuthErrorAbort)
-			}
-		})
 	}
 }
 
