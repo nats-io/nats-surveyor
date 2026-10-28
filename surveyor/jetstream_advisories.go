@@ -839,11 +839,7 @@ func (w *jsAdvisoryFSWatcher) start() error {
 				if !ok {
 					return
 				}
-				if errors.Is(err, fsnotify.ErrEventOverflow) {
-					w.logger.Warnf("JetStream advisories filesystem watcher dropped events, config changes may have been missed; restart to reload all configs: %v", err)
-				} else {
-					w.logger.Warnf("JetStream advisories filesystem watcher error: %v", err)
-				}
+				w.logger.Warnf("JetStream advisories filesystem watcher error: %v", err)
 			case <-stopCh:
 				return
 			}

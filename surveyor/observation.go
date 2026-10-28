@@ -612,11 +612,7 @@ func (w *serviceObsFSWatcher) start() error {
 				if !ok {
 					return
 				}
-				if errors.Is(err, fsnotify.ErrEventOverflow) {
-					w.logger.Warnf("service observations filesystem watcher dropped events, config changes may have been missed; restart to reload all configs: %v", err)
-				} else {
-					w.logger.Warnf("service observations filesystem watcher error: %v", err)
-				}
+				w.logger.Warnf("service observations filesystem watcher error: %v", err)
 			case <-stopCh:
 				return
 			}
