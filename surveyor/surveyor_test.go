@@ -20,12 +20,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -37,6 +39,7 @@ import (
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
 	"github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 )
 
 // Testing constants
@@ -922,6 +925,79 @@ func TestSurveyor_Concurrent(t *testing.T) {
 			t.Fatalf("Expected that singleflight should have prevented concurrent polling,"+
 				" and all uptime values to be the same. "+
 				"Got baseVal: %v. current value: %v (GOMAXPROCS=%d)", baseVal, v, runtime.GOMAXPROCS(0))
+		}
+	}
+}
+
+// A config file or directory that cannot be loaded must not stop the rest of
+// the config directory from loading.
+func TestSurveyor_ConfigDirSkipsFailingEntries(t *testing.T) {
+	js := st.NewJetStreamServer(t)
+	defer js.Shutdown()
+
+	// each failing entry sorts before a valid one, which an aborted walk
+	// would leave unloaded
+	setUpDir := func(good, badAuth string) (string, []string) {
+		dir := t.TempDir()
+		for name, content := range map[string]string{
+			"a_invalid.json":    `{}`,
+			"b_good.json":       good,
+			"c_badauth.json":    badAuth,
+			"d_good.json":       good,
+			"f_sub/g_good.json": good,
+		} {
+			path := filepath.Join(dir, name)
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatalf("create config dir: %v", err)
+			}
+			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+				t.Fatalf("write config: %v", err)
+			}
+		}
+		unreadable := filepath.Join(dir, "e_unreadable")
+		if err := os.Mkdir(unreadable, 0o000); err != nil {
+			t.Fatalf("create unreadable dir: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(unreadable, 0o700) })
+		return dir, []string{
+			filepath.Join(dir, "b_good.json"),
+			filepath.Join(dir, "d_good.json"),
+			filepath.Join(dir, "f_sub", "g_good.json"),
+		}
+	}
+	advDir, wantAdv := setUpDir(`{"name":"a","username":"a","password":"a"}`, `{"name":"z","username":"z","password":"z"}`)
+	obsDir, wantObs := setUpDir(`{"name":"a","topic":"a.topic","username":"a","password":"a"}`, `{"name":"z","topic":"z.topic","username":"z","password":"z"}`)
+
+	logger, logs := logtest.NewNullLogger()
+	opts := getTestOptions()
+	opts.URLs = js.ClientURL()
+	opts.DisableHTTPServer = true
+	opts.Logger = logger
+	opts.JetStreamConfigDir = advDir
+	opts.ObservationConfigDir = obsDir
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	if got := slices.Sorted(maps.Keys(s.JetStreamAdvisoryManager().ConfigMap())); !slices.Equal(got, wantAdv) {
+		t.Errorf("loaded advisories %v, want %v", got, wantAdv)
+	}
+	if got := slices.Sorted(maps.Keys(s.ServiceObservationManager().ConfigMap())); !slices.Equal(got, wantObs) {
+		t.Errorf("loaded observations %v, want %v", got, wantObs)
+	}
+	for _, failing := range []string{
+		filepath.Join(advDir, "a_invalid.json"), filepath.Join(advDir, "c_badauth.json"),
+		filepath.Join(obsDir, "a_invalid.json"), filepath.Join(obsDir, "c_badauth.json"),
+	} {
+		if !slices.ContainsFunc(logs.AllEntries(), func(e *logrus.Entry) bool {
+			return e.Level == logrus.WarnLevel && strings.Contains(e.Message, failing)
+		}) {
+			t.Errorf("no warning logged for %s", failing)
 		}
 	}
 }

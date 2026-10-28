@@ -637,10 +637,12 @@ func (w *serviceObsFSWatcher) stop() {
 	w.watcher = nil
 }
 
+// startObservationsInDir logs entries that fail to load and continues the walk.
 func (w *serviceObsFSWatcher) startObservationsInDir() fs.WalkDirFunc {
 	return func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			w.logger.Warnf("could not read observation path: %s, error: %v", path, err)
+			return nil
 		}
 
 		// skip directories starting with '..'
@@ -663,10 +665,14 @@ func (w *serviceObsFSWatcher) startObservationsInDir() fs.WalkDirFunc {
 
 		obs, err := NewServiceObservationConfigFromFile(path)
 		if err != nil {
-			return fmt.Errorf("could not create observation from path: %s, error: %v", path, err)
+			w.logger.Warnf("could not create observation from path: %s, error: %v", path, err)
+			return nil
 		}
 
-		return w.om.Set(obs)
+		if err := w.om.Set(obs); err != nil {
+			w.logger.Warn(err)
+		}
+		return nil
 	}
 }
 
