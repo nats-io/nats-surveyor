@@ -232,3 +232,28 @@ func TestConnPool_TokenFile_TakesPrecedence_Over_StaticToken(t *testing.T) {
 		t.Fatal("expected connected")
 	}
 }
+
+// The pool's base options are shared by concurrent Gets for different
+// credentials, so Get must not write into their spare capacity.
+func TestConnPool_GetDoesNotModifyBaseOptions(t *testing.T) {
+	s := runUserPassServer(t, "user", "pass")
+	base := make([]nats.Option, 0, 8)
+	cp := newNatsConnPool(logrus.New(), &natsContextDefaults{URL: s.ClientURL()}, base)
+
+	conn, err := cp.Get(&NatsContext{
+		Username: "user",
+		Password: "pass",
+		// also catches clipping only after NatsOpts are appended
+		NatsOpts: []nats.Option{nats.MaxReconnects(5)},
+	})
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	defer conn.Close()
+
+	for i, opt := range base[:cap(base)] {
+		if opt != nil {
+			t.Fatalf("Get wrote into the pool's base options at index %d", i)
+		}
+	}
+}

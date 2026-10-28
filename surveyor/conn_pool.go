@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
@@ -262,7 +263,9 @@ func (cp *natsConnPool) getPooledConn(key string, cfg *NatsContext) (*pooledNats
 		}
 		cp.cacheMu.Unlock()
 
-		opts := append(cp.natsOpts, cfg.NatsOpts...)
+		// clip so appends below never write into cp.natsOpts' backing array,
+		// which is shared by concurrent Gets for other credentials
+		opts := append(slices.Clip(cp.natsOpts), cfg.NatsOpts...)
 
 		if cfg.TokenFile != "" && cfg.Username != "" {
 			opts = append(opts, nats.UserInfoHandler(func() (string, string) {
