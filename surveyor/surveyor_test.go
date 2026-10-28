@@ -910,43 +910,43 @@ func TestSurveyor_ConfigDirSkipsFailingEntries(t *testing.T) {
 		}
 	}
 
-	// each failing entry sorts before the valid ones, so the walk reaches it first
-	failures := []struct {
-		name   string
-		create func(t *testing.T, dir, badAuth string)
-	}{
-		{
-			name: "invalid config",
-			create: func(t *testing.T, dir, _ string) {
-				writeConfig(t, filepath.Join(dir, "a_failing.json"), `{}`)
-			},
-		},
-		{
-			name: "listener fails to start",
-			create: func(t *testing.T, dir, badAuth string) {
-				writeConfig(t, filepath.Join(dir, "a_failing.json"), badAuth)
-			},
-		},
-		{
-			name: "unreadable directory",
-			create: func(t *testing.T, dir, _ string) {
-				unreadable := filepath.Join(dir, "a_failing")
-				if err := os.Mkdir(unreadable, 0o000); err != nil {
-					t.Fatalf("create unreadable dir: %v", err)
-				}
-				t.Cleanup(func() { _ = os.Chmod(unreadable, 0o700) })
-				if _, err := os.ReadDir(unreadable); err == nil {
-					t.Skip("directory with mode 000 is readable, e.g. when running as root")
-				}
-			},
-		},
-	}
-
 	for _, kind := range kinds {
+		// each failing entry sorts before the valid ones, so the walk reaches it first
+		failures := []struct {
+			name   string
+			create func(t *testing.T, dir string)
+		}{
+			{
+				name: "invalid config",
+				create: func(t *testing.T, dir string) {
+					writeConfig(t, filepath.Join(dir, "a_failing.json"), `{}`)
+				},
+			},
+			{
+				name: "listener fails to start",
+				create: func(t *testing.T, dir string) {
+					writeConfig(t, filepath.Join(dir, "a_failing.json"), kind.badAuth)
+				},
+			},
+			{
+				name: "unreadable directory",
+				create: func(t *testing.T, dir string) {
+					unreadable := filepath.Join(dir, "a_failing")
+					if err := os.Mkdir(unreadable, 0o000); err != nil {
+						t.Fatalf("create unreadable dir: %v", err)
+					}
+					t.Cleanup(func() { _ = os.Chmod(unreadable, 0o700) })
+					if _, err := os.ReadDir(unreadable); err == nil {
+						t.Skip("directory with mode 000 is readable, e.g. when running as root")
+					}
+				},
+			},
+		}
+
 		for _, failure := range failures {
 			t.Run(kind.name+"/"+failure.name, func(t *testing.T) {
 				dir := t.TempDir()
-				failure.create(t, dir, kind.badAuth)
+				failure.create(t, dir)
 				want := []string{
 					filepath.Join(dir, "b_good.json"),
 					filepath.Join(dir, "c_sub", "d_good.json"),
