@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -29,6 +30,7 @@ import (
 	"github.com/nats-io/nuid"
 	"github.com/prometheus/client_golang/prometheus"
 	ptu "github.com/prometheus/client_golang/prometheus/testutil"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 )
 
 const (
@@ -702,6 +704,44 @@ Outer:
 			t.Fatalf("Invalid observation config; want: %+v; got: %+v", obs, existingObservation)
 		}
 	}
+}
+
+func TestServiceObservation_WatcherKeepsWatchingAfterErrors(t *testing.T) {
+	js := st.NewJetStreamServer(t)
+	defer js.Shutdown()
+
+	logger, logs := logtest.NewNullLogger()
+	opt := GetDefaultOptions()
+	opt.URLs = js.ClientURL()
+	opt.Logger = logger
+	registry := prometheus.NewRegistry()
+	om := NewServiceObservationManager(newSurveyorConnPool(opt, registry), logger, NewServiceObservationMetrics(registry, nil))
+	om.Start()
+	defer om.Stop()
+
+	w := newServiceObservationFSWatcher(logger, om)
+	if err := w.start(); err != nil {
+		t.Fatalf("start watcher: %v", err)
+	}
+	defer w.stop()
+	w.Lock()
+	watcher := w.watcher
+	w.Unlock()
+	dir := t.TempDir()
+	if err := watcher.Add(dir); err != nil {
+		t.Fatalf("watch dir: %v", err)
+	}
+
+	injectWatcherErrors(t, watcher, logs)
+
+	path := filepath.Join(dir, "svc.json")
+	writeConfigFile(t, path, `{"name":"svc","topic":"svc.topic"}`)
+	eventually(t, func() (string, error) {
+		if _, ok := om.ConfigMap()[path]; !ok {
+			return "waiting for config written after the errors", fmt.Errorf("%s not loaded", path)
+		}
+		return "", nil
+	}, defaultWaitFor, defaultTick)
 }
 
 func TestSurveyor_ObservationsWatcher(t *testing.T) {

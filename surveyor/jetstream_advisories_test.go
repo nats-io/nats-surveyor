@@ -3,16 +3,21 @@ package surveyor
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 
 	"github.com/nats-io/jsm.go"
 	st "github.com/nats-io/nats-surveyor/test"
@@ -723,6 +728,104 @@ Outer:
 		if !reflect.DeepEqual(obs, existingAdvisory) {
 			t.Fatalf("Invalid advisory config; want: %+v; got: %+v", obs, existingAdvisory)
 		}
+	}
+}
+
+// startAdvisoryWatcher starts an advisory manager and a filesystem watcher for
+// a new temporary directory, connecting to the server at url.
+func startAdvisoryWatcher(t *testing.T, url string) (*JSAdvisoryManager, *fsnotify.Watcher, string, *logtest.Hook) {
+	t.Helper()
+	// created first so it is removed only after the watcher has stopped
+	dir := t.TempDir()
+	logger, logs := logtest.NewNullLogger()
+	opt := GetDefaultOptions()
+	opt.URLs = url
+	opt.Logger = logger
+	registry := prometheus.NewRegistry()
+	am := NewJetStreamAdvisoryManager(newSurveyorConnPool(opt, registry), logger, NewJetStreamAdvisoryMetrics(registry, nil))
+	am.Start()
+	t.Cleanup(am.Stop)
+
+	w := newJetStreamAdvisoryFSWatcher(logger, am)
+	if err := w.start(); err != nil {
+		t.Fatalf("start watcher: %v", err)
+	}
+	t.Cleanup(w.stop)
+	w.Lock()
+	watcher := w.watcher
+	w.Unlock()
+	if err := watcher.Add(dir); err != nil {
+		t.Fatalf("watch dir: %v", err)
+	}
+	return am, watcher, dir, logs
+}
+
+func waitForAdvisoryLoaded(t *testing.T, am *JSAdvisoryManager, path string) {
+	t.Helper()
+	eventually(t, func() (string, error) {
+		if _, ok := am.ConfigMap()[path]; !ok {
+			return "waiting for advisory config to load", fmt.Errorf("%s not loaded", path)
+		}
+		return "", nil
+	}, defaultWaitFor, defaultTick)
+}
+
+func TestJetStream_WatcherKeepsWatchingAfterErrors(t *testing.T) {
+	js := st.NewJetStreamServer(t)
+	defer js.Shutdown()
+	am, watcher, dir, logs := startAdvisoryWatcher(t, js.ClientURL())
+
+	injectWatcherErrors(t, watcher, logs)
+
+	path := filepath.Join(dir, "global.json")
+	writeConfigFile(t, path, `{"name":"global"}`)
+	waitForAdvisoryLoaded(t, am, path)
+}
+
+// On kqueue (macOS, BSD) fsnotify reports an error when a watched file is
+// replaced by one it cannot open. Config changes must still be picked up.
+func TestJetStream_WatcherKeepsWatchingAfterUnreadableFile(t *testing.T) {
+	switch runtime.GOOS {
+	case "darwin", "dragonfly", "freebsd", "netbsd", "openbsd":
+	default:
+		t.Skip("only the kqueue backend reports an error for an unreadable file")
+	}
+	js := st.NewJetStreamServer(t)
+	defer js.Shutdown()
+	am, _, dir, logs := startAdvisoryWatcher(t, js.ClientURL())
+
+	path := filepath.Join(dir, "a.json")
+	writeConfigFile(t, path, `{"name":"global"}`)
+	waitForAdvisoryLoaded(t, am, path)
+
+	// prepared outside the watched dir, so only the rename is seen
+	unreadable := filepath.Join(t.TempDir(), "a.json")
+	if err := os.WriteFile(unreadable, []byte(`{"name":"global"}`), 0o000); err != nil {
+		t.Fatalf("write unreadable config: %v", err)
+	}
+	if f, err := os.Open(unreadable); err == nil {
+		f.Close()
+		t.Skip("file with mode 000 is readable, e.g. when running as root")
+	}
+	if err := os.Rename(unreadable, path); err != nil {
+		t.Fatalf("replace config: %v", err)
+	}
+	// fsnotify reports its error right after delivering the event for the
+	// replaced file, which fails to load
+	eventually(t, func() (string, error) {
+		if !warningLogged(logs, "could not create advisory from path: "+path) {
+			return "waiting for the replaced config to fail loading", errors.New("not logged")
+		}
+		return "", nil
+	}, defaultWaitFor, defaultTick)
+
+	// sorts before a.json: the kqueue backend stops scanning a directory at
+	// the first file it cannot open
+	added := filepath.Join(dir, "0.json")
+	writeConfigFile(t, added, `{"name":"global"}`)
+	waitForAdvisoryLoaded(t, am, added)
+	if !warningLogged(logs, "JetStream advisories filesystem watcher error") {
+		t.Error("no watcher error logged: fsnotify did not report one, so this test no longer covers the error path")
 	}
 }
 
