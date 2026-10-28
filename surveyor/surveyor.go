@@ -584,6 +584,11 @@ func (s *Surveyor) Stop() {
 	s.jsAdvisoryFSWatcher.stop()
 	s.jsAdvisoryManager.Stop()
 
+	if s.conn != nil {
+		s.conn.Close()
+		s.conn = nil
+	}
+
 	s.connProvider.Close(true)
 	s.running = false
 }

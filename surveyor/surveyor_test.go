@@ -237,6 +237,33 @@ func TestSurveyor_StartTwice(t *testing.T) {
 	s.Stop()
 }
 
+// Pooled connections never stop reconnecting on their own, so Stop must close
+// the statz connection.
+func TestSurveyor_StopClosesStatzConnection(t *testing.T) {
+	ns := st.NewSingleServer(t)
+	defer ns.Shutdown()
+
+	opts := getTestOptions()
+	opts.URLs = ns.ClientURL()
+	opts.DisableHTTPServer = true
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	s.Lock()
+	statzConn := s.conn.Conn()
+	s.Unlock()
+
+	s.Stop()
+	if !statzConn.IsClosed() {
+		statzConn.Close()
+		t.Fatal("Stop left the statz connection open")
+	}
+}
+
 func TestSurveyor_Account(t *testing.T) {
 	sc := st.NewSuperCluster(t)
 	defer sc.Shutdown()
@@ -623,24 +650,23 @@ accounts {
 	s.Lock()
 	statzConn := s.conn.Conn()
 	s.Unlock()
-	// Stop does not close the statz connection, close it so it does not keep
-	// reconnecting after the test
-	defer statzConn.Close()
 
-	var advConn *nats.Conn
-	eventually(t, func() (string, error) {
+	advListener := func() (*jsAdvisoryListener, *nats.Conn) {
 		am := s.JetStreamAdvisoryManager()
 		am.Lock()
 		defer am.Unlock()
 		l, ok := am.listenerMap[advFile]
 		if !ok {
-			return "waiting for advisory listener", fmt.Errorf("listener for %s not started", advFile)
+			return nil, nil
 		}
 		l.Lock()
 		defer l.Unlock()
-		advConn = l.conn.Conn()
-		return "", nil
-	}, 5*time.Second, 10*time.Millisecond)
+		return l, l.conn.Conn()
+	}
+	listener, advConn := advListener()
+	if listener == nil {
+		t.Fatalf("advisory listener for %s not started", advFile)
+	}
 
 	conns := map[string]*nats.Conn{"statz": statzConn, "advisory": advConn}
 
@@ -680,6 +706,10 @@ accounts {
 	if err := advConn.Flush(); err != nil {
 		t.Fatalf("flush advisory connection: %v", err)
 	}
+	// recovered by reconnecting, not by restarting the listener
+	if l, nc := advListener(); l != listener || nc != advConn {
+		t.Fatal("advisory listener or its connection was replaced")
+	}
 
 	output, err := PollSurveyorEndpoint(t, defaultSurveyorURL, false, http.StatusOK)
 	if err != nil {
@@ -717,12 +747,28 @@ func TestSurveyor_PooledConnsReconnectWithoutLimit(t *testing.T) {
 	defer ns.Shutdown()
 
 	tests := []struct {
-		name     string
-		natsOpts []nats.Option
-		want     int
+		name                     string
+		natsOpts                 []nats.Option
+		wantMaxReconnect         int
+		wantIgnoreAuthErrorAbort bool
 	}{
-		{name: "default", want: -1},
-		{name: "overridden by NATSOpts", natsOpts: []nats.Option{nats.MaxReconnects(5)}, want: 5},
+		{name: "default", wantMaxReconnect: -1, wantIgnoreAuthErrorAbort: true},
+		{
+			name:                     "MaxReconnects overridden by NATSOpts",
+			natsOpts:                 []nats.Option{nats.MaxReconnects(5)},
+			wantMaxReconnect:         5,
+			wantIgnoreAuthErrorAbort: true,
+		},
+		{
+			// nats.go has no option to unset IgnoreAuthErrorAbort
+			name: "IgnoreAuthErrorAbort unset by NATSOpts",
+			natsOpts: []nats.Option{func(o *nats.Options) error {
+				o.IgnoreAuthErrorAbort = false
+				return nil
+			}},
+			wantMaxReconnect:         -1,
+			wantIgnoreAuthErrorAbort: false,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -736,11 +782,11 @@ func TestSurveyor_PooledConnsReconnectWithoutLimit(t *testing.T) {
 			}
 			defer conn.Close()
 
-			if got := conn.Conn().Opts.MaxReconnect; got != test.want {
-				t.Fatalf("MaxReconnects = %d, want %d", got, test.want)
+			if got := conn.Conn().Opts.MaxReconnect; got != test.wantMaxReconnect {
+				t.Fatalf("MaxReconnects = %d, want %d", got, test.wantMaxReconnect)
 			}
-			if !conn.Conn().Opts.IgnoreAuthErrorAbort {
-				t.Fatal("expected IgnoreAuthErrorAbort to be set")
+			if got := conn.Conn().Opts.IgnoreAuthErrorAbort; got != test.wantIgnoreAuthErrorAbort {
+				t.Fatalf("IgnoreAuthErrorAbort = %v, want %v", got, test.wantIgnoreAuthErrorAbort)
 			}
 		})
 	}
