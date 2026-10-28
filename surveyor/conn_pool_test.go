@@ -134,23 +134,7 @@ func runTokenServer(t *testing.T, token string) *server.Server {
 
 func runUserPassServer(t *testing.T, user, pass string) *server.Server {
 	t.Helper()
-	opts := &server.Options{
-		Host: "127.0.0.1",
-		Port: -1,
-		Users: []*server.User{
-			{Username: user, Password: pass},
-		},
-	}
-	s, err := server.NewServer(opts)
-	if err != nil {
-		t.Fatalf("new server: %v", err)
-	}
-	go s.Start()
-	if !s.ReadyForConnections(5 * time.Second) {
-		t.Fatal("server not ready")
-	}
-	t.Cleanup(s.Shutdown)
-	return s
+	return runUsersServer(t, &server.User{Username: user, Password: pass})
 }
 
 func runUsersServer(t *testing.T, users ...*server.User) *server.Server {
@@ -202,6 +186,8 @@ func TestConnPool_ConcurrentGet_UsesOwnCredentials(t *testing.T) {
 	var calls atomic.Int32
 	entered := make(chan struct{})
 	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseGate := func() { releaseOnce.Do(func() { close(release) }) }
 	gate := func(*nats.Options) error {
 		if calls.Add(1) == 1 {
 			close(entered)
@@ -224,13 +210,20 @@ func TestConnPool_ConcurrentGet_UsesOwnCredentials(t *testing.T) {
 		defer close(aliceDone)
 		alice, aliceErr = cp.Get(&NatsContext{Username: "alice", Password: "alice-pass"})
 	}()
+	// release alice and close her connection on every exit path, failures included
+	t.Cleanup(func() {
+		releaseGate()
+		<-aliceDone
+		if alice != nil {
+			alice.Close()
+		}
+	})
 
 	select {
 	case <-entered:
 	case <-aliceDone:
 		t.Fatalf("alice Get returned before connecting: %v", aliceErr)
 	case <-time.After(5 * time.Second):
-		close(release)
 		t.Fatal("alice's connect did not start")
 	}
 
@@ -242,27 +235,34 @@ func TestConnPool_ConcurrentGet_UsesOwnCredentials(t *testing.T) {
 		bob, bobErr = cp.Get(&NatsContext{
 			Username: "bob",
 			Password: "bob-pass",
+			// a non-empty NatsOpts makes the first append in Get write into
+			// the base slice's spare capacity, which also catches a fix that
+			// clips only after that append
 			NatsOpts: []nats.Option{nats.MaxReconnects(5)},
 		})
 	}()
+	t.Cleanup(func() {
+		releaseGate()
+		<-bobDone
+		if bob != nil {
+			bob.Close()
+		}
+	})
 
 	select {
 	case <-bobDone:
 	case <-time.After(5 * time.Second):
-		close(release)
 		t.Fatal("bob's Get blocked on alice's connect")
 	}
-	close(release)
+	releaseGate()
 	<-aliceDone
 
 	if bobErr != nil {
 		t.Fatalf("bob Get failed: %v", bobErr)
 	}
-	defer bob.Close()
 	if aliceErr != nil {
 		t.Fatalf("alice Get failed: %v", aliceErr)
 	}
-	defer alice.Close()
 
 	for i, opt := range baseOpts[len(baseOpts):cap(baseOpts)] {
 		if opt != nil {
