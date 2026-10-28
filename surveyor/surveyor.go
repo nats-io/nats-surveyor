@@ -502,7 +502,7 @@ func (s *Surveyor) Start() error {
 	defer s.Unlock()
 
 	if s.running {
-		if s.conn != nil && s.conn.IsConnected() {
+		if s.conn != nil && !s.conn.IsClosed() {
 			// already running
 			return nil
 		}

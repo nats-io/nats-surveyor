@@ -241,6 +241,42 @@ func TestSurveyor_StartTwice(t *testing.T) {
 	s.Stop()
 }
 
+// The statz connection never gives up reconnecting, so starting a running
+// Surveyor must keep it rather than replace it.
+func TestSurveyor_StartWhileReconnecting(t *testing.T) {
+	ns := st.NewSingleServer(t)
+	defer ns.Shutdown()
+
+	opts := getTestOptions()
+	opts.URLs = ns.ClientURL()
+	opts.DisableHTTPServer = true
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+	s.Lock()
+	statzConn := s.conn.Conn()
+	s.Unlock()
+
+	ns.Shutdown()
+	eventually(t, func() (string, error) {
+		if statzConn.IsConnected() {
+			return "waiting for disconnect", fmt.Errorf("status %v", statzConn.Status())
+		}
+		return "", nil
+	}, 5*time.Second, 10*time.Millisecond)
+	if err = s.Start(); err != nil {
+		t.Fatalf("start while reconnecting: %v", err)
+	}
+	if statzConn.IsClosed() {
+		t.Fatal("Start closed the reconnecting statz connection")
+	}
+}
+
 // A password rotated on the server and rolled back makes it reject the
 // credentials for a while. Nothing replaces a closed pooled connection, so it
 // must keep retrying.
