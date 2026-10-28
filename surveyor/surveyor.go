@@ -214,8 +214,13 @@ func newSurveyorConnPool(opts *Options, registry *prometheus.Registry) *natsConn
 				opts.Logger.Warnf("Error: name=%q err=%v", c.Opts.Name, err)
 			}
 		}),
-		//TODO: this should be -1, right?
-		nats.MaxReconnects(10240),
+		// Nothing replaces a closed pooled connection, so never give up on
+		// one. Without IgnoreAuthErrorAbort nats.go closes the connection
+		// when a server returns the same auth error twice since it last
+		// accepted the connection, e.g. while a password rotation is rolled
+		// back.
+		nats.MaxReconnects(-1),
+		nats.IgnoreAuthErrorAbort(),
 	)
 
 	if opts.TLSFirst {
