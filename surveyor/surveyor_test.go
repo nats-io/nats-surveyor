@@ -17,11 +17,13 @@ import (
 	"bufio"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -543,6 +545,67 @@ func TestSurveyor_Reconnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconnect failed: %v.", err)
 	}
+}
+
+// fsnotify stops delivering events until a reported error is received, so the
+// config watchers must keep reading their Errors channel.
+func TestSurveyor_ConfigWatchersReadErrors(t *testing.T) {
+	js := st.NewJetStreamServer(t)
+	defer js.Shutdown()
+
+	opts := getTestOptions()
+	opts.URLs = js.ClientURL()
+	opts.DisableHTTPServer = true
+	opts.JetStreamConfigDir = t.TempDir()
+	opts.ObservationConfigDir = t.TempDir()
+	s, err := NewSurveyor(opts)
+	if err != nil {
+		t.Fatalf("couldn't create surveyor: %v", err)
+	}
+	if err = s.Start(); err != nil {
+		t.Fatalf("start error: %v", err)
+	}
+	defer s.Stop()
+
+	s.jsAdvisoryFSWatcher.Lock()
+	advErrors := s.jsAdvisoryFSWatcher.watcher.Errors
+	s.jsAdvisoryFSWatcher.Unlock()
+	s.serviceObsFSWatcher.Lock()
+	obsErrors := s.serviceObsFSWatcher.watcher.Errors
+	s.serviceObsFSWatcher.Unlock()
+
+	for name, errs := range map[string]chan error{"advisories": advErrors, "observations": obsErrors} {
+		// a second error is only received if the watcher keeps running
+		for range 2 {
+			select {
+			case errs <- errors.New("injected watcher error"):
+			case <-time.After(5 * time.Second):
+				t.Fatalf("%s watcher did not receive the error", name)
+			}
+		}
+	}
+
+	// configs written afterwards must still load; waiting for them also orders
+	// the injected sends before fsnotify closes Errors when the watchers stop
+	advFile := filepath.Join(opts.JetStreamConfigDir, "c.json")
+	obsFile := filepath.Join(opts.ObservationConfigDir, "c.json")
+	for path, content := range map[string]string{advFile: `{"name":"global"}`, obsFile: `{"name":"svc","topic":"svc.topic"}`} {
+		tmp := filepath.Join(t.TempDir(), "c.json")
+		if err := os.WriteFile(tmp, []byte(content), 0o600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		if err := os.Rename(tmp, path); err != nil {
+			t.Fatalf("move config: %v", err)
+		}
+	}
+	eventually(t, func() (string, error) {
+		_, adv := s.JetStreamAdvisoryManager().ConfigMap()[advFile]
+		_, obs := s.ServiceObservationManager().ConfigMap()[obsFile]
+		if !adv || !obs {
+			return "waiting for configs written after the errors", fmt.Errorf("advisory loaded: %v, observation loaded: %v", adv, obs)
+		}
+		return "", nil
+	}, defaultWaitFor, defaultTick)
 }
 
 func TestSurveyor_ClientTLSFail(t *testing.T) {
