@@ -565,3 +565,176 @@ func TestPollTime(t *testing.T) {
 	}
 
 }
+
+// Label sets of the fixture in testdata/raftz/raftz.json, in the order the
+// Prometheus text format writes them, which is alphabetical by label name.
+const (
+	raftzGroupMetaLabels   = `{account="$SYS",group="_meta_",server_cluster="C1",server_id="NAAA",server_name="n1"}`
+	raftzGroupIdleLabels   = `{account="ACC",group="S-IDLE",server_cluster="C1",server_id="NAAA",server_name="n1"}`
+	raftzGroupBehindLabels = `{account="ACC",group="C-BEHIND",server_cluster="C1",server_id="NAAA",server_name="n1"}`
+
+	// The legacy meta series pass (cluster, name, id) into labels declared as
+	// (server_id, server_name, cluster_name). That mapping predates the per
+	// group family and is asserted here so that it cannot change unnoticed.
+	raftzMetaLabels = `{cluster_name="NAAA",server_id="C1",server_name="n1"}`
+)
+
+func raftzTestdata(t *testing.T) *ServerAPIRaftzResponse {
+	t.Helper()
+
+	raw, err := os.ReadFile("testdata/raftz/raftz.json")
+	if err != nil {
+		t.Fatalf("error reading testdata: %v", err)
+	}
+	resp := &ServerAPIRaftzResponse{}
+	if err := json.Unmarshal(raw, resp); err != nil {
+		t.Fatalf("error unmarshalling raftz testdata: %v", err)
+	}
+	if resp.Data == nil {
+		t.Fatal("raftz testdata has no data")
+	}
+	return resp
+}
+
+func assertContainsAll(t *testing.T, output string, want []string) {
+	t.Helper()
+
+	for _, w := range want {
+		if !strings.Contains(output, w) {
+			t.Errorf("missing: %s", w)
+		}
+	}
+	if t.Failed() {
+		t.Logf("output: %s", output)
+		t.FailNow()
+	}
+}
+
+func assertContainsNone(t *testing.T, output string, unwanted []string) {
+	t.Helper()
+
+	for _, u := range unwanted {
+		if strings.Contains(output, u) {
+			t.Errorf("unexpected: %s", u)
+		}
+	}
+	if t.Failed() {
+		t.Logf("output: %s", output)
+		t.FailNow()
+	}
+}
+
+func TestStatzCollector_WithStats_RaftzGroups(t *testing.T) {
+	sc, err := NewStatzCollectorOpts(
+		WithStats(WithStatsBatch{
+			RaftzStatzs: []*ServerAPIRaftzResponse{raftzTestdata(t)},
+		}),
+		WithCollectRaftz(true),
+		WithCollectRaftzGroups(true),
+	)
+	if err != nil {
+		t.Fatalf("error creating statz collector: %v", err)
+	}
+
+	output := gatherStatzCollectorMetrics(t, sc)
+
+	assertContainsAll(t, output, []string{
+		// overrun_count is the only counter in the family
+		"# TYPE nats_core_raftz_group_overrun_count counter",
+		"# TYPE nats_core_raftz_group_ipq_apply_len gauge",
+		"# TYPE nats_core_raftz_group_state gauge",
+
+		// A group that is behind: every field of the fixture, including the
+		// ones the server only sends when they are set.
+		"nats_core_raftz_group_state" + raftzGroupBehindLabels + " 2",
+		"nats_core_raftz_group_size" + raftzGroupBehindLabels + " 3",
+		"nats_core_raftz_group_quorum_needed" + raftzGroupBehindLabels + " 2",
+		"nats_core_raftz_group_committed" + raftzGroupBehindLabels + " 9100",
+		"nats_core_raftz_group_applied" + raftzGroupBehindLabels + " 9000",
+		"nats_core_raftz_group_pindex" + raftzGroupBehindLabels + " 8900",
+		"nats_core_raftz_group_term" + raftzGroupBehindLabels + " 7",
+		"nats_core_raftz_group_observer" + raftzGroupBehindLabels + " 1",
+		"nats_core_raftz_group_paused" + raftzGroupBehindLabels + " 1",
+		"nats_core_raftz_group_catching_up" + raftzGroupBehindLabels + " 1",
+		"nats_core_raftz_group_overrun" + raftzGroupBehindLabels + " 1",
+		"nats_core_raftz_group_overrun_count" + raftzGroupBehindLabels + " 3",
+		"nats_core_raftz_group_ipq_proposal_len" + raftzGroupBehindLabels + " 1",
+		"nats_core_raftz_group_ipq_entry_len" + raftzGroupBehindLabels + " 2",
+		"nats_core_raftz_group_ipq_resp_len" + raftzGroupBehindLabels + " 4",
+		"nats_core_raftz_group_ipq_apply_len" + raftzGroupBehindLabels + " 42",
+		"nats_core_raftz_group_wal_msgs" + raftzGroupBehindLabels + " 100",
+		"nats_core_raftz_group_wal_bytes" + raftzGroupBehindLabels + " 65536",
+
+		// A healthy group: the fields the server omits when empty must still
+		// be exported, as 0, or an alert rule cannot use them.
+		"nats_core_raftz_group_state" + raftzGroupIdleLabels + " 0",
+		"nats_core_raftz_group_observer" + raftzGroupIdleLabels + " 0",
+		"nats_core_raftz_group_paused" + raftzGroupIdleLabels + " 0",
+		"nats_core_raftz_group_catching_up" + raftzGroupIdleLabels + " 0",
+		"nats_core_raftz_group_overrun" + raftzGroupIdleLabels + " 0",
+		"nats_core_raftz_group_overrun_count" + raftzGroupIdleLabels + " 0",
+		"nats_core_raftz_group_ipq_apply_len" + raftzGroupIdleLabels + " 0",
+		"nats_core_raftz_group_committed" + raftzGroupIdleLabels + " 5000",
+		"nats_core_raftz_group_applied" + raftzGroupIdleLabels + " 5000",
+		"nats_core_raftz_group_wal_bytes" + raftzGroupIdleLabels + " 8192",
+
+		// The metalayer group is part of the per group family as well.
+		"nats_core_raftz_group_state" + raftzGroupMetaLabels + " 1",
+		"nats_core_raftz_group_committed" + raftzGroupMetaLabels + " 120",
+
+		// and the legacy series are unchanged.
+		"nats_core_raftz_meta_committed" + raftzMetaLabels + " 120",
+		"nats_core_raftz_meta_applied" + raftzMetaLabels + " 120",
+		"nats_core_raftz_meta_pindex" + raftzMetaLabels + " 118",
+	})
+}
+
+func TestStatzCollector_WithStats_RaftzGroupsDisabled(t *testing.T) {
+	sc, err := NewStatzCollectorOpts(
+		WithStats(WithStatsBatch{
+			RaftzStatzs: []*ServerAPIRaftzResponse{raftzTestdata(t)},
+		}),
+		WithCollectRaftz(true),
+	)
+	if err != nil {
+		t.Fatalf("error creating statz collector: %v", err)
+	}
+
+	output := gatherStatzCollectorMetrics(t, sc)
+
+	// --raftz on its own exports what it always did, and nothing more.
+	assertContainsAll(t, output, []string{
+		"nats_core_raftz_meta_committed" + raftzMetaLabels + " 120",
+		"nats_core_raftz_meta_applied" + raftzMetaLabels + " 120",
+		"nats_core_raftz_meta_pindex" + raftzMetaLabels + " 118",
+	})
+	assertContainsNone(t, output, []string{"nats_core_raftz_group_"})
+}
+
+func TestStatzCollector_WithStats_RaftzGroupsActiveOnly(t *testing.T) {
+	sc, err := NewStatzCollectorOpts(
+		WithStats(WithStatsBatch{
+			RaftzStatzs: []*ServerAPIRaftzResponse{raftzTestdata(t)},
+		}),
+		WithCollectRaftz(true),
+		WithCollectRaftzGroups(true),
+		WithRaftzGroupsActiveOnly(true),
+	)
+	if err != nil {
+		t.Fatalf("error creating statz collector: %v", err)
+	}
+
+	output := gatherStatzCollectorMetrics(t, sc)
+
+	// Only the group that is behind is exported. The idle groups, metalayer
+	// included, are skipped entirely, while the legacy meta series stay.
+	assertContainsAll(t, output, []string{
+		"nats_core_raftz_group_ipq_apply_len" + raftzGroupBehindLabels + " 42",
+		"nats_core_raftz_group_overrun_count" + raftzGroupBehindLabels + " 3",
+		"nats_core_raftz_meta_committed" + raftzMetaLabels + " 120",
+	})
+	assertContainsNone(t, output, []string{
+		"nats_core_raftz_group_state" + raftzGroupIdleLabels,
+		"nats_core_raftz_group_state" + raftzGroupMetaLabels,
+	})
+}
