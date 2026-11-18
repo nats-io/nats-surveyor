@@ -101,6 +101,26 @@ type statzDescs struct {
 	RaftzMetaApplied   *GaugeVec
 	RaftzMetaPindex    *GaugeVec
 
+	// Per Raft group raftz info
+	RaftzGroupState          *GaugeVec
+	RaftzGroupSize           *GaugeVec
+	RaftzGroupQuorumNeeded   *GaugeVec
+	RaftzGroupCommitted      *GaugeVec
+	RaftzGroupApplied        *GaugeVec
+	RaftzGroupPindex         *GaugeVec
+	RaftzGroupTerm           *GaugeVec
+	RaftzGroupObserver       *GaugeVec
+	RaftzGroupPaused         *GaugeVec
+	RaftzGroupCatchingUp     *GaugeVec
+	RaftzGroupOverrun        *GaugeVec
+	RaftzGroupOverrunCount   *CounterVec
+	RaftzGroupIPQProposalLen *GaugeVec
+	RaftzGroupIPQEntryLen    *GaugeVec
+	RaftzGroupIPQRespLen     *GaugeVec
+	RaftzGroupIPQApplyLen    *GaugeVec
+	RaftzGroupWALMsgs        *GaugeVec
+	RaftzGroupWALBytes       *GaugeVec
+
 	// Jetstream Info
 	JetstreamInfo *GaugeVec
 	// Jetstream Server
@@ -249,6 +269,9 @@ type StatzCollector struct {
 	collectAccountsDetailed bool
 	collectGatewayz         bool
 	collectRaftz            bool
+	collectRaftzGroups      bool
+	raftzGroupsActiveOnly   bool
+	raftzAccountFilter      string
 	collectJsz              CollectJsz
 	jszLimit                int
 	jszLeadersOnly          bool
@@ -264,6 +287,7 @@ type StatzCollector struct {
 	gatewayzLabels     []string
 	jsServerLabels     []string
 	jsServerInfoLabels []string
+	raftzGroupLabels   []string
 	constLabels        prometheus.Labels
 
 	surveyedCnt *GaugeVec
@@ -442,6 +466,10 @@ func (sc *StatzCollector) buildDescs() {
 
 	// Raftz
 	if sc.collectRaftz {
+		// The per group family carries the standard server labels, in the
+		// standard order, plus the account and the Raft group name.
+		sc.raftzGroupLabels = append(append([]string{}, sc.serverLabels...), "account", "group")
+
 		sc.descs.RaftzMetaCommitted = newGaugeVec(newName("raftz_meta_committed"),
 			"Highest committed log entry index of the meta Raft group",
 			sc.constLabels,
@@ -457,6 +485,30 @@ func (sc *StatzCollector) buildDescs() {
 			sc.constLabels,
 			sc.jsServerLabels,
 		)
+
+		if sc.collectRaftzGroups {
+			gl := sc.raftzGroupLabels
+			cl := sc.constLabels
+
+			sc.descs.RaftzGroupState = newGaugeVec(newName("raftz_group_state"), "State of the Raft group: 0 follower, 1 leader, 2 candidate, 3 closed, -1 unknown", cl, gl)
+			sc.descs.RaftzGroupSize = newGaugeVec(newName("raftz_group_size"), "Number of peers in the Raft group", cl, gl)
+			sc.descs.RaftzGroupQuorumNeeded = newGaugeVec(newName("raftz_group_quorum_needed"), "Number of peers needed for quorum in the Raft group", cl, gl)
+			sc.descs.RaftzGroupCommitted = newGaugeVec(newName("raftz_group_committed"), "Highest committed log entry index of the Raft group", cl, gl)
+			sc.descs.RaftzGroupApplied = newGaugeVec(newName("raftz_group_applied"), "Highest applied log entry index of the Raft group. Lags committed when the asset layer cannot keep up", cl, gl)
+			sc.descs.RaftzGroupPindex = newGaugeVec(newName("raftz_group_pindex"), "Log entry index at last snapshot of the Raft group", cl, gl)
+			sc.descs.RaftzGroupTerm = newGaugeVec(newName("raftz_group_term"), "Current term of the Raft group", cl, gl)
+			sc.descs.RaftzGroupObserver = newGaugeVec(newName("raftz_group_observer"), "1 if this node is an observer in the Raft group, 0 otherwise", cl, gl)
+			sc.descs.RaftzGroupPaused = newGaugeVec(newName("raftz_group_paused"), "1 if quorum is paused for the Raft group because this node is too far behind, 0 otherwise", cl, gl)
+			sc.descs.RaftzGroupCatchingUp = newGaugeVec(newName("raftz_group_catching_up"), "1 if this node is catching up on the Raft group, 0 otherwise", cl, gl)
+			sc.descs.RaftzGroupOverrun = newGaugeVec(newName("raftz_group_overrun"), "1 if the Raft group is currently overrun, that is committed is too far ahead of applied, 0 otherwise", cl, gl)
+			sc.descs.RaftzGroupOverrunCount = newCounterVec(newName("raftz_group_overrun_count"), "Number of times the server decided the Raft group was overrun and paused quorum or stepped down", cl, gl)
+			sc.descs.RaftzGroupIPQProposalLen = newGaugeVec(newName("raftz_group_ipq_proposal_len"), "Number of entries queued in the outbound proposal queue of the Raft group", cl, gl)
+			sc.descs.RaftzGroupIPQEntryLen = newGaugeVec(newName("raftz_group_ipq_entry_len"), "Number of inbound append entries queued for the Raft group", cl, gl)
+			sc.descs.RaftzGroupIPQRespLen = newGaugeVec(newName("raftz_group_ipq_resp_len"), "Number of inbound append entry responses queued for the Raft group", cl, gl)
+			sc.descs.RaftzGroupIPQApplyLen = newGaugeVec(newName("raftz_group_ipq_apply_len"), "Number of committed entries queued for the asset layer to apply. Grows when the stream or consumer monitor cannot keep up", cl, gl)
+			sc.descs.RaftzGroupWALMsgs = newGaugeVec(newName("raftz_group_wal_msgs"), "Number of entries in the write ahead log of the Raft group", cl, gl)
+			sc.descs.RaftzGroupWALBytes = newGaugeVec(newName("raftz_group_wal_bytes"), "Size in bytes of the write ahead log of the Raft group", cl, gl)
+		}
 	}
 
 	// Jetstream Info
@@ -768,6 +820,45 @@ func WithCollectRaftz(collectRaftz bool) StatzCollectorOpt {
 	}
 }
 
+// WithCollectRaftzGroups enables per Raft group metrics from the raftz endpoint.
+// It has no effect unless WithCollectRaftz is enabled as well.
+//
+// This is a high cardinality option: one series set is exported per Raft group,
+// per server, which in a JetStream cluster means one per stream replica and one
+// per consumer replica. Use WithRaftzAccountFilter and/or
+// WithRaftzGroupsActiveOnly to reduce the number of exported series.
+func WithCollectRaftzGroups(collectRaftzGroups bool) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.collectRaftzGroups = collectRaftzGroups
+		return nil
+	}
+}
+
+// WithRaftzGroupsActiveOnly restricts per Raft group metrics to groups that are
+// not idle, that is groups with a non-empty apply queue, or that are paused,
+// catching up, or have been overrun at least once.
+//
+// This trades completeness for cardinality: series appear and disappear as
+// groups become active and idle again, which breaks rate() and increase() over
+// the gaps. It has no effect unless WithCollectRaftzGroups is enabled.
+func WithRaftzGroupsActiveOnly(activeOnly bool) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.raftzGroupsActiveOnly = activeOnly
+		return nil
+	}
+}
+
+// WithRaftzAccountFilter restricts raftz collection to a single account.
+// The default, an empty string, means the system account, which is where the
+// metalayer (_meta_) group lives. Setting this to any other account therefore
+// also stops the raftz_meta_* series from being exported.
+func WithRaftzAccountFilter(account string) StatzCollectorOpt {
+	return func(sc *StatzCollector) error {
+		sc.raftzAccountFilter = account
+		return nil
+	}
+}
+
 func WithCollectJsz(jsz CollectJsz, jszLeadersOnly bool, jszFilters []JszFilter) StatzCollectorOpt {
 	return func(sc *StatzCollector) error {
 		sc.collectJsz = jsz
@@ -811,6 +902,7 @@ type WithStatsBatch struct {
 	AccStatzs     []*ServerAPIAccstatzResponse
 	JsStatzs      []*server.ServerAPIJszResponse
 	GatewayStatzs []*server.ServerAPIGatewayzResponse
+	RaftzStatzs   []*ServerAPIRaftzResponse
 }
 
 // WithStats lets you provide your own NATS Server responses for generating metrics.
@@ -897,6 +989,15 @@ func WithStats(batch WithStatsBatch) StatzCollectorOpt {
 				Data:              statz.Data,
 			}
 			sc.gatewayStatz = append(sc.gatewayStatz, g)
+		}
+
+		// raftz
+		sc.raftStats = make([]*raftStat, 0, len(batch.RaftzStatzs))
+		for _, statz := range batch.RaftzStatzs {
+			if statz == nil || statz.Data == nil {
+				continue
+			}
+			sc.raftStats = append(sc.raftStats, statz)
 		}
 
 		return nil
@@ -1337,10 +1438,14 @@ type gatewayStatz struct {
 	Data *server.Gatewayz `json:"data,omitempty"`
 }
 
-type raftStat struct {
+// ServerAPIRaftzResponse is the response type for raftz, defined here since
+// nats-server doesn't export it
+type ServerAPIRaftzResponse struct {
 	server.ServerAPIResponse
 	Data *server.RaftzStatus `json:"data,omitempty"`
 }
+
+type raftStat = ServerAPIRaftzResponse
 
 type jsStat struct {
 	Server *server.ServerInfo
@@ -1457,9 +1562,15 @@ func (sc *StatzCollector) getGatewayz(ctx context.Context, nc *nats.Conn) ([]*ga
 }
 
 func (sc *StatzCollector) getRaftz(ctx context.Context, nc *nats.Conn) ([]*raftStat, error) {
+	// The metalayer group is all that is needed unless per group metrics are
+	// enabled, in which case every group of the filtered account is requested.
+	groupFilter := "_meta_"
+	if sc.collectRaftzGroups {
+		groupFilter = ""
+	}
 	req := &server.RaftzOptions{
-		AccountFilter: "",
-		GroupFilter:   "_meta_",
+		AccountFilter: sc.raftzAccountFilter,
+		GroupFilter:   groupFilter,
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
@@ -1613,6 +1724,29 @@ func (sc *StatzCollector) MetricInfos() []MetricInfo {
 			sc.descs.RaftzMetaApplied,
 			sc.descs.RaftzMetaPindex,
 		)
+
+		if sc.collectRaftzGroups {
+			metrics = append(metrics,
+				sc.descs.RaftzGroupState,
+				sc.descs.RaftzGroupSize,
+				sc.descs.RaftzGroupQuorumNeeded,
+				sc.descs.RaftzGroupCommitted,
+				sc.descs.RaftzGroupApplied,
+				sc.descs.RaftzGroupPindex,
+				sc.descs.RaftzGroupTerm,
+				sc.descs.RaftzGroupObserver,
+				sc.descs.RaftzGroupPaused,
+				sc.descs.RaftzGroupCatchingUp,
+				sc.descs.RaftzGroupOverrun,
+				sc.descs.RaftzGroupOverrunCount,
+				sc.descs.RaftzGroupIPQProposalLen,
+				sc.descs.RaftzGroupIPQEntryLen,
+				sc.descs.RaftzGroupIPQRespLen,
+				sc.descs.RaftzGroupIPQApplyLen,
+				sc.descs.RaftzGroupWALMsgs,
+				sc.descs.RaftzGroupWALBytes,
+			)
+		}
 	}
 
 	// Account scope metrics
@@ -2155,18 +2289,26 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 			// Raftz metrics
 			if sc.collectRaftz {
 				for _, raftStat := range sc.raftStats {
-					if raftStat == nil || raftStat.Data == nil {
+					if raftStat == nil || raftStat.Data == nil || raftStat.Server == nil {
 						continue
 					}
-					for _, group := range *(raftStat.Data) {
-						meta, ok := group["_meta_"]
-						if !ok {
+					labels := sc.serverLabelValues(raftStat.Server)
+					for account, groups := range *(raftStat.Data) {
+						if meta, ok := groups["_meta_"]; ok {
+							metrics.newGaugeMetric(sc.descs.RaftzMetaCommitted, float64(meta.Committed), labels)
+							metrics.newGaugeMetric(sc.descs.RaftzMetaApplied, float64(meta.Applied), labels)
+							metrics.newGaugeMetric(sc.descs.RaftzMetaPindex, float64(meta.PIndex), labels)
+						}
+
+						if !sc.collectRaftzGroups {
 							continue
 						}
-						labels := sc.serverLabelValues(raftStat.Server)
-						metrics.newGaugeMetric(sc.descs.RaftzMetaCommitted, float64(meta.Committed), labels)
-						metrics.newGaugeMetric(sc.descs.RaftzMetaApplied, float64(meta.Applied), labels)
-						metrics.newGaugeMetric(sc.descs.RaftzMetaPindex, float64(meta.PIndex), labels)
+						for name, group := range groups {
+							if sc.raftzGroupsActiveOnly && !raftzGroupActive(&group) {
+								continue
+							}
+							sc.collectRaftzGroupMetrics(metrics, labels, account, name, &group)
+						}
 					}
 				}
 			}
@@ -2247,6 +2389,65 @@ func (sc *StatzCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- m.Metric()
 	}
 	sc.logger.Debugf("StatszCollector.Collect took: %s", time.Since(start))
+}
+
+// raftzGroupActive reports whether a Raft group is doing something worth
+// looking at: it has committed entries waiting to be applied, or the server has
+// flagged it as paused, catching up or overrun.
+func raftzGroupActive(g *server.RaftzGroup) bool {
+	return g.IPQApplyLen > 0 || g.OverrunCount > 0 || g.Overrun || g.CatchingUp || g.Paused
+}
+
+// raftzStateValue encodes server.RaftState as a small integer. Unknown states
+// are reported as -1 rather than being dropped, so a new server side state does
+// not silently make the series disappear.
+func raftzStateValue(state string) float64 {
+	switch strings.ToUpper(state) {
+	case "FOLLOWER":
+		return 0
+	case "LEADER":
+		return 1
+	case "CANDIDATE":
+		return 2
+	case "CLOSED":
+		return 3
+	}
+	return -1
+}
+
+func raftzBoolValue(b bool) float64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// collectRaftzGroupMetrics exports every field of a single Raft group. Fields
+// the server omits when they are empty are exported as 0 rather than being
+// skipped, so that an alert rule never has to deal with a missing series.
+func (sc *StatzCollector) collectRaftzGroupMetrics(metrics *metricSlice, serverLabels []string, account, group string, g *server.RaftzGroup) {
+	labels := make([]string, 0, len(serverLabels)+2)
+	labels = append(labels, serverLabels...)
+	labels = append(labels, account, group)
+
+	metrics.newGaugeMetric(sc.descs.RaftzGroupState, raftzStateValue(g.State), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupSize, float64(g.Size), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupQuorumNeeded, float64(g.QuorumNeeded), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupCommitted, float64(g.Committed), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupApplied, float64(g.Applied), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupPindex, float64(g.PIndex), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupTerm, float64(g.Term), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupObserver, raftzBoolValue(g.Observer), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupPaused, raftzBoolValue(g.Paused), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupCatchingUp, raftzBoolValue(g.CatchingUp), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupOverrun, raftzBoolValue(g.Overrun), labels)
+	metrics.newCounterMetric(sc.descs.RaftzGroupOverrunCount, float64(g.OverrunCount), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupIPQProposalLen, float64(g.IPQPropLen), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupIPQEntryLen, float64(g.IPQEntryLen), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupIPQRespLen, float64(g.IPQRespLen), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupIPQApplyLen, float64(g.IPQApplyLen), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupWALMsgs, float64(g.WAL.Msgs), labels)
+	metrics.newGaugeMetric(sc.descs.RaftzGroupWALBytes, float64(g.WAL.Bytes), labels)
 }
 
 func collectGatewayzMetrics(metrics *metricSlice, gwDescs *gatewayzDescs, rgwName string, gwStat *gatewayStatz, gw *server.RemoteGatewayz) {
