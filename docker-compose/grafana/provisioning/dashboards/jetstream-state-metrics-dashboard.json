@@ -415,7 +415,7 @@
         {
           "editorMode": "builder",
           "exemplar": false,
-          "expr": "nats_core_jetstream_api_requests",
+          "expr": "nats_core_jetstream_api_request_total",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
