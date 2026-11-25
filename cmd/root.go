@@ -261,6 +261,16 @@ func init() {
 	rootCmd.Flags().Bool("raftz", false, "Export metalayer Raft group metrics from raftz endpoint")
 	_ = viper.BindPFlag("raftz", rootCmd.Flags().Lookup("raftz"))
 
+	// raftz per group
+	rootCmd.Flags().Bool("raftz-groups", false, "Export per Raft group metrics from raftz endpoint, requires --raftz (high cardinality)")
+	_ = viper.BindPFlag("raftz-groups", rootCmd.Flags().Lookup("raftz-groups"))
+
+	rootCmd.Flags().Bool("raftz-groups-active-only", false, "Export per Raft group metrics only for groups that are not idle, requires --raftz-groups")
+	_ = viper.BindPFlag("raftz-groups-active-only", rootCmd.Flags().Lookup("raftz-groups-active-only"))
+
+	rootCmd.Flags().String("raftz-account", "", "Restrict raftz collection to this account, defaults to the system account")
+	_ = viper.BindPFlag("raftz-account", rootCmd.Flags().Lookup("raftz-account"))
+
 	// jsz streams
 	rootCmd.Flags().Var(
 		enumflag.New(&collectJsz, "jsz", surveyor.CollectJszIds, enumflag.EnumCaseInsensitive),
@@ -337,6 +347,9 @@ func getSurveyorOpts() *surveyor.Options {
 	opts.AccountsDetailed = viper.GetBool("accounts-detailed")
 	opts.Gatewayz = viper.GetBool("gatewayz")
 	opts.Raftz = viper.GetBool("raftz")
+	opts.RaftzGroups = viper.GetBool("raftz-groups")
+	opts.RaftzActiveOnly = viper.GetBool("raftz-groups-active-only")
+	opts.RaftzAccount = viper.GetString("raftz-account")
 	opts.Jsz = collectJsz
 	opts.JszLimit = viper.GetInt("jsz-limit")
 	opts.JszLeadersOnly = viper.GetBool("jsz-leaders-only")
