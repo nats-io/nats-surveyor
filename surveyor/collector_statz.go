@@ -1074,7 +1074,8 @@ func (sc *StatzCollector) poll(ctx context.Context) error {
 	// server responses reaches server-discovery-timeout value (defaults to 500ms) or we reach
 	// polling timeout.
 	serverDiscoveryTimer := time.NewTimer(sc.serverDiscoveryWait)
-	pollTimer := time.NewTimer(sc.pollTimeout)
+	ctx, cancel := context.WithTimeout(ctx, sc.pollTimeout)
+	defer cancel()
 	var done bool
 	for !done {
 		select {
@@ -1090,7 +1091,7 @@ func (sc *StatzCollector) poll(ctx context.Context) error {
 			if expectedServers == -1 {
 				done = true
 			}
-		case <-pollTimer.C:
+		case <-ctx.Done():
 			done = true
 			if expectedServers != -1 {
 				sc.logger.Warnf("Poll timeout after %v while waiting for responses", sc.pollTimeout)
@@ -1383,9 +1384,6 @@ func (sc *StatzCollector) getAccStatz(ctx context.Context, nc *nats.Conn) (map[s
 		}
 
 		res = append(res, &a)
-		if sc.numServers != -1 && len(res) == sc.numServers {
-			break
-		}
 	}
 
 	accStats := make(map[string][]*accStat)
@@ -1448,9 +1446,6 @@ func (sc *StatzCollector) getGatewayz(ctx context.Context, nc *nats.Conn) ([]*ga
 		}
 
 		res = append(res, &g)
-		if sc.numServers != -1 && len(res) == sc.numServers {
-			break
-		}
 	}
 
 	return res, nil
@@ -1487,9 +1482,6 @@ func (sc *StatzCollector) getRaftz(ctx context.Context, nc *nats.Conn) ([]*raftS
 		}
 
 		res = append(res, &r)
-		if sc.numServers != -1 && len(res) == sc.numServers {
-			break
-		}
 	}
 
 	return res, nil
@@ -2299,6 +2291,7 @@ func requestMany(ctx context.Context, nc *nats.Conn,
 	msgsChan := make(chan *nats.Msg, 100)
 
 	intervalTimer := time.NewTimer(sc.pollTimeout)
+
 	sub, err := nc.Subscribe(inbox, func(msg *nats.Msg) {
 		intervalTimer.Reset(sc.serverDiscoveryWait)
 		msgsChan <- msg
@@ -2332,7 +2325,7 @@ func requestMany(ctx context.Context, nc *nats.Conn,
 			}
 		case <-intervalTimer.C:
 			return res, nil
-		case <-time.After(sc.pollTimeout):
+		case <-ctx.Done():
 			return res, nil
 		}
 	}
